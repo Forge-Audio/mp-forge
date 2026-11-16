@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>Make plugins for your MPC creatively.</b><br>
-  A free, open-source desktop app for Akai MPC hardware. There is no code to write.
+  A free, open-source desktop app for Akai MPC hardware.
 </p>
 
 <div align="center">
@@ -158,11 +158,11 @@ Akai Professional or inMusic Brands. MPC and Akai are trademarks of their owners
      - point the first line below at https://forge-audio.github.io/mp-forge/getting-started/
      - point [download] at the website's own download page, https://forge-audio.github.io/mp-forge/download/
      - the website's home is https://forge-audio.github.io/mp-forge/ : say so near the top of this page -->
-[get-started]: docs/src/content/docs/getting-started.md
-[what-you-need]: docs/src/content/docs/what-you-need.md
-[safety-checks]: docs/src/content/docs/safety-checks.md
-[status]: docs/src/content/docs/status.md
-[building-from-source]: docs/src/content/docs/building-from-source.md
+[get-started]: https://forge-audio.github.io/mp-forge/getting-started/
+[what-you-need]: https://forge-audio.github.io/mp-forge/what-you-need/
+[safety-checks]: https://forge-audio.github.io/mp-forge/safety-checks/
+[status]: https://forge-audio.github.io/mp-forge/status/
+[building-from-source]: https://forge-audio.github.io/mp-forge/building-from-source/
 [download]: https://github.com/Forge-Audio/mp-forge/releases/latest
 [trailer]: https://youtu.be/mRqsBG5l61k
 [discord]: https://discord.gg/EWkFTAEgJr
