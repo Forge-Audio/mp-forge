@@ -595,7 +595,7 @@ fn the_check_shows_the_ai_each_whole_page_once_the_plugin_builds() {
     let with_nothing_changed = run_the_check(&mut tools);
 
     let shown = captions_of(&first);
-    assert!(shown[0].starts_with("Page `DELAY` as the MPC lays it out"), "{shown:?}");
+    assert!(shown[0].starts_with("Page `DELAY` as the MPC lays it out"), "{shown:?}\n{}", first.content);
     assert!(shown[1].starts_with("Picture `reel`") && shown[2].starts_with("Picture `lamp`"), "{shown:?}");
     assert!(first.content.contains("Each page of the screen follows"));
     assert!(with_nothing_changed.illustrations.is_empty());
