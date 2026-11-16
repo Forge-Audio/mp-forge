@@ -11,13 +11,9 @@
   const FRAME_WHEN_STILL = 1;
   const AT_WORK = "A blacksmith hammering your plugin into shape.";
 
-  function prefersStillness() {
-    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  }
-
   // The frame is read off the clock, so the swing never starts over when the view behind it is drawn again.
   function frameNow() {
-    return prefersStillness() ? FRAME_WHEN_STILL : Math.floor(performance.now() / FRAME_LASTS_MS) % FRAMES;
+    return window.motion.keepsStill() ? FRAME_WHEN_STILL : Math.floor(performance.now() / FRAME_LASTS_MS) % FRAMES;
   }
 
   function showFrame(figure, frame) {

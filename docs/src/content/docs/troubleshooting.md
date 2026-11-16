@@ -69,6 +69,14 @@ Claude Code has to be installed and signed in. Settings lists it under **What MP
 computer**, and marks it **NOT FOUND** when it is not installed. Or switch the menu's **Connection** to
 **Claude API** and add a key, or pick a model from another service.
 
+### "Claude Code stopped without finishing."
+
+Claude Code started and then gave up. MP Forge passes on what Claude Code said as it did, after **It said:**.
+
+When it says your Claude Code is older than MP Forge needs, run `claude update` in a terminal and try again.
+MP Forge starts Claude Code with its own tools switched off, and an older Claude Code does not know how to
+be started that way. `claude --version` should then say 2.1.259 or newer.
+
 ### "The AI is still busy with another plugin."
 
 The AI works on one plugin at a time. Build this one once the other has finished, or open the other and
@@ -137,5 +145,12 @@ Akai's SDK is not in the `vendor` folder inside your `mp-forge` folder. Fetch it
 building, start MP Forge again with `cargo run` from its `app` folder.
 
 ## Something else
+
+### Nothing in MP Forge moves
+
+The conversation does not slide aside and the blacksmith stands still. Your computer has told MP Forge that
+you want less motion. On Windows it says so whenever **Animation effects** is off under Settings,
+Accessibility, Visual effects. Either switch that on, or open MP Forge's Settings and set **Animations** to
+**ALWAYS**.
 
 [Where MP Forge stands](./status.md) says what works and where it has been tested.

@@ -1,5 +1,5 @@
-// The settings page: the colour mode, what the app opens when it starts, how many versions are kept, when the AI's
-// context is compacted, where the musician's MPC is, and their accounts with AI services.
+// The settings page: the colour mode, whether the app moves, what the app opens when it starts, how many versions
+// are kept, when the AI's context is compacted, where the musician's MPC is, and their accounts with AI services.
 
 (function () {
   "use strict";
@@ -34,7 +34,7 @@
     const choiceButton = ([value, words]) => {
       const made = button("mode-button", words);
       made.setAttribute("aria-pressed", String(picked(setting) === value));
-      made.addEventListener("click", () => { remember(setting.key, value); drawChoices(holder, setting); });
+      made.addEventListener("click", () => { remember(setting.key, value); drawChoices(holder, setting); setting.whenPicked?.(); });
       return made;
     };
     holder.replaceChildren(...setting.choices.map(choiceButton));
@@ -170,6 +170,7 @@
     openWith(opensWith());
     drawChoices(parts.versionsKept, VERSIONS_KEPT);
     drawChoices(parts.compactAt, COMPACT_AT);
+    drawChoices(parts.motion, window.motion.SETTING);
     parts.mpcAddress.value = mpc().address;
     parts.mpcDrive.value = mpc().drive;
     parts.modeDark.addEventListener("click", () => useMode("dark"));

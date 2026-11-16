@@ -1638,7 +1638,7 @@
     const part = (id) => document.getElementById(id);
     return {
       sheet: page.appSheet, modeDark: part("mode-dark"), modeLight: part("mode-light"), startsNew: part("starts-new"), startsLast: part("starts-last"),
-      versionsKept: part("versions-kept"), compactAt: part("compact-at"),
+      versionsKept: part("versions-kept"), compactAt: part("compact-at"), motion: part("motion"),
       mpcAddress: part("mpc-address"), mpcDrive: part("mpc-drive"), mpcPasswordState: part("mpc-password-state"), mpcPassword: part("mpc-password"),
       accounts: part("ai-accounts"),
     };

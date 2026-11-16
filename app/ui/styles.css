@@ -110,7 +110,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 /* A plugin that is being built or checked has a pulsing square on its tab. */
 .tab.working::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; background: var(--accent); animation: tab-working 900ms steps(2, jump-none) infinite; }
 @keyframes tab-working { from { opacity: 1; } to { opacity: 0.25; } }
-@media (prefers-reduced-motion: reduce) { .tab.working::before { animation: none; } }
+body.keeps-still .tab.working::before { animation: none; }
 
 .bar > .bar-spacer { flex: 1 1 auto; }
 
@@ -197,7 +197,7 @@ body.editing .bar-icon { pointer-events: none; opacity: 0.55; }
 .mirror { flex: none; width: calc(100% - var(--chat-width) - 12px); max-height: 400vh; }
 body.chat-only .conversation { width: 100%; }
 body.chat-only .mirror { max-height: 0; overflow: hidden; visibility: hidden; transition: max-height 0s 420ms, visibility 0s 420ms; }
-@media (prefers-reduced-motion: reduce) { .conversation, body.chat-only .mirror { transition: none; } }
+body.keeps-still .conversation, body.keeps-still.chat-only .mirror { transition: none; }
 
 /* The settings take the place of the conversation and the MPC view. */
 .settings { flex: 1 1 100%; }
@@ -319,10 +319,8 @@ body.in-settings .conversation, body.in-settings .mirror { display: none; }
   42%, 100% { fill: var(--pad-resting); transform: translateY(0); }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .pad { animation: none; fill: var(--accent); }
-  .mpc-picture.loops { animation: none; }
-}
+body.keeps-still .pad { animation: none; fill: var(--accent); }
+body.keeps-still .mpc-picture.loops { animation: none; }
 
 .composer { display: flex; flex-direction: column; gap: 8px; }
 
@@ -730,7 +728,7 @@ body.editing .tabs { pointer-events: none; opacity: 0.55; }
    older version: going back is what the timeline is for. */
 .timeline-link { flex: none; width: 28px; height: 4px; margin: 0 5px 0 7px; background: repeating-linear-gradient(to right, var(--soft) 0 4px, transparent 4px 8px); animation: versions-flow-back 700ms steps(4) infinite; }
 @keyframes versions-flow-back { from { background-position-x: 0; } to { background-position-x: -8px; } }
-@media (prefers-reduced-motion: reduce) { .timeline-link { animation: none; } }
+body.keeps-still .timeline-link { animation: none; }
 .timeline-stop:hover { background: var(--face); }
 .timeline-stop[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 .timeline-stop.is-now { border-style: double; border-width: 6px; }

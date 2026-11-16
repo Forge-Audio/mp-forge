@@ -15,7 +15,6 @@
   const AT_THE_END_PX = 1;
   // How long a glide takes to cover about two thirds of what is left of the way.
   const GLIDE_EASES_OVER_MS = 90;
-  const prefersLessMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
   function endFollower(list) {
     let following = true;
@@ -69,7 +68,7 @@
 
     function glide() {
       if (!following || !gliding) return;
-      if (prefersLessMotion.matches) return restAtTheEnd();
+      if (window.motion.keepsStill()) return restAtTheEnd();
       if (nextStep !== null) return;
       lastStepAt = performance.now();
       nextStep = requestAnimationFrame(stepTowardsTheEnd);
