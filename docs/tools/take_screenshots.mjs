@@ -52,6 +52,12 @@ const THE_CHECKS = [
 
 // What is changed in the copy's stand-in data, each as [what is there, what goes in its place].
 const CHANGES_FOR_EVERY_PICTURE = [
+	// The stand-in starts without Akai's build tools and fetches them as the app would. The pictures are of a
+	// computer that has them already, so none shows the note about getting ready.
+	[
+		'{ name: "Akai\'s build tools", usedFor: "The compiler that turns a plugin\'s code into what the MPC runs.", isThere: false',
+		'{ name: "Akai\'s build tools", usedFor: "The compiler that turns a plugin\'s code into what the MPC runs.", isThere: true',
+	],
 	// The only maker shown is the project itself.
 	[/maker: "Demo"/g, `maker: "${MAKER}"`],
 	// The made-up plugins wear the control kit that comes with Akai's SDK, which is the one copied in for them.
@@ -67,11 +73,6 @@ const CHANGES_FOR_EVERY_PICTURE = [
 		'"This is the demo, so nothing was really built.\\n\\n**Controls:** Time, Repeats and Tone."',
 		'"**Built.** Time and Repeats set the echo, Wobble and Flutter make it seasick, and Dirt and Hiss wear the tape. It passed its safety check."',
 	],
-];
-// The stand-in starts without Akai's build tools. Only the picture of what is needed keeps it that way.
-const BUILD_TOOLS_ARE_THERE = [
-	'{ name: "Akai\'s build tools", usedFor: "The compiler that turns a plugin\'s code into what the MPC runs.", isThere: false',
-	'{ name: "Akai\'s build tools", usedFor: "The compiler that turns a plugin\'s code into what the MPC runs.", isThere: true',
 ];
 
 function changed(text, [from, to]) {
@@ -112,16 +113,10 @@ function serving(folder) {
 // --- Opening the screen ----------------------------------------------------------------------------
 
 // A fresh window on the app's screen, past the tour it offers the first time, with every font loaded.
-async function openedScreen(browser, address, { withBuildTools }) {
+async function openedScreen(browser, address) {
 	const context = await browser.newContext({ viewport: WINDOW, deviceScaleFactor: DETAIL, ...SAME_ON_EVERY_COMPUTER });
 	await context.addInitScript(() => localStorage.setItem('guideSeen', 'yes'));
 	const page = await context.newPage();
-	if (withBuildTools) {
-		await page.route(`**/${STAND_IN_DATA}`, async (route) => {
-			const answer = await route.fetch();
-			await route.fulfill({ response: answer, body: changed(await answer.text(), BUILD_TOOLS_ARE_THERE) });
-		});
-	}
 	await page.goto(address);
 	await page.evaluate(() => document.fonts.ready);
 	return page;
@@ -245,7 +240,7 @@ async function whatMpForgeNeeds(page) {
 }
 
 async function takeEveryPicture(browser, address) {
-	const page = await openedScreen(browser, address, { withBuildTools: true });
+	const page = await openedScreen(browser, address);
 	await describeAPlugin(page);
 	await buildIt(page);
 	await chooseAnAi(page);
@@ -254,7 +249,7 @@ async function takeEveryPicture(browser, address) {
 	await editTheLook(page);
 	await checkAndPlayTheInstrument(page);
 	await settingsPictures(page);
-	await whatMpForgeNeeds(await openedScreen(browser, address, { withBuildTools: false }));
+	await whatMpForgeNeeds(await openedScreen(browser, address));
 }
 
 async function main() {

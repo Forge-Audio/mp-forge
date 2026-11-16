@@ -15,8 +15,8 @@ use std::time::Duration;
 
 use serde_json::Value;
 
-use crate::process::{Finished, RunError, command_for, run_with_time_limit};
-use crate::sdk::{PYTHON, Sdk};
+use crate::process::{Finished, RunError, run_with_time_limit};
+use crate::sdk::Sdk;
 
 const TOOLS_FOLDER: &str = "tools";
 const REMOTE_TOOL: &str = "tools/mpc_remote.py";
@@ -176,7 +176,7 @@ fn only_removable_drive(drives: &[Drive]) -> Result<&Drive, DeliveryError> {
 
 /// Has Akai's tool reach the MPC and say which drives it has. Nothing on the MPC is changed.
 fn drives_of(sdk: &Sdk, mpc: &Mpc) -> Result<Vec<Drive>, DeliveryError> {
-    let mut command = command_for(PYTHON);
+    let mut command = sdk.python();
     command.arg("-c").arg(DRIVES_SCRIPT).arg(sdk.root().join(TOOLS_FOLDER)).arg(&mpc.address);
     let said = finished(&mut command, mpc, LOOKING_TIME_LIMIT)?;
     drives_listed_in(&said).ok_or_else(|| DeliveryError::ToolDidNotRun("its list of the MPC's drives could not be read.".to_string()))
@@ -193,7 +193,7 @@ pub fn restart_app(sdk: &Sdk, mpc: &Mpc) -> Result<(), DeliveryError> {
 }
 
 fn run(sdk: &Sdk, mpc: &Mpc, errand: &Errand, limit: Duration) -> Result<(), DeliveryError> {
-    let mut command = command_for(PYTHON);
+    let mut command = sdk.python();
     command.arg(sdk.root().join(REMOTE_TOOL)).args(arguments_for(mpc, errand));
     finished(&mut command, mpc, limit).map(|_said| ())
 }

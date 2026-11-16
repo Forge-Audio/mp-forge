@@ -267,6 +267,11 @@ pub fn progress(event: &Event) -> Option<Value> {
     }
 }
 
+/// A step in the conversation saying what is being fetched before the build can begin.
+pub fn fetching(what: &str) -> Value {
+    json!({ "kind": "step", "text": format!("fetching {what}, which this computer needs to build a plugin: this happens once and takes a minute or two") })
+}
+
 /// How many tokens the AI's conversation holds, when the event says. The screen shows it beside the conversation.
 pub fn context(event: &Event) -> Option<Value> {
     match event {

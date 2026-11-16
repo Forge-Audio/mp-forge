@@ -283,8 +283,8 @@
 
   // The demo starts without the build tools, so fetching them can be tried.
   const DEMO_NEEDS = [
-    { name: "Python 3", usedFor: "Runs Akai's tools that build and check a plugin.", isThere: true, isRequired: true, howToGet: "Install Python 3 from python.org, then check again.", canBeFetched: false },
-    { name: "Akai's build tools", usedFor: "The compiler that turns a plugin's code into what the MPC runs.", isThere: false, isRequired: true, howToGet: "Choose GET THE BUILD TOOLS. Akai's build script fetches its compiler once, about 50 MB.", canBeFetched: true },
+    { name: "Python 3", usedFor: "Runs Akai's tools that build and check a plugin.", isThere: true, isRequired: true, howToGet: "Choose GET WHAT IS MISSING. MP Forge fetches a Python of its own, about 30 MB, and installs nothing on your computer.", canBeFetched: true },
+    { name: "Akai's build tools", usedFor: "The compiler that turns a plugin's code into what the MPC runs.", isThere: false, isRequired: true, howToGet: "Choose GET WHAT IS MISSING. Akai's build script fetches its compiler once, about 50 MB.", canBeFetched: true },
     { name: "SSH", usedFor: "Sends a plugin to your MPC over the network.", isThere: true, isRequired: false, howToGet: "", canBeFetched: false },
     { name: "Claude Code", usedFor: "Lets Claude do the work through your own Claude sign-in, without a key.", isThere: false, isRequired: false, howToGet: "Install Claude Code from claude.com/claude-code and sign in to it. Not needed when you use a key or another service.", canBeFetched: false },
   ];
@@ -413,7 +413,7 @@
       preview_plugin: () => { throw "The demo has no sound. Open the real app to hear a plugin."; },
       conversation: () => [],
       what_is_needed: () => DEMO_NEEDS.map((need) => ({ ...need, isThere: need.isThere || demoToolsFetched })),
-      fetch_build_tools: () => new Promise((resolve) => setTimeout(() => { demoToolsFetched = true; resolve(); }, 1500)),
+      fetch_what_is_missing: () => new Promise((resolve) => setTimeout(() => { demoToolsFetched = true; resolve(); }, 1500)),
       keep_conversation: () => {},
       versions: () => demoVersions.slice(),
       forget_version: ({ number }) => {

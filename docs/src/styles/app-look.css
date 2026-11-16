@@ -181,6 +181,20 @@ body {
 	background: var(--face);
 }
 
+/* On a wide window Starlight gives the "on this page" panel half of whatever room is left over, which stretches
+   the panel and leaves the page off to one side. Here the panel keeps the width of a sidebar, and the page
+   sits in the middle of the room between the two sidebars. */
+@media (min-width: 72rem) {
+	.right-sidebar-container {
+		width: var(--sl-sidebar-width);
+	}
+
+	[data-has-sidebar][data-has-toc] .main-pane {
+		--sl-content-margin-inline: auto;
+		width: calc(100% - var(--sl-sidebar-width));
+	}
+}
+
 .right-sidebar-panel a {
 	font-size: 0.9375rem;
 	color: var(--soft);

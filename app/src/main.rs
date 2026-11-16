@@ -135,7 +135,7 @@ fn open_window() -> ExitCode {
             commands::player_start,
             commands::player_tell,
             commands::what_is_needed,
-            commands::fetch_build_tools,
+            commands::fetch_what_is_missing,
             commands::player_stop,
         ])
         .run(tauri::generate_context!());

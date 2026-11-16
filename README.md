@@ -82,8 +82,8 @@ plugin is safe, shows you its MPC screen, lets you play it on your computer, and
 ## Get MP Forge
 
 1. Download MP Forge for macOS, Windows or Linux from the [download page][download].
-2. Install it and open it. MP Forge checks what it needs on your computer, tells you if something is missing
-   and how to get it, and fetches Akai's build tools for you when you press GET THE BUILD TOOLS.
+2. Install it and open it. MP Forge checks what it needs on your computer and fetches Python and Akai's
+   build tools itself if they are missing. There is nothing else to install.
 3. Follow [Get started][get-started] from there: pick an AI, make your first plugin, check it and send it.
 
 What you need besides MP Forge itself:

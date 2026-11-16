@@ -8,10 +8,12 @@ use std::process::Command;
 use std::time::Duration;
 
 use crate::built_screen::SizedArt;
+use crate::own_python::OwnPython;
 use crate::process::{Finished, RunError, command_for, run_with_time_limit};
 use crate::simulation::Session;
 
-pub(crate) const PYTHON: &str = if cfg!(windows) { "python" } else { "python3" };
+/// What the computer calls a Python that was installed on it.
+const PYTHON_OF_THE_COMPUTER: &str = if cfg!(windows) { "python" } else { "python3" };
 const BUILD_SCRIPT: &str = "tools/build.py";
 const NEW_PLUGIN_SCRIPT: &str = "tools/new_plugin.py";
 const VALIDATE_SCRIPT: &str = "tools/validate.py";
@@ -99,6 +101,16 @@ impl Sdk {
         self.root.join(KEPT_TOOLS_FOLDER)
     }
 
+    /// The Python that runs Akai's tools: MP Forge's own once it has fetched one, and the computer's until then.
+    pub(crate) fn python(&self) -> Command {
+        let own = self.own_python();
+        if own.is_there() { command_for(own.program()) } else { command_for(PYTHON_OF_THE_COMPUTER) }
+    }
+
+    pub(crate) fn own_python(&self) -> OwnPython {
+        OwnPython::kept_in(&self.kept_tools_folder())
+    }
+
     /// Creates a working starter plugin from Akai's template, in its own folder under `plugins_dir`.
     pub fn create_plugin(&self, identity: &PluginIdentity, plugins_dir: &Path, limit: Duration) -> Result<Finished, RunError> {
         let mut command = self.tool_that_names_folders(NEW_PLUGIN_SCRIPT);
@@ -119,14 +131,14 @@ impl Sdk {
     /// One of Akai's tools that names folders in what it says, started so that the plugins may be kept on
     /// another drive than the SDK.
     fn tool_that_names_folders(&self, script: &str) -> Command {
-        let mut command = command_for(PYTHON);
+        let mut command = self.python();
         command.arg("-c").arg(RUNS_A_TOOL_ACROSS_DRIVES).arg(self.root.join(script));
         command
     }
 
     /// Checks the finished plugin folder the build left behind, as Akai's own validator sees it.
     pub fn validate(&self, plugin: &Path, limit: Duration) -> Result<Finished, RunError> {
-        let mut command = command_for(PYTHON);
+        let mut command = self.python();
         command.arg(self.root.join(VALIDATE_SCRIPT)).arg(plugin);
         run_with_time_limit(&mut command, limit)
     }
@@ -135,7 +147,7 @@ impl Sdk {
     /// Akai's own drawing code does the drawing, in the colours the plugin's layout asks for.
     pub fn draw_sized_art(&self, plugin: &Path, art: &[SizedArt], limit: Duration) -> Result<Finished, RunError> {
         let beside_the_screen = built_screen_file(plugin).and_then(|screen_file| screen_file.parent().map(Path::to_path_buf));
-        let mut command = command_for(PYTHON);
+        let mut command = self.python();
         command.arg("-c").arg(SIZED_ART_SCRIPT).arg(self.root.join(TOOLS_FOLDER));
         command.arg(plugin.join(BUILT_PARAMETERS)).arg(plugin.join(SCREEN_LAYOUT));
         command.arg(beside_the_screen.unwrap_or_else(|| plugin.join(BUILD_FOLDER))).arg(plugin.join(SIZED_ART_CACHE));

@@ -7,21 +7,26 @@ description: The messages MP Forge shows when something is in the way, and what 
 
 ### "This computer cannot build a plugin yet."
 
-Something MP Forge cannot work without is missing: Python 3, Akai's build tools, or both. Open **Settings**
-and look under **What MP Forge needs on this computer**. Each missing thing says how to get it. Press
-**CHECK AGAIN** when you have.
+Something MP Forge cannot work without is missing: Python 3, Akai's build tools, or both. MP Forge fetches
+these itself, so this means the fetch did not work, most often because the network was not there. The
+message says what went wrong. Check the connection, open **Settings**, and press **GET WHAT IS MISSING**
+under **What MP Forge needs on this computer**.
 
-### Python is installed but still marked MISSING
+### My computer has Python, and MP Forge fetched its own anyway
 
-Akai's build script needs two parts of Python, `venv` and `ensurepip`, that some systems leave out. On
-Linux, install `python3-venv` as well as `python3`. On Windows, MP Forge looks for a program called
-`python`, so install Python from the Microsoft Store, or from python.org with "Add python.exe to PATH"
-ticked.
+Akai's build script needs two parts of Python, `venv` and `ensurepip`, that some systems leave out, and on
+Windows a Python may be installed without being findable by the name `python`. When the Python on your
+computer will not do, MP Forge fetches one of its own and uses that. Yours is left as it is.
 
 ### "The build tools could not be fetched" or "Fetching the build tools took too long"
 
 Fetching Akai's compiler needs the network, once, for a download of about 50 MB. Check the connection and
-press **GET THE BUILD TOOLS** again.
+press **GET WHAT IS MISSING** in Settings.
+
+### "Python could not be downloaded"
+
+MP Forge fetches a Python of its own when your computer has none it can use, a download of about 30 MB.
+Check the connection and press **GET WHAT IS MISSING** in Settings.
 
 ## The AI
 

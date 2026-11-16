@@ -22,23 +22,27 @@ things stand.
 The first time it opens, MP Forge offers to show you round. Press **SHOW ME ROUND** for a one-minute tour,
 or **SKIP**. You can have the tour again from Settings.
 
-Every time it opens, MP Forge looks for what it needs on your computer to build and check a plugin. If
-something it cannot work without is missing, it says so in the conversation and sends you to Settings.
+Every time it opens, MP Forge looks for the two things it needs on your computer to build and check a
+plugin: Python and Akai's build tools. If either is missing it fetches it for you, there and then. You do
+not install anything yourself. The conversation says **Getting this computer ready** while it fetches, and
+**This computer is ready** when it has. It is a download of about 80 MB in all, takes a minute or two, needs
+the network, and happens once. You can describe your plugin while you wait.
 
-Open **Settings** with the cog at the top right, and find **What MP Forge needs on this computer**. Each
-thing is marked:
+To see what was found, open **Settings** with the cog at the top right, and find **What MP Forge needs on
+this computer**. Each thing is marked:
 
 | Mark | What it means |
 | --- | --- |
 | **OK** | It is here. |
-| **MISSING** | No plugin can be made without it. The line says how to get it. |
+| **MISSING** | No plugin can be made without it. MP Forge could not fetch it, most often because the network was not there. |
 | **NOT FOUND** | Optional. Only the one thing it is used for is switched off. |
 
-![The settings list of what MP Forge needs: Python 3 marked OK, Akai's build tools marked MISSING, SSH marked OK and Claude Code marked NOT FOUND, with the buttons CHECK AGAIN and GET THE BUILD TOOLS.](../../assets/screenshots/settings-what-mp-forge-needs.png)
+![The settings list of what MP Forge needs: Python 3, Akai's build tools and SSH marked OK, and Claude Code marked NOT FOUND, with the button CHECK AGAIN.](../../assets/screenshots/settings-what-mp-forge-needs.png)
 
-- If **Akai's build tools** are missing, press **GET THE BUILD TOOLS**. MP Forge fetches them for you. It
-  is a download of about 50 MB, takes a minute or so, and happens once.
-- If anything else is missing, the line beside it says how to get it. Press **CHECK AGAIN** when you have.
+- If **Python 3** or **Akai's build tools** is still marked MISSING, check the network and press
+  **GET WHAT IS MISSING**. MP Forge tries again.
+- If something optional is not found, the line beside it says how to get it. Press **CHECK AGAIN** when you
+  have.
 
 [What you need](./what-you-need.md) lists everything MP Forge looks for, and what your MPC needs.
 

@@ -65,7 +65,7 @@ The first time, this builds the whole app, which takes several minutes. After th
 Built this way, MP Forge looks for Akai's SDK in the `mp-forge` folder it was built in, so keep that folder
 where it is. To have it look in another folder, set `WORKBENCH_HOME` to that folder before you start it.
 
-If Akai's build tools were not set up by `check-sdk.sh`, press **GET THE BUILD TOOLS** in Settings, as in
+If Akai's build tools were not set up by `check-sdk.sh`, MP Forge fetches them the first time it opens, as in
 [Getting started](./getting-started.md#2-let-mp-forge-check-your-computer).
 
 ## Run the tests

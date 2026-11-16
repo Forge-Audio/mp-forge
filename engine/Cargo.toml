@@ -21,6 +21,8 @@ serde_json = "1.0.154"
 ureq = "3.5.2"
 symphonia = { version = "0.5", default-features = false, features = ["mp3"] }
 trash = "5.3"
+flate2 = "1"
+tar = "0.4"
 
 # Decoding an MP3 unoptimised takes seconds for one song, so the decoder is optimised in development builds too.
 [profile.dev.package.symphonia-bundle-mp3]

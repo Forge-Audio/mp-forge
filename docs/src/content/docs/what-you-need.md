@@ -8,27 +8,33 @@ description: What has to be on your computer and your MPC before MP Forge can ma
 MP Forge is made for macOS, Windows and Linux. [What is and is not finished](./status.md) says how far
 each of them has been tested.
 
-MP Forge looks for what it needs every time it opens, and tells you if something is missing and how to get
-it. You can see the list at any time under **Settings → What MP Forge needs on this computer**.
+MP Forge looks for what it needs every time it opens. Python and Akai's build tools it fetches for you when
+they are missing, so there is nothing to install before you start. You can see the list at any time under
+**Settings → What MP Forge needs on this computer**.
 
-![The settings list of what MP Forge needs: Python 3 marked OK, Akai's build tools marked MISSING, SSH marked OK and Claude Code marked NOT FOUND, with the buttons CHECK AGAIN and GET THE BUILD TOOLS.](../../assets/screenshots/settings-what-mp-forge-needs.png)
+![The settings list of what MP Forge needs: Python 3, Akai's build tools and SSH marked OK, and Claude Code marked NOT FOUND, with the button CHECK AGAIN.](../../assets/screenshots/settings-what-mp-forge-needs.png)
 
 ### To build and check plugins
 
-MP Forge cannot make a plugin without these two. Settings marks each as **OK** or **MISSING**.
+MP Forge cannot make a plugin without these two, and it gets both for you. Settings marks each as **OK** or
+**MISSING**.
 
-| What | What it is for | How to get it |
+| What | What it is for | How MP Forge gets it |
 | --- | --- | --- |
-| **Python 3** | Runs Akai's tools that build and check a plugin. Akai's SDK asks for Python 3.9 or newer. | See below. |
-| **Akai's build tools** | The compiler that turns a plugin's code into what the MPC runs. | Press **GET THE BUILD TOOLS** in Settings. MP Forge fetches it once, about 50 MB. |
+| **Python 3** | Runs Akai's tools that build and check a plugin. | If your computer has a Python that will do, MP Forge uses it. If not, it fetches one of its own, about 30 MB. |
+| **Akai's build tools** | The compiler that turns a plugin's code into what the MPC runs. | Akai's build script fetches it, about 50 MB. |
 
-If Settings marks Python 3 as missing, this is where to get it:
+Both are kept in a folder of MP Forge's own. Nothing is installed on your computer and nothing of yours is
+changed. The Python is one of the standalone builds published by Astral, and MP Forge checks each download
+against a fingerprint before it opens it.
 
-- **macOS:** install it from [python.org](https://www.python.org).
-- **Windows:** install it from the Microsoft Store, or from python.org with "Add python.exe to PATH" ticked.
-- **Linux:** install `python3` and `python3-venv` with your system's package manager.
+If either goes missing later, MP Forge fetches it again the next time it opens or the next time you build.
+If one is marked MISSING, the fetch did not work, most often for want of the network. Press
+**GET WHAT IS MISSING** in Settings to try again.
 
-Then press **CHECK AGAIN**.
+There is no ready-made Python for a few kinds of computer, such as Linux systems that do not use glibc. On
+one of those, install `python3` and `python3-venv` with your system's package manager, then press
+**CHECK AGAIN**.
 
 ### Optional
 

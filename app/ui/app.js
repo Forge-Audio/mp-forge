@@ -1654,11 +1654,24 @@
     return { list: part("list"), check: part("check"), fetch: part("fetch"), said: part("said") };
   }
 
-  // A computer that cannot build a plugin yet says so before the musician asks for one, with where to look.
-  function tellOfWhatIsMissing(missing) {
-    const named = missing.map((need) => need.name).join(" and ");
-    addMessage(NEW_PLUGIN, { kind: "problem", text: `**This computer cannot build a plugin yet.** It still needs ${named}. Open Settings to see how to get ${missing.length === 1 ? "it" : "them"}.` });
+  function namesOf(needs) {
+    return needs.map((need) => need.name).join(" and ");
   }
+
+  // A computer that cannot build a plugin yet is made ready without the musician doing anything, and they are
+  // told what is going on. Only what MP Forge could not fetch is left to them, with where to look.
+  const gettingThisComputerReady = {
+    fetching(needs) {
+      addMessage(NEW_PLUGIN, { kind: "note", text: `**Getting this computer ready.** MP Forge is fetching ${namesOf(needs)}, which it needs to build a plugin. This happens once, takes a minute or two and needs the network. You can describe your plugin meanwhile.` });
+    },
+    ready() {
+      addMessage(NEW_PLUGIN, { kind: "note", text: "**This computer is ready.** Everything MP Forge needs to build a plugin is in place." });
+    },
+    stillMissing(needs, problem) {
+      const whatWentWrong = problem ? ` ${problem}` : "";
+      addMessage(NEW_PLUGIN, { kind: "problem", text: `**This computer cannot build a plugin yet.** It still needs ${namesOf(needs)}.${whatWentWrong} Open Settings to try again or to see how to get ${needs.length === 1 ? "it" : "them"}.` });
+    },
+  };
 
   function pluginsFolderParts() {
     const part = (name) => document.getElementById(`plugins-folder-${name}`);
@@ -1690,7 +1703,7 @@
     window.pluginsFolder.start(pluginsFolderParts(), pluginsAreKeptElsewhere);
     tabStrip.start({ strip: page.tabs, earlier: document.getElementById("tabs-earlier"), later: document.getElementById("tabs-later") }, drawTabs);
     page.newPluginTab.addEventListener("click", () => openFromItsTab(NEW_PLUGIN));
-    window.whatIsNeeded.start(whatIsNeededParts(), tellOfWhatIsMissing);
+    window.whatIsNeeded.start(whatIsNeededParts(), gettingThisComputerReady);
     appMenu.start(page.appMenu, rowsForWhatWasClicked);
     lookEditor.start(editorParts(), { onDone: doneEditing });
     guide.start(guideParts(), { showExample: showTheGuidesExample, showNewPlugin: backToANewPlugin });

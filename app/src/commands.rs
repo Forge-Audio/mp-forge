@@ -41,7 +41,7 @@ use workbench_engine::readiness;
 use workbench_engine::maker::{Connection, Delivery, MakeError, Maker, PluginRequest, Sending};
 use workbench_engine::providers::{ANTHROPIC, Provider};
 use workbench_engine::samples::SampleShelf;
-use workbench_engine::sdk::{PluginIdentity, PluginKind, built_screen_file, built_skin_image};
+use workbench_engine::sdk::{PluginIdentity, PluginKind, Sdk, built_screen_file, built_skin_image};
 use workbench_engine::stop_signal::StopSignal;
 
 use workbench_engine::ai_settings::AiSettings;
@@ -257,6 +257,7 @@ fn chat_model_for(provider: &'static Provider, model: ChosenModel) -> Result<Cha
 #[tauri::command(async)]
 pub fn check_plugin(name: String, workbench: State<Workbench>) -> Result<Value, String> {
     let _claim = workbench.claim_to_check(&name)?;
+    readiness::fetch_what_is_missing(&workbench.sdk()?, &|_fetching| {})?;
     let report = workbench.maker()?.inspect(&name).map_err(explain)?;
     Ok(payloads::report(&report))
 }
@@ -496,10 +497,11 @@ pub fn what_is_needed(workbench: State<Workbench>) -> Result<Vec<Value>, String>
     Ok(readiness::needs_on_this_computer(&workbench.sdk()?).iter().map(payloads::need).collect())
 }
 
-/// Has Akai's build script fetch its compiler now, so the first plugin does not wait on it. Takes a minute or so.
+/// Fetches whichever of Python and Akai's build tools this computer lacks, so the first plugin does not wait
+/// on them. Takes a minute or two.
 #[tauri::command(async)]
-pub fn fetch_build_tools(workbench: State<Workbench>) -> Result<(), String> {
-    readiness::fetch_build_tools(&workbench.sdk()?)
+pub fn fetch_what_is_missing(workbench: State<Workbench>) -> Result<(), String> {
+    readiness::fetch_what_is_missing(&workbench.sdk()?, &|_fetching| {})
 }
 
 /// Starts the live player for a built plugin. What it says arrives as `player-event`s.
@@ -590,9 +592,10 @@ fn run_in_background(
     ai: AiForAJob,
 ) -> Result<(), String> {
     let claim = workbench.claim_for_ai_work(&plugin_name)?;
+    let sdk = workbench.sdk()?;
     let maker = workbench.maker()?.compacting_at(ai.compact_at).stopped_by(workbench.stop_signal_for_next_job());
     thread::spawn(move || {
-        let outcome = run_job(&maker, Box::new(job), ai.ai, &app);
+        let outcome = with_all_a_build_needs(&sdk, &app).and_then(|()| run_job(&maker, Box::new(job), ai.ai, &app));
         let message = match outcome {
             Ok(delivery) => payloads::finished(&plugin_name, &delivery),
             Err(explanation) => payloads::failed(&plugin_name, &explanation),
@@ -601,6 +604,14 @@ fn run_in_background(
         let _ = app.emit(FINISHED_EVENT, message);
     });
     Ok(())
+}
+
+/// A build never starts without Python and Akai's build tools. Whichever has gone missing since the app last
+/// looked is fetched first, and the musician is told what the wait is for.
+fn with_all_a_build_needs(sdk: &Sdk, app: &AppHandle) -> Result<(), String> {
+    readiness::fetch_what_is_missing(sdk, &|fetching| {
+        let _ = app.emit(PROGRESS_EVENT, payloads::fetching(fetching));
+    })
 }
 
 fn run_job(maker: &Maker, job: Box<Job>, ai: ChosenAi, app: &AppHandle) -> Result<Delivery, String> {

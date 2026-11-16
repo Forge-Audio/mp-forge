@@ -41,6 +41,7 @@ pub mod model_http;
 pub mod mp3;
 pub mod ollama;
 pub mod open_mpc;
+pub mod own_python;
 pub mod other_looks;
 pub mod ordered_json;
 pub mod page_art;
