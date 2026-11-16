@@ -19,7 +19,7 @@ const CUP = [
 ];
 const NOTHING = '.';
 const COLOURS = { K: 'var(--line)', W: '#ffffff', R: 'var(--accent)' };
-const PIXELS_ON_THE_PAGE = 3;
+const PIXELS_ON_THE_PAGE = 2;
 
 function runsOfOneColour(row) {
 	return [...row.matchAll(/(.)\1*/g)].map((run) => ({ letter: run[1], from: run.index, length: run[0].length }));

@@ -72,7 +72,7 @@ const steps = [
 // Where a visitor can go next. Donating is offered once there is somewhere for a donation to go.
 const waysToJoinIn = [
 	{ what: 'Talk to us', words: 'Get help when you are stuck, show the plugins you have made, and ask for what MP Forge is missing.', button: 'Join the Discord', place: places.discord },
-	{ what: 'Keep it going', words: 'MP Forge is free and stays free. If it is useful to you, a donation helps to keep it going.', button: 'Donate', place: places.donations },
+	{ what: 'Keep it going', words: 'MP Forge is free and stays free. If it is useful to you, a donation helps to keep it going.', button: 'Donate on Ko-fi', place: places.donations, withACup: true },
 	{ what: 'Read the code', words: 'Every line is open. Report a problem, suggest a change, or build MP Forge yourself.', button: 'Go to GitHub', place: places.source },
 ].filter((way) => way.place);
 
@@ -98,14 +98,6 @@ const needs = [
 				<a class="button quiet" href={places.docs}>Read the docs</a>
 			</p>
 			<p class="note">For macOS, Windows and Linux.</p>
-			{
-				places.donations && (
-					<a class="tip" href={places.donations}>
-						<PixelCup />
-						<span>Support MP Forge on Ko-fi</span>
-					</a>
-				)
-			}
 		</div>
 
 		{
@@ -173,7 +165,10 @@ const needs = [
 						<h3 class="titlebar">{way.what}</h3>
 						<p>{way.words}</p>
 						<p class="choices">
-							<a class="button quiet" href={way.place}>{way.button}</a>
+							<a class="button quiet" href={way.place}>
+								{way.withACup && <PixelCup />}
+								{way.button}
+							</a>
 						</p>
 					</li>
 				))
