@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 
 use workbench_engine::agent::ModelError;
 use workbench_engine::browser_sign_in::{self, Attempt, Patience};
+use workbench_engine::claude_code::{self, Standing};
 use workbench_engine::codex::{self, SignIn};
 use workbench_engine::process::command_for;
 use workbench_engine::providers::{OfferedModel, Provider, every_provider, provider_called};
@@ -108,6 +109,18 @@ pub fn sign_in_with_browser(account: String) -> Result<(), String> {
     open_in_the_browser(&attempt.page_to_open(pages))?;
     let key = attempt.key_once_approved(pages, &patience_with_the_browser())?;
     key_store::keep(provider.word, &key)
+}
+
+/// Whether Claude Code can do MP Forge's work on this computer: installed, new enough and signed in. Claude Code
+/// is asked itself, which takes a moment, so this runs off the main thread.
+#[tauri::command(async)]
+pub fn claude_code_standing() -> &'static str {
+    match claude_code::standing() {
+        Standing::Ready => "ready",
+        Standing::NotSignedIn => "not-signed-in",
+        Standing::TooOld => "too-old",
+        Standing::NotInstalled => "not-installed",
+    }
 }
 
 #[tauri::command]

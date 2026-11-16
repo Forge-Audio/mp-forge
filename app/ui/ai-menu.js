@@ -8,6 +8,7 @@
 (function () {
   "use strict";
 
+  const { ask } = window.backend;
   const { element, remember, recall } = window.helpers;
   const aiAccounts = window.aiAccounts;
 
@@ -74,6 +75,16 @@
   // Models on this computer forget their instructions unless the program that runs them is given room for them.
   const ROOM_LOCAL_MODELS_NEED = "These run on this computer, with no account and nothing sent away. In Ollama's settings, give them a context length of 64000 or more, or they lose track of what they were asked.";
   const NO_LOCAL_MODELS = "No model here can use tools yet. Get one in Ollama that can, such as qwen3, then open this list again.";
+
+  // What stands between Claude Code and the work, said in red among Claude's models. Nothing is said while it is
+  // ready, nor while Claude is reached with a key and Claude Code is not used.
+  const CLAUDE_CODE_NEEDS = {
+    "too-old": { note: "UPDATE NEEDED", words: "Your Claude Code is older than MP Forge needs. Run  claude update  in a terminal, then open this menu again." },
+    "not-signed-in": { note: "SIGN IN NEEDED", words: "Claude Code is not signed in. Run  claude  in a terminal and sign in with /login, then open this menu again." },
+    "not-installed": { note: "NOT INSTALLED", words: "Claude Code was not found on this computer. Install it from claude.com/claude-code, or set Connection to Claude API and add a key." },
+  };
+  const CLAUDE_CODE_IS_READY = "ready";
+  let claudeCodeStands = CLAUDE_CODE_IS_READY;
 
   const picked = {};
   // What is known of each service's models: nothing yet, a list, or why the list could not be had.
@@ -256,6 +267,7 @@
     if (needsAKey && !(await aiAccounts.addKey(ANTHROPIC))) return;
     pick(CONNECTION, value);
     opener.textContent = summary();
+    markTheOpener();
   }
 
   function keepModel(service, model) {
@@ -358,10 +370,38 @@
     if (listing.loading) return [wordsRow("Asking for its models…")];
     if (listing.problem) return [wordsRow(`Its models could not be listed: ${listing.problem}`)];
     if (service.runsOnThisComputer) return whatLocalModelsShow(service);
+    if (service.word === ANTHROPIC) return whatAnthropicShows(service);
     return modelsOf(service).map((model) => modelRow(service, model, model.name));
   }
 
+  function whatClaudeCodeNeeds() {
+    return picked.ai === DIRECT_CONNECTION ? undefined : CLAUDE_CODE_NEEDS[claudeCodeStands];
+  }
+
+  // Claude Code is asked how it stands when the app starts and each time the menu is opened, so what the menu
+  // says is right again as soon as the musician has updated it or signed in.
+  function askHowClaudeCodeStands() {
+    ask("claude_code_standing").then((stands) => {
+      if (stands === claudeCodeStands) return;
+      claudeCodeStands = stands;
+      markTheOpener();
+      if (!search.value) drawModels();
+    }, () => {});
+  }
+
+  function markTheOpener() {
+    opener.classList.toggle("needs-doing", Boolean(whatClaudeCodeNeeds()));
+  }
+
+  function whatAnthropicShows(service) {
+    const needs = whatClaudeCodeNeeds();
+    const models = modelsOf(service).map((model) => modelRow(service, model, model.name));
+    return needs ? [element("div", "menu-words needs-doing", needs.words), ...models] : models;
+  }
+
   function noteBeside(service) {
+    const needs = service.word === ANTHROPIC && whatClaudeCodeNeeds();
+    if (needs) return needs.note;
     if (service.runsOnThisComputer) return "NO KEY NEEDED";
     if (service.word === ANTHROPIC || service.hasKey) return "";
     return service.signsIn || service.signsInWithBrowser ? "SIGN IN" : "ADD KEY";
@@ -395,7 +435,8 @@
     const isOpen = openService === service.word;
     const row = menuRow("menuitem", "service-row");
     row.setAttribute("aria-expanded", String(isOpen));
-    row.append(element("span", "", `${isOpen ? "v" : ">"} ${service.name.toUpperCase()}`), element("span", "menu-value", noteBeside(service)));
+    const needsDoing = service.word === ANTHROPIC && Boolean(whatClaudeCodeNeeds());
+    row.append(element("span", "", `${isOpen ? "v" : ">"} ${service.name.toUpperCase()}`), element("span", needsDoing ? "menu-value needs-doing" : "menu-value", noteBeside(service)));
     row.addEventListener("click", () => openOrSignIn(service));
     return row;
   }
@@ -506,7 +547,9 @@
     modelList = element("div", "menu-models");
     menu.replaceChildren(search, modelList, element("div", "menu-divider"), ...[EFFORT, CONNECTION, webLookups()].map(branch));
     drawModels();
+    markTheOpener();
     if (!isOpen) return;
+    askHowClaudeCodeStands();
     loadEveryListThatCanBeHad();
     search.focus();
   }
@@ -519,6 +562,7 @@
     popup = window.popupMenu(opener, menu, draw);
     aiAccounts.onChange(() => { forgetListings(); letGoOfAModelNoLongerOffered(); draw(!menu.hidden); pickListeners.forEach((tell) => tell()); });
     draw(false);
+    askHowClaudeCodeStands();
   }
 
   function looksThingsUp() {

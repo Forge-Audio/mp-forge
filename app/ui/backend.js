@@ -452,6 +452,8 @@
         return { sent: true, report: DEMO_REPORT, drive: mpc.drive || "SD CARD", restarted: mpc.restart, restartProblem: null };
       },
       clipboard_words: () => navigator.clipboard.readText(),
+      // The stand-in's Claude Code is ready. Keeping another word under "demoClaudeCode" shows how the menu reads then.
+      claude_code_standing: () => window.helpers.recall("demoClaudeCode") || "ready",
       ai_accounts: () => [...DEMO_SERVICES.map((service) => ({ ...service, hasKey: demoKeys.has(service.word) })), demoSignInAccount()],
       keep_key: ({ account, key }) => {
         if (/\s/.test(key)) throw "That does not look like a key. A key is one unbroken run of letters, digits and marks, with no spaces.";

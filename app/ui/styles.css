@@ -302,6 +302,10 @@ body.in-settings .conversation, body.in-settings .mirror { display: none; }
 .readout:not(:disabled)::after { content: ""; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid currentColor; }
 .readout[aria-expanded="true"] { background: var(--well); }
 .status-menu { min-width: 300px; }
+.menu-words.needs-doing { color: var(--accent); font-weight: 600; }
+.service-row .menu-value.needs-doing { color: var(--accent); }
+.service-row:hover .menu-value.needs-doing, .service-row:focus-visible .menu-value.needs-doing { color: inherit; }
+.bar-button.needs-doing::before { content: "!"; color: var(--accent); font-weight: 700; }
 .menu-words { padding: 6px 10px 8px; font-size: 14px; line-height: 1.35; white-space: normal; }
 .status-menu .menu-row { justify-content: center; border: 2px solid var(--line); background: var(--accent); color: var(--accent-ink); font-family: Silkscreen, monospace; font-size: 12px; }
 .readout-label { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--soft); }

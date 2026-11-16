@@ -14,6 +14,10 @@ use crate::simulation::Session;
 
 /// What the computer calls a Python that was installed on it.
 const PYTHON_OF_THE_COMPUTER: &str = if cfg!(windows) { "python" } else { "python3" };
+/// Has Python read and write its words as UTF-8, as it does on a Mac and on Linux. Left to itself on Windows, a
+/// Python that is not printing to a console writes in the computer's old code page, and stops with an error at
+/// the first letter that page lacks, such as the arrow in the notes Akai's tool prints after an install.
+const WRITES_EVERY_LETTER: [(&str, &str); 2] = [("PYTHONUTF8", "1"), ("PYTHONIOENCODING", "utf-8")];
 const BUILD_SCRIPT: &str = "tools/build.py";
 const NEW_PLUGIN_SCRIPT: &str = "tools/new_plugin.py";
 const VALIDATE_SCRIPT: &str = "tools/validate.py";
@@ -104,7 +108,9 @@ impl Sdk {
     /// The Python that runs Akai's tools: MP Forge's own once it has fetched one, and the computer's until then.
     pub(crate) fn python(&self) -> Command {
         let own = self.own_python();
-        if own.is_there() { command_for(own.program()) } else { command_for(PYTHON_OF_THE_COMPUTER) }
+        let mut python = if own.is_there() { command_for(own.program()) } else { command_for(PYTHON_OF_THE_COMPUTER) };
+        python.envs(WRITES_EVERY_LETTER);
+        python
     }
 
     pub(crate) fn own_python(&self) -> OwnPython {

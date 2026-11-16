@@ -246,6 +246,19 @@ mod tests {
         assert!(compiler_set_up_by_akai_works(&sdk));
     }
 
+    /// Akai's install tool prints an arrow among its notes. On Windows that stopped it, after the plugin had
+    /// been sent, with an error about a letter that could not be written.
+    #[test]
+    fn python_prints_letters_that_an_old_code_page_of_windows_lacks() {
+        let mut python = akais_real_sdk().python();
+        python.args(["-c", "print('\\u2192')"]);
+
+        let printed = run_with_time_limit(&mut python, TIME_TO_ANSWER).unwrap();
+
+        assert!(printed.succeeded(), "{}", printed.output);
+        assert_eq!(printed.output.trim(), "\u{2192}");
+    }
+
     #[test]
     fn mp_forges_own_python_is_used_in_place_of_the_computers_once_it_is_there() {
         let folder = TemporaryFolder::create("readiness-own-python");

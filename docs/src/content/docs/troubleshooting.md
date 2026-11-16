@@ -65,8 +65,11 @@ a terminal, sign in in the browser window it opens, then press **CHECK AGAIN**.
 
 ### Claude does not answer through Claude Code
 
-Claude Code has to be installed and signed in. Settings lists it under **What MP Forge needs on this
-computer**, and marks it **NOT FOUND** when it is not installed. Or switch the menu's **Connection** to
+Claude Code has to be installed, up to date and signed in. MP Forge asks it each time you open the model
+menu. When something is missing, the menu says so in red at the top of Claude's models, with **UPDATE
+NEEDED**, **SIGN IN NEEDED** or **NOT INSTALLED** beside Anthropic, and the menu's button shows a red mark.
+Settings also lists Claude Code under **What MP Forge needs on this computer**, and marks it **NOT FOUND**
+when it is not installed. Or switch the menu's **Connection** to
 **Claude API** and add a key, or pick a model from another service.
 
 ### "Claude Code stopped without finishing."

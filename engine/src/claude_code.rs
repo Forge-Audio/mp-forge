@@ -22,7 +22,7 @@ use crate::agent::{AgentError, Event, ModelError, Worker};
 use crate::ai_settings::AiSettings;
 use crate::mcp_server::SERVER_NAME;
 use crate::plugin_tools::TOOL_NAMES;
-use crate::process::{ErrorOutput, command_for, end_with_all_it_started, temporary_file_of_its_own};
+use crate::process::{ErrorOutput, RunError, command_for, end_with_all_it_started, run_with_time_limit, temporary_file_of_its_own};
 use crate::stop_signal::StopSignal;
 
 const PROGRAM: &str = "claude";
@@ -45,6 +45,62 @@ const HOW_TO_UPDATE: &str = "Your Claude Code is older than MP Forge needs. Run 
 /// As much of what Claude Code said on its way out as a musician can read, or pass on to whoever helps them.
 const LAST_LINES_PASSED_ON: usize = 3;
 const LONGEST_PASSED_ON: usize = 400;
+/// The oldest Claude Code that knows every switch it is always started with here: `--restricted` and
+/// `--permission-prompts none`, the second of which came with this version.
+const OLDEST_THAT_WORKS: Version = Version(2, 1, 259);
+const SAYS_ITS_VERSION: [&str; 1] = ["--version"];
+const SAYS_WHETHER_IT_IS_SIGNED_IN: [&str; 2] = ["auth", "status"];
+const TIME_TO_ANSWER: Duration = Duration::from_secs(15);
+
+/// A version of Claude Code, such as 2.1.259, compared a number at a time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct Version(u32, u32, u32);
+
+/// Whether the musician's Claude Code can do the workbench's work.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Standing {
+    Ready,
+    NotSignedIn,
+    TooOld,
+    NotInstalled,
+}
+
+/// Asks Claude Code which version it is and whether it is signed in. Nothing is sent anywhere, and nothing it
+/// says of the account is kept. Whatever it says that is not understood counts in its favour, so a change in
+/// its wording never raises a false alarm.
+pub fn standing() -> Standing {
+    let Some(its_version) = answer_to(&SAYS_ITS_VERSION) else { return Standing::NotInstalled };
+    if version_in(&its_version).is_some_and(|version| version < OLDEST_THAT_WORKS) {
+        return Standing::TooOld;
+    }
+    let its_sign_in = answer_to(&SAYS_WHETHER_IT_IS_SIGNED_IN).unwrap_or_default();
+    if says_it_is_signed_out(&its_sign_in) { Standing::NotSignedIn } else { Standing::Ready }
+}
+
+/// What Claude Code prints when asked. None when it could not be started at all. One that never answers
+/// has said nothing.
+fn answer_to(asked: &[&str]) -> Option<String> {
+    let mut claude_code = command_for(PROGRAM);
+    claude_code.args(asked);
+    match run_with_time_limit(&mut claude_code, TIME_TO_ANSWER) {
+        Ok(answered) => Some(answered.output),
+        Err(RunError::TimedOut { .. }) => Some(String::new()),
+        Err(RunError::CouldNotStart(_)) => None,
+    }
+}
+
+/// The version among what Claude Code prints of itself, such as `2.1.86 (Claude Code)`.
+fn version_in(said: &str) -> Option<Version> {
+    said.split_whitespace().find_map(|word| {
+        let mut numbers = word.split('.').map(str::parse::<u32>);
+        let version = Version(numbers.next()?.ok()?, numbers.next()?.ok()?, numbers.next()?.ok()?);
+        numbers.next().is_none().then_some(version)
+    })
+}
+
+fn says_it_is_signed_out(said: &str) -> bool {
+    serde_json::from_str::<Value>(said).is_ok_and(|status| status["loggedIn"] == false)
+}
 
 /// The command that starts the workbench's own tool server for one plugin.
 pub struct ToolServer {
@@ -549,6 +605,37 @@ mod tests {
         let (transcript, _) = heard(&[json!({ "type": "system", "subtype": "init", "session_id": "session-1" })]);
 
         assert!(matches!(transcript.closing_words(), Err(ModelError::Unreachable(why)) if why == STOPPED_WITHOUT_FINISHING));
+    }
+
+    /// Asks the Claude Code on this computer, which not every computer that runs these tests has. Nothing is
+    /// asked of Claude itself, so it spends nothing: `cargo test -- --ignored this_computers_claude_code`.
+    #[test]
+    #[ignore = "needs Claude Code installed, up to date and signed in"]
+    fn this_computers_claude_code_is_found_ready() {
+        assert_eq!(standing(), Standing::Ready);
+    }
+
+    #[test]
+    fn the_version_is_read_from_what_claude_code_prints_of_itself() {
+        assert_eq!(version_in("2.1.86 (Claude Code)\n"), Some(Version(2, 1, 86)));
+        assert_eq!(version_in("a newer one is out\n2.1.325 (Claude Code)"), Some(Version(2, 1, 325)));
+        assert_eq!(version_in("Claude Code"), None);
+        assert_eq!(version_in("2.1 (Claude Code)"), None);
+    }
+
+    #[test]
+    fn a_version_is_too_old_number_by_number_and_not_letter_by_letter() {
+        assert!(Version(2, 1, 86) < OLDEST_THAT_WORKS);
+        assert!(Version(2, 1, 258) < OLDEST_THAT_WORKS);
+        assert!(Version(2, 1, 259) >= OLDEST_THAT_WORKS && Version(2, 2, 0) >= OLDEST_THAT_WORKS && Version(3, 0, 0) >= OLDEST_THAT_WORKS);
+    }
+
+    #[test]
+    fn only_a_plain_no_counts_as_signed_out() {
+        assert!(says_it_is_signed_out(r#"{ "loggedIn": false, "authMethod": "none" }"#));
+        assert!(!says_it_is_signed_out(r#"{ "loggedIn": true }"#));
+        assert!(!says_it_is_signed_out("Not logged in. Run claude auth login."));
+        assert!(!says_it_is_signed_out(""));
     }
 
     fn stopped_early_saying(complaints: &str) -> String {

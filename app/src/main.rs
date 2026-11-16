@@ -139,6 +139,7 @@ fn open_window() -> ExitCode {
             commands::send_to_mpc,
             commands::clipboard_words,
             accounts::ai_accounts,
+            accounts::claude_code_standing,
             accounts::keep_key,
             accounts::forget_key,
             accounts::mpc_password_is_kept,
