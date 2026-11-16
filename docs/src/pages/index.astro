@@ -3,6 +3,7 @@
 
 import { Image } from 'astro:assets';
 
+import Blacksmith from '../components/Blacksmith.astro';
 import LaunchVideo from '../components/LaunchVideo.astro';
 import Website from '../layouts/Website.astro';
 import { LAUNCH_VIDEO } from '../launch-video.js';
@@ -10,6 +11,7 @@ import { places } from '../website-places.js';
 
 import logo from '../assets/logo.png';
 import wholeApp from '../assets/screenshots/the-mpc-screen.png';
+import pluginFromTheTrailer from '../assets/bille-tumbler-in-mp-forge.png';
 import describing from '../assets/screenshots/describe-a-plugin.png';
 import playing from '../assets/screenshots/play-an-instrument.png';
 import editing from '../assets/screenshots/edit-the-look.png';
@@ -22,6 +24,9 @@ const WIDTH_BESIDE_WORDS = '(min-width: 56rem) 38rem, 94vw';
 const WHOLE_APP_SHOWS =
 	'MP Forge with a finished plugin open: the conversation on the left, and on the right the plugin’s MPC screen with its knobs and faders, the play, send and edit buttons above it, and the sixteen hardware knobs beside it. The status reads SAFE TO SEND.';
 
+const PLUGIN_FROM_THE_TRAILER_SHOWS =
+	'MP Forge with Bille Tumbler open, the plugin made in the trailer. On the left is the conversation that made it. On the right is its MPC screen: a pyramid tumbling across a table, above violet knobs named Throw, Tumble, Rock and Weight.';
+
 // What a visitor should know before downloading. Every post about MP Forge says the same things.
 const facts = [
 	{ what: 'Free', words: 'Free and open source. There is nothing to buy.', more: places.licence },
@@ -30,9 +35,11 @@ const facts = [
 	{ what: 'MPC OS 3.10.1', words: 'Your MPC needs MPC OS 3.10.1 or later.', more: places.whatYouNeed },
 ];
 
+// Each step shows the blacksmith a moment further through one swing of his hammer, which lands on the last.
 const steps = [
 	{
 		title: 'Start anywhere',
+		smith: 'resting',
 		words: 'Say what you want, as you would to a friend, with a picture or a sound file if it helps. Or press REMIX A PLUGIN to build your own version of one from the Open MPC catalog, or I’M FEELING LUCKY to be surprised. An AI of your choice writes the plugin.',
 		picture: describing,
 		shows: 'The form for a new plugin, filled in: the name Dusty Tape, the maker Forge Audio, Effect chosen, and a description beside the BUILD IT button.',
@@ -40,6 +47,7 @@ const steps = [
 	},
 	{
 		title: 'See it and play it',
+		smith: 'lifting',
 		words: 'The plugin’s screen is shown as it will look on your MPC, and the real plugin plays through your computer’s speakers straight away. An instrument gets a piano to play. An effect gets a beat, or a sound of your own, with ON and OFF to compare.',
 		picture: playing,
 		shows: 'An instrument being played: its MPC screen, a piano under it, and the sixteen hardware knobs beside it.',
@@ -47,6 +55,7 @@ const steps = [
 	},
 	{
 		title: 'Make it yours',
+		smith: 'woundUp',
 		words: 'Ask for a change in plain words and hear it. Open EDIT THE LOOK to move, resize and restyle every control and to add your own artwork. Every change keeps the version before it, so going back is always possible.',
 		picture: editing,
 		shows: 'The editor EDIT THE LOOK: a row of tools, the plugin’s page with its controls to arrange, and on the right the layers, the chosen item and a box for asking MP Forge to change something.',
@@ -54,6 +63,7 @@ const steps = [
 	},
 	{
 		title: 'Twelve safety checks',
+		smith: 'comingDown',
 		words: 'A plugin runs inside the MPC’s own app. So MP Forge reads its code, builds it with Akai’s tools and plays it through Akai’s simulator first. A plugin that does not pass cannot be sent.',
 		picture: checking,
 		shows: 'The status in the top bar reading NOT CHECKED YET, with its menu open and the button RUN THE SAFETY CHECK NOW.',
@@ -61,6 +71,7 @@ const steps = [
 	},
 	{
 		title: 'Send it to your MPC',
+		smith: 'striking',
 		words: 'Once it is safe to send, the plugin goes over your network to a USB drive or SD card in your MPC. It never goes onto the MPC’s built-in storage, so pulling the drive out always takes it away again.',
 		picture: sending,
 		shows: 'The sheet SEND TO YOUR MPC, asking for the MPC’s address, with the buttons CANCEL and SEND.',
@@ -101,7 +112,7 @@ const needs = [
 
 		{
 			LAUNCH_VIDEO ? (
-				<LaunchVideo video={LAUNCH_VIDEO} poster={wholeApp} posterShows={WHOLE_APP_SHOWS} />
+				<LaunchVideo video={LAUNCH_VIDEO} poster={pluginFromTheTrailer} posterShows={PLUGIN_FROM_THE_TRAILER_SHOWS} />
 			) : (
 				<Image class="picture" src={wholeApp} alt={WHOLE_APP_SHOWS} widths={WIDTHS_OFFERED} sizes={WIDTH_ON_THE_FIRST_SCREEN} loading="eager" />
 			)
@@ -124,6 +135,7 @@ const needs = [
 			steps.map((step, index) => (
 				<article class="step">
 					<div class="step-words">
+						<Blacksmith doing={step.smith} />
 						<p class="label">Step {index + 1}</p>
 						<h2>{step.title}</h2>
 						<p>{step.words}</p>
@@ -176,6 +188,7 @@ const needs = [
 	</section>
 
 	<section class="closing">
+		<Blacksmith doing="swinging" times={3} />
 		<h2>Free and open source</h2>
 		<p>
 			MP Forge is free, and its code is open for anyone to read and change, under the{' '}

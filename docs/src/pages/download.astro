@@ -5,6 +5,7 @@
 // As it is written here the page needs no script: it is one plain link to the releases page. The script takes
 // that away and puts the buttons in its place, or says where the downloads are when it could not list them.
 
+import Blacksmith from '../components/Blacksmith.astro';
 import Website from '../layouts/Website.astro';
 import { places } from '../website-places.js';
 
@@ -17,6 +18,7 @@ const systems = [
 
 <Website title="Download MP Forge" description="Download MP Forge for macOS, Windows or Linux. Free and open source.">
 	<section class="opening brief">
+		<Blacksmith doing="swinging" />
 		<h1>Download MP Forge</h1>
 		<p class="lead">Free and open source, for macOS, Windows and Linux.</p>
 	</section>

@@ -298,11 +298,12 @@ main > section {
 	object-position: top;
 }
 
+/* The button stands low in the picture, so that the plugin in it can be seen. */
 .video .play {
 	position: absolute;
 	left: 50%;
-	top: 50%;
-	transform: translate(-50%, -50%);
+	bottom: 8%;
+	transform: translateX(-50%);
 }
 
 /* The facts stand side by side, however many there are. */
@@ -404,6 +405,43 @@ main > section {
 
 .closing .choices {
 	justify-content: center;
+}
+
+/* --- The blacksmith ------------------------------------------------------------------------------- */
+
+/* His strip holds fifteen frames, each 64 by 67 pixels as drawn. He is shown a whole number of times larger,
+   so that his pixels stay square. One frame is on show at a time: the one named, or each in turn. */
+.smith {
+	--frame-width: calc(64px * var(--times));
+	display: block;
+	flex: none;
+	width: var(--frame-width);
+	height: calc(67px * var(--times));
+	background-repeat: no-repeat;
+	background-size: calc(var(--frame-width) * 15) 100%;
+	background-position-x: calc(var(--frame-width) * var(--frame) * -1);
+	image-rendering: pixelated;
+}
+
+/* A swing lasts as long as in the app: fifteen frames of 83 thousandths of a second. */
+.smith.swinging {
+	animation: swing-of-the-hammer 1245ms steps(15) infinite;
+}
+
+@keyframes swing-of-the-hammer {
+	from {
+		background-position-x: 0;
+	}
+
+	to {
+		background-position-x: calc(var(--frame-width) * -15);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.smith.swinging {
+		animation: none;
+	}
 }
 
 /* --- Cards: one of the app's windows, small ------------------------------------------------------- */

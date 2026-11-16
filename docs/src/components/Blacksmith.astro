@@ -1,0 +1,25 @@
+---
+// The app's blacksmith, hammering an MPC on his anvil. He is one strip of frames side by side, and is shown
+// either swinging his hammer or holding still at one moment of the swing. He is there for show: a reader who
+// cannot see him loses nothing, so he is hidden from screen readers.
+
+import strip from '../assets/blacksmith.png';
+
+// The frame of the strip that shows each moment of the swing.
+const MOMENTS = { resting: 1, lifting: 5, woundUp: 8, comingDown: 13, striking: 0 };
+const TIMES_LARGER_THAN_DRAWN = 2;
+
+interface Props {
+	doing: 'swinging' | keyof typeof MOMENTS;
+	times?: number;
+}
+
+const { doing, times = TIMES_LARGER_THAN_DRAWN } = Astro.props;
+const swinging = doing === 'swinging';
+const frameWhenStill = swinging ? MOMENTS.resting : MOMENTS[doing];
+---
+
+<span
+	class:list={['smith', { swinging }]}
+	style={`--times: ${times}; --frame: ${frameWhenStill}; background-image: url(${strip.src});`}
+	aria-hidden="true"></span>

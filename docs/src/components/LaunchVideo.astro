@@ -15,7 +15,7 @@ interface Props {
 
 const { video, poster, posterShows } = Astro.props;
 
-const WIDTHS_OFFERED = [640, 960, 1280];
+const WIDTHS_OFFERED = [640, 960, 1280, 1920];
 const WIDTH_ON_THE_PAGE = '(min-width: 56rem) 44rem, 94vw';
 const onYouTube = `https://www.youtube.com/watch?v=${video}`;
 const playingInPlace = `https://www.youtube-nocookie.com/embed/${video}?autoplay=1`;
