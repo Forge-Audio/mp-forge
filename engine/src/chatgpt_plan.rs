@@ -429,6 +429,36 @@ fn decoded_json(web_base64: &str) -> Option<Value> {
 }
 
 #[cfg(test)]
+pub(crate) mod test_support {
+    use std::io::Read;
+    use std::net::TcpStream;
+
+    /// Reads the heading and as much of the body as the heading says there is. A stand-in service that answers
+    /// and hangs up with some of the request still unread is cut off by Windows before its answer arrives.
+    pub(crate) fn whole_request_from(asker: &mut TcpStream) -> String {
+        let mut request = String::new();
+        let mut piece = [0u8; 2048];
+        while !is_whole(&request) {
+            let read = asker.read(&mut piece).unwrap_or(0);
+            if read == 0 {
+                break;
+            }
+            request.push_str(&String::from_utf8_lossy(&piece[..read]));
+        }
+        request
+    }
+
+    fn is_whole(request: &str) -> bool {
+        request.split_once("\r\n\r\n").is_some_and(|(heading, body)| body.len() >= body_length_said_in(heading))
+    }
+
+    fn body_length_said_in(heading: &str) -> usize {
+        let said_on = |line: &str| line.to_ascii_lowercase().strip_prefix("content-length:").and_then(|length| length.trim().parse().ok());
+        heading.lines().find_map(said_on).unwrap_or(0)
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use std::collections::HashMap;
     use std::io::{Read, Write};
@@ -441,6 +471,7 @@ mod tests {
     use ring::rsa::KeyPair;
     use ring::signature::RSA_PKCS1_SHA256;
 
+    use super::test_support::whole_request_from;
     use super::*;
 
     const MADE_UP_SIGNING_KEY: &str = include_str!("../tests/fixtures/made_up_signing_key.pkcs8.b64");
@@ -541,21 +572,6 @@ mod tests {
             Some(answers) if answers.len() > 1 => answers.remove(0),
             Some(answers) => answers.first().cloned().unwrap_or((404, String::new())),
             None => (404, String::new()),
-        }
-    }
-
-    /// Reads the heading and as much of the body as the heading says there is.
-    fn whole_request_from(asker: &mut TcpStream) -> String {
-        let mut request = String::new();
-        let mut piece = [0u8; 2048];
-        loop {
-            let read = asker.read(&mut piece).unwrap_or(0);
-            request.push_str(&String::from_utf8_lossy(&piece[..read]));
-            let Some((heading, body)) = request.split_once("\r\n\r\n") else { continue };
-            let wanted = heading.lines().find_map(|line| line.to_ascii_lowercase().strip_prefix("content-length:").and_then(|length| length.trim().parse::<usize>().ok()));
-            if read == 0 || body.len() >= wanted.unwrap_or(0) {
-                return request;
-            }
         }
     }
 

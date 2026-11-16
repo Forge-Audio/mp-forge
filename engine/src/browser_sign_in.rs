@@ -41,6 +41,8 @@ const BETWEEN_LOOKS: Duration = Duration::from_millis(100);
 /// A browser sometimes opens a connection ahead of time and says nothing on it. It is not waited on for long,
 /// so the connection that does carry the answer is reached quickly.
 const BROWSER_SAYS_IT_WITHIN: Duration = Duration::from_secs(2);
+/// A browser sends a few dozen lines of heading at most. Anything that sends more is not listened to further.
+const MOST_LINES_IN_A_HEADING: usize = 200;
 const CAME_BACK_TO: &str = "/signed-in";
 const PROOF_METHOD: &str = "S256";
 const BYTES_IN_A_SECRET: usize = 32;
@@ -117,12 +119,15 @@ fn answered(mut browser: TcpStream, page: &str, is_awaited: &dyn Fn(&Brought) ->
     brought
 }
 
+/// The first line of what the browser asked. The rest of its heading is read as well and left unused: a door
+/// shut with words still unread makes Windows cut the browser off before it has shown the page.
 fn first_line_from(browser: &TcpStream) -> Option<String> {
     browser.set_nonblocking(false).ok()?;
     browser.set_read_timeout(Some(BROWSER_SAYS_IT_WITHIN)).ok()?;
-    let mut line = String::new();
-    BufReader::new(browser).read_line(&mut line).ok()?;
-    Some(line)
+    let mut heading = BufReader::new(browser).lines();
+    let first_line = heading.next()?.ok()?;
+    heading.take(MOST_LINES_IN_A_HEADING).map_while(Result::ok).take_while(|line| !line.is_empty()).for_each(drop);
+    Some(first_line)
 }
 
 /// The fields in a request such as `GET /signed-in?code=abc&state=xyz HTTP/1.1`, when it is for `page`.

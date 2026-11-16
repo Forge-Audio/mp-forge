@@ -295,11 +295,12 @@ fn stop_reason_from(cut_short_because: Option<&str>, refused: bool, asked_for_to
 
 #[cfg(test)]
 mod tests {
-    use std::io::{Read, Write};
+    use std::io::Write;
     use std::net::TcpListener;
     use std::thread;
 
     use super::*;
+    use crate::chatgpt_plan::test_support::whole_request_from;
     use crate::agent::ToolOutput;
 
     const TOOLS: [&str; 2] = ["read_plugin_file", "check_plugin"];
@@ -450,9 +451,7 @@ mod tests {
         let address = format!("http://127.0.0.1:{}/responses", service.local_addr().unwrap().port());
         thread::spawn(move || {
             for mut asker in service.incoming().flatten() {
-                let mut heard = [0u8; 8192];
-                let read = asker.read(&mut heard).unwrap_or(0);
-                let has_the_new_token = String::from_utf8_lossy(&heard[..read]).to_lowercase().contains("bearer new-token");
+                let has_the_new_token = whole_request_from(&mut asker).to_lowercase().contains("bearer new-token");
                 let reply = format!("{WORDS_ITEM}\n\n{COMPLETED}\n\n");
                 let _ = if has_the_new_token {
                     write!(asker, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{reply}", reply.len())

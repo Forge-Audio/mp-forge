@@ -81,10 +81,12 @@ jobs:
         working-directory: vendor/mpc-plugin-builder-sdk
         run: python tools/build.py examples/StereoDelay
 
+      # Every group of tests is run even after one has failed, so that one run shows everything that is wrong.
       - name: Test the engine
         working-directory: engine
-        run: cargo test --locked
+        run: cargo test --locked --no-fail-fast
 
       - name: Test the app
+        if: ${{ !cancelled() }}
         working-directory: app
-        run: cargo test --locked
+        run: cargo test --locked --no-fail-fast
