@@ -5,7 +5,7 @@ description: What has to be on your computer and your MPC before MP Forge can ma
 
 ## On your computer
 
-MP Forge is made for macOS, Windows and Linux. [What is and is not finished](./status.md) says how far
+MP Forge is made for macOS, Windows and Linux. [Where MP Forge stands](./status.md) says how far
 each of them has been tested.
 
 MP Forge looks for what it needs every time it opens. Python and Akai's build tools it fetches for you when

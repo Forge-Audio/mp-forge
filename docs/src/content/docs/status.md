@@ -1,9 +1,9 @@
 ---
-title: What is and is not finished
+title: Where MP Forge stands
 description: Where MP Forge stands today, said plainly.
 ---
 
-This page says what works, where MP Forge has been tested, and what is not there yet.
+This page says what works and where MP Forge has been tested.
 
 It is free and open source, under the GNU General Public License, version 3 or later.
 
@@ -23,10 +23,6 @@ It is free and open source, under the GNU General Public License, version 3 or l
 - **On a Mac**, MP Forge is written, installed and used by hand.
 - **On Windows and Linux**, it is built and tested by automated tests every time the code changes. It has
   not yet been tested by hand there.
-
-## Not there yet
-
-- **Taking plugins off an MPC.** MP Forge sends plugins. Removing one is done on the drive itself.
 
 ## Who makes it
 

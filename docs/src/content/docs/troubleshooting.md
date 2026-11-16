@@ -138,4 +138,4 @@ building, start MP Forge again with `cargo run` from its `app` folder.
 
 ## Something else
 
-[What is and is not finished](./status.md) says what MP Forge does not do yet.
+[Where MP Forge stands](./status.md) says what works and where it has been tested.
