@@ -34,7 +34,7 @@ Effort, Connection and Web lookups are the same for every plugin.
 
 | In the menu | How you connect it |
 | --- | --- |
-| **Anthropic** (Claude), through **Claude Code** | Install Claude Code from [claude.com/claude-code](https://claude.com/claude-code) and sign in to it. MP Forge needs no key. This is what MP Forge starts on. |
+| **Anthropic** (Claude), through **Claude Code** | Install Claude Code from [claude.com/claude-code](https://claude.com/claude-code) and sign in to it. Keep it up to date with `claude update`: MP Forge needs version 2.1.259 or newer. MP Forge needs no key. This is what MP Forge starts on. |
 | **Anthropic** (Claude), through the **Claude API** | Paste a key made at console.anthropic.com/settings/keys. |
 | **OpenAI** | Paste a key made at platform.openai.com/api-keys. |
 | **ChatGPT (your plan)** | Press **CONTINUE WITH CHATGPT** and sign in on OpenAI's own page in your browser. This needs a paid ChatGPT plan, Plus or Pro. |

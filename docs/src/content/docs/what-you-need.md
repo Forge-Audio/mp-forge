@@ -44,7 +44,7 @@ Each of these only switches on the one thing it is used for. Settings marks one 
 | What | What it is for | How to get it |
 | --- | --- | --- |
 | **SSH** | Sends a plugin to your MPC over the network. | It comes with macOS. On Windows, add "OpenSSH Client" under Windows Settings, Optional features. On Linux, install `openssh-client`. |
-| **Claude Code** | Lets Claude do the work through your own Claude sign-in, without a key. | Install it from [claude.com/claude-code](https://claude.com/claude-code) and sign in to it. Not needed when you use a key or another service. |
+| **Claude Code** | Lets Claude do the work through your own Claude sign-in, without a key. | Install it from [claude.com/claude-code](https://claude.com/claude-code) and sign in to it. It has to be version 2.1.259 or newer: `claude update` in a terminal brings it up to date. Not needed when you use a key or another service. |
 
 ### On Linux
 

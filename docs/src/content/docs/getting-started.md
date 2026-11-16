@@ -81,6 +81,9 @@ time you pick a model from a service you have not used, MP Forge asks you to sig
 MP Forge starts on a Claude model, reached through Claude Code. That works with no key if you have Claude
 Code installed and signed in. If you do not, pick a model from any other service in the menu.
 
+If Claude Code has been on your computer for a while, bring it up to date first: run `claude update` in a
+terminal. MP Forge needs version 2.1.259 or newer, and an older one stops as soon as a build starts.
+
 [Choosing an AI](./choosing-an-ai.md) lists every service and how each one is connected.
 
 ## 4. Make your first plugin
