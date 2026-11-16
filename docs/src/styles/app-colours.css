@@ -1,0 +1,35 @@
+/* MP Forge's own colours and measures, dark and light. They are the ones in app/ui/styles.css, under the same
+   names. The docs and the website's pages both draw with them, so they are written down once, here. */
+
+:root {
+	--accent: #b5271f;
+	--accent-ink: #ffffff;
+	--desk: #22212a;
+	--face: #34323d;
+	--well: #18171d;
+	--line: #0c0b10;
+	--ink: #ecebf2;
+	--soft: #b0adbd;
+	--bar: #0c0b10;
+	--bar-ink: #ecebf2;
+	--hi: #5d5a6b;
+	--lo: #1f1e26;
+
+	--raised: inset 2px 2px 0 var(--hi), inset -2px -2px 0 var(--lo);
+	--raised-window: var(--raised), 4px 4px 0 var(--line);
+	--pressed-in: inset 2px 2px 0 var(--lo);
+	--font-labels: Silkscreen, monospace;
+}
+
+:root[data-theme='light'] {
+	--desk: #a9a6b8;
+	--face: #d9d6e2;
+	--well: #ffffff;
+	--line: #1b1a22;
+	--ink: #1b1a22;
+	--soft: #4a4759;
+	--bar: #1b1a22;
+	--bar-ink: #ffffff;
+	--hi: #ffffff;
+	--lo: #8b879c;
+}

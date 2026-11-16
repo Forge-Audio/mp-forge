@@ -47,6 +47,8 @@ body {
   background: var(--desk);
   color: var(--ink);
   font-family: "Pixelify Sans", "Courier New", monospace;
+  /* Pixelify Sans joins "fi" into one shape that reads as an A, so "first" came out as "Arst". */
+  font-variant-ligatures: none;
   font-size: 17px;
   line-height: 1.4;
 }

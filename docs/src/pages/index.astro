@@ -1,0 +1,131 @@
+---
+// The website's home: what MP Forge is, how to get it, and what it looks like.
+
+import { Image } from 'astro:assets';
+
+import Website from '../layouts/Website.astro';
+import { places } from '../website-places.js';
+
+import logo from '../assets/logo.png';
+import wholeApp from '../assets/screenshots/the-mpc-screen.png';
+import describing from '../assets/screenshots/describe-a-plugin.png';
+import playing from '../assets/screenshots/play-an-instrument.png';
+import checking from '../assets/screenshots/run-the-safety-check.png';
+import sending from '../assets/screenshots/send-to-your-mpc.png';
+
+const WIDTHS_OFFERED = [640, 960, 1280, 1920];
+const WIDTH_ON_THE_PAGE = '(min-width: 72rem) 68rem, 94vw';
+const WIDTH_BESIDE_WORDS = '(min-width: 56rem) 38rem, 94vw';
+
+const steps = [
+	{
+		title: 'Describe it',
+		words: 'Give the plugin a name and say what you want, as you would to a friend. Add a picture or a sound file if it helps. An AI of your choice writes the plugin.',
+		picture: describing,
+		shows: 'The form for a new plugin, filled in: the name Dusty Tape, the maker Forge Audio, Effect chosen, and a description beside the BUILD IT button.',
+		more: { words: 'Making your first plugin', place: places.firstPlugin },
+	},
+	{
+		title: 'See it and play it',
+		words: 'The plugin’s screen is shown as it will look on your MPC, and the real plugin plays through your computer’s speakers. Ask for changes until it is right. Every change keeps the version before it.',
+		picture: playing,
+		shows: 'An instrument being played: its MPC screen, a piano under it, and the sixteen hardware knobs beside it.',
+		more: { words: 'Playing and changing a plugin', place: places.firstPlugin },
+	},
+	{
+		title: 'Twelve safety checks',
+		words: 'A plugin runs inside the MPC’s own app. So MP Forge reads its code, builds it with Akai’s tools and plays it through Akai’s simulator first. A plugin that does not pass cannot be sent.',
+		picture: checking,
+		shows: 'The status in the top bar reading NOT CHECKED YET, with its menu open and the button RUN THE SAFETY CHECK NOW.',
+		more: { words: 'What the checks look for', place: places.safetyChecks },
+	},
+	{
+		title: 'Send it to your MPC',
+		words: 'Once it is safe to send, the plugin goes over your network to a USB drive or SD card in your MPC. It never goes onto the MPC’s built-in storage, so pulling the drive out always takes it away again.',
+		picture: sending,
+		shows: 'The sheet SEND TO YOUR MPC, asking for the MPC’s address, with the buttons CANCEL and SEND.',
+		more: { words: 'Setting your MPC up', place: places.sendToYourMpc },
+	},
+];
+
+const needs = [
+	{ what: 'A computer', words: 'MP Forge is made for macOS, Windows and Linux.' },
+	{ what: 'An AI of your own', words: 'An account with an AI service, or Ollama for models that run on your own computer with no account.' },
+	{ what: 'An MPC', words: 'Running MPC OS 3.10.1 or later, with External Plugin Support switched on, and a USB drive or SD card in it.' },
+];
+---
+
+<Website title="MP Forge: make plugins for your MPC by describing them" description="MP Forge is a free, open-source app that makes instruments and effects for Akai MPC hardware from a description.">
+	<section class="opening">
+		<Image class="logo" src={logo} alt="" width={128} height={128} />
+		<h1>Make plugins for your MPC by describing them.</h1>
+		<p class="lead">
+			MP Forge is a desktop app for musicians who do not program. You say what you want in plain words, an AI builds
+			the instrument or effect, and MP Forge checks that it is safe before it goes anywhere near your MPC.
+		</p>
+		<p class="choices">
+			<a class="button large" href={places.download}>Download</a>
+			<a class="button quiet" href={places.docs}>Read the docs</a>
+		</p>
+		<p class="note">Free and open source. For macOS, Windows and Linux.</p>
+	</section>
+
+	<section class="shown">
+		<Image
+			class="picture"
+			src={wholeApp}
+			alt="MP Forge with a finished plugin open: the conversation on the left, and on the right the plugin's MPC screen with its knobs and faders, the play, send and edit buttons above it, and the sixteen hardware knobs beside it. The status reads SAFE TO SEND."
+			widths={WIDTHS_OFFERED}
+			sizes={WIDTH_ON_THE_PAGE}
+			loading="eager"
+		/>
+	</section>
+
+	<section class="steps" aria-label="How it works">
+		{
+			steps.map((step, index) => (
+				<article class="step">
+					<div class="step-words">
+						<p class="label">Step {index + 1}</p>
+						<h2>{step.title}</h2>
+						<p>{step.words}</p>
+						<p>
+							<a href={step.more.place}>{step.more.words}</a>
+						</p>
+					</div>
+					<Image class="picture" src={step.picture} alt={step.shows} widths={WIDTHS_OFFERED} sizes={WIDTH_BESIDE_WORDS} />
+				</article>
+			))
+		}
+	</section>
+
+	<section class="needs">
+		<h2>What you need</h2>
+		<ul class="cards">
+			{
+				needs.map((need) => (
+					<li class="card">
+						<h3 class="titlebar">{need.what}</h3>
+						<p>{need.words}</p>
+					</li>
+				))
+			}
+		</ul>
+		<p>
+			MP Forge tells you if anything else is missing on your computer, and how to get it.{' '}
+			<a href={places.whatYouNeed}>What you need</a> has the full list.
+		</p>
+	</section>
+
+	<section class="closing">
+		<h2>Free and open source</h2>
+		<p>
+			MP Forge is free, and its code is open for anyone to read and change, under the{' '}
+			<a href={places.licence}>GNU General Public License, version 3 or later</a>.
+		</p>
+		<p class="choices">
+			<a class="button large" href={places.download}>Download</a>
+			<a class="button quiet" href={places.source}>See the code</a>
+		</p>
+	</section>
+</Website>

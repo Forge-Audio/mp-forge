@@ -1,0 +1,126 @@
+---
+title: Troubleshooting
+description: The messages MP Forge shows when something is in the way, and what to do about each.
+---
+
+## Starting MP Forge
+
+### "This computer cannot build a plugin yet."
+
+Something MP Forge cannot work without is missing: Python 3, Akai's build tools, or both. Open **Settings**
+and look under **What MP Forge needs on this computer**. Each missing thing says how to get it. Press
+**CHECK AGAIN** when you have.
+
+### Python is installed but still marked MISSING
+
+Akai's build script needs two parts of Python, `venv` and `ensurepip`, that some systems leave out. On
+Linux, install `python3-venv` as well as `python3`. On Windows, MP Forge looks for a program called
+`python`, so install Python from the Microsoft Store, or from python.org with "Add python.exe to PATH"
+ticked.
+
+### "The build tools could not be fetched" or "Fetching the build tools took too long"
+
+Fetching Akai's compiler needs the network, once, for a download of about 50 MB. Check the connection and
+press **GET THE BUILD TOOLS** again.
+
+## The AI
+
+### The model list of a service will not open
+
+A service's models are asked of the service itself, so this needs the network and, for most services, your
+key or sign-in. Check both under **Settings → AI accounts**.
+
+### "Ollama is not running on this computer."
+
+Open Ollama, then open the list of models again.
+
+### "No model here can use tools yet."
+
+None of the models you have in Ollama can do MP Forge's work. Get one in Ollama that can use tools, then
+open the list again.
+
+### A model on your computer loses track of what it was asked
+
+In Ollama's settings, give models a context length of 64000 or more.
+
+### "Codex was not found on this computer yet." or "Codex is installed but not signed in yet."
+
+The **ChatGPT (Codex sign-in)** connection uses Codex, OpenAI's own tool. Install it, run `codex login` in
+a terminal, sign in in the browser window it opens, then press **CHECK AGAIN**.
+
+### Claude does not answer through Claude Code
+
+Claude Code has to be installed and signed in. Settings lists it under **What MP Forge needs on this
+computer**, and marks it **NOT FOUND** when it is not installed. Or switch the menu's **Connection** to
+**Claude API** and add a key, or pick a model from another service.
+
+### "The AI is still busy with another plugin."
+
+The AI works on one plugin at a time. Build this one once the other has finished, or open the other and
+press **STOP** there.
+
+## Building and checking
+
+### The status says BLOCKED
+
+One safety check failed. The conversation says which, and why. Ask for a fix there, in your own words:
+"fix what the safety check found" is enough. [The safety checks](./safety-checks.md) explains each check.
+
+### "The live player stopped on its own."
+
+The plugin most likely crashed it. Run the safety check to find out why.
+
+### A change made things worse
+
+Press **VERSIONS** at the top of the conversation and go back to a version from before the change.
+
+## Sending to your MPC
+
+### "The MPC was not reached, or it said no."
+
+The message ends with what Akai's install tool reported. Things to check:
+
+- the MPC is not on the same network as your computer,
+- the address is not the MPC's own, which it shows under its Wi-Fi settings,
+- developer mode is off on the MPC,
+- the MPC asks for a password, and none is set under **Settings → Your MPC**.
+
+### "The MPC has no USB drive or SD card in it that can be written to."
+
+MP Forge only sends to a drive that can be pulled out. Put a USB drive or an SD card in the MPC and send
+again.
+
+### "The MPC has several drives that can be pulled out"
+
+Say which one to use under **Settings → Your MPC**, by its name or its number.
+
+### "… is built into the MPC."
+
+The drive named in Settings is the MPC's own storage, which MP Forge never writes to. Name a removable
+drive there, or leave the drive empty.
+
+### "Akai's tool for reaching the MPC could not be run"
+
+Sending needs Python 3 and SSH on your computer. Check both under **Settings → What MP Forge needs on this
+computer**.
+
+### The plugin was sent but is not in the MPC's list
+
+- The MPC's app has to be restarted before a new plugin shows. Send again with **Restart the MPC's app
+  afterwards** ticked, or restart the MPC yourself.
+- **Enable Enhancements** and **External Plugin Support** both have to be on, under Preferences →
+  Enhancements (Beta).
+- The MPC has to run MPC OS 3.10.1 or later.
+- Look under **External Plugins** in the plugin browser.
+
+## If you built MP Forge yourself
+
+### "Akai's SDK was not found at … Run scripts/check-sdk.sh to fetch it."
+
+Akai's SDK is not in the `vendor` folder inside your `mp-forge` folder. Fetch it as in
+[Building from source](./building-from-source.md#fetch-akais-sdk). If you moved the `mp-forge` folder after
+building, start MP Forge again with `cargo run` from its `app` folder.
+
+## Something else
+
+MP Forge is an early build, and [what is not finished](./status.md) is written down.

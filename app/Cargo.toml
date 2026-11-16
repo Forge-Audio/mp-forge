@@ -2,6 +2,7 @@
 name = "workbench-app"
 version = "0.1.0"
 edition = "2024"
+license = "GPL-3.0-or-later"
 description = "The desktop app for the MPC plugin workbench."
 
 [build-dependencies]

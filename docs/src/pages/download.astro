@@ -1,0 +1,147 @@
+---
+// The download page. The installers themselves are kept with MP Forge's releases on GitHub. This page asks
+// GitHub which files the latest release holds and links straight to them, the visitor's own system first.
+//
+// As it is written here the page needs no script: it is one plain link to the releases page. The script takes
+// that away and puts the buttons in its place, or says that the downloads are still on their way.
+
+import Website from '../layouts/Website.astro';
+import { places } from '../website-places.js';
+
+const systems = [
+	{ word: 'macos', name: 'macOS' },
+	{ word: 'windows', name: 'Windows' },
+	{ word: 'linux', name: 'Linux' },
+];
+---
+
+<Website title="Download MP Forge" description="Download MP Forge for macOS, Windows or Linux. Free and open source.">
+	<section class="opening brief">
+		<h1>Download MP Forge</h1>
+		<p class="lead">Free and open source, for macOS, Windows and Linux.</p>
+	</section>
+
+	<section class="downloads" aria-live="polite">
+		<div data-shown-when="plain">
+			<p>MP Forge’s downloads are kept with its releases on GitHub.</p>
+			<p class="choices">
+				<a class="button large" href={places.releases}>Go to the downloads</a>
+			</p>
+		</div>
+
+		<p class="note" data-shown-when="looking" hidden>Looking for the latest version…</p>
+
+		<div data-shown-when="found" hidden>
+			<ul class="cards systems">
+				{
+					systems.map((system) => (
+						<li class="card" data-system={system.word}>
+							<h2 class="titlebar">
+								<span>{system.name}</span>
+								<span class="yours" hidden>Your computer</span>
+							</h2>
+							<div class="files" />
+							<p class="note" data-nothing-yet hidden>Not ready for {system.name} yet.</p>
+						</li>
+					))
+				}
+			</ul>
+			<p class="note" data-version />
+		</div>
+
+		<div class="on-their-way" data-shown-when="on-their-way" hidden>
+			<h2>The first downloads are on their way</h2>
+			<p>
+				The installers for macOS, Windows and Linux are being built now. Their buttons will be here as soon as they are
+				ready. Until then, there are two other ways.
+			</p>
+			<p class="choices">
+				<a class="button quiet" href={places.releases}>The releases page</a>
+				<a class="button quiet" href={places.buildingFromSource}>Build it from source</a>
+			</p>
+		</div>
+
+		<p class="note other">
+			<a href={places.releases}>Other downloads</a>: every file of the latest release, and the releases before it.
+		</p>
+	</section>
+
+	<section class="after">
+		<h2>After you download</h2>
+		<ol class="cards">
+			<li class="card">
+				<h3 class="titlebar">1. Install it and open it</h3>
+				<p>Install MP Forge the way you install any app on your system, then open it.</p>
+			</li>
+			<li class="card">
+				<h3 class="titlebar">2. Let it check your computer</h3>
+				<p>MP Forge tells you if anything it needs is missing and how to get it, and fetches Akai’s build tools for you.</p>
+			</li>
+			<li class="card">
+				<h3 class="titlebar">3. Make your first plugin</h3>
+				<p>Pick an AI, describe an instrument or an effect, and press BUILD IT.</p>
+			</li>
+		</ol>
+		<p><a href={places.docs}>Getting started</a> goes through all of it, step by step.</p>
+		<p class="note">
+			MP Forge is written and tested by hand on a Mac. Windows and Linux are checked by automated tests so far.{' '}
+			<a href={places.status}>Where it stands</a> says more.
+		</p>
+	</section>
+</Website>
+
+<script>
+	import { SYSTEMS, latestRelease, systemOf } from '../scripts/downloads.js';
+
+	type Installer = { name: string; address: string; kind: string };
+
+	const page = document.querySelector('.downloads')!;
+	const cardOf = (system: string) => page.querySelector<HTMLElement>(`[data-system="${system}"]`)!;
+
+	function show(state: string) {
+		page.querySelectorAll<HTMLElement>('[data-shown-when]').forEach((part) => { part.hidden = part.dataset.shownWhen !== state; });
+	}
+
+	function made(tag: string, className: string, words: string) {
+		const part = document.createElement(tag);
+		part.className = className;
+		part.textContent = words;
+		return part;
+	}
+
+	function buttonFor(installer: Installer) {
+		const button = made('a', 'button', `Download .${installer.kind}`) as HTMLAnchorElement;
+		button.href = installer.address;
+		const holder = made('p', 'file', '');
+		holder.append(button, made('span', 'file-name', installer.name));
+		return holder;
+	}
+
+	function fill(system: string, installers: Installer[]) {
+		const card = cardOf(system);
+		card.querySelector('.files')!.replaceChildren(...installers.map(buttonFor));
+		card.querySelector<HTMLElement>('[data-nothing-yet]')!.hidden = installers.length > 0;
+	}
+
+	// The visitor's own system comes first, with its first button the largest on the page.
+	function putFirst(system: string | null) {
+		if (!system) return;
+		const card = cardOf(system);
+		card.parentElement!.prepend(card);
+		card.classList.add('is-yours');
+		card.querySelector<HTMLElement>('.yours')!.hidden = false;
+		card.querySelector('.button')?.classList.add('large');
+	}
+
+	async function showTheDownloads() {
+		show('looking');
+		const release = await latestRelease();
+		if (!release) return show('on-their-way');
+		SYSTEMS.forEach((system) => fill(system, release.installers[system]));
+		putFirst(systemOf(navigator));
+		page.querySelector('[data-version]')!.textContent = release.version ? `The latest version is ${release.version}.` : '';
+		show('found');
+	}
+
+	showTheDownloads();
+</script>

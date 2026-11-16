@@ -1,0 +1,107 @@
+---
+// The frame every page of the website stands in: the bar at the top, the page itself, and the foot.
+// The docs have a frame of their own, which is Starlight's.
+
+import { Image } from 'astro:assets';
+
+import '@fontsource/pixelify-sans/600.css';
+import '@fontsource/pixelify-sans/700.css';
+import '@fontsource/silkscreen/400.css';
+import '@fontsource/silkscreen/700.css';
+import '../styles/app-colours.css';
+import '../styles/website.css';
+
+import logo from '../assets/logo.png';
+import { places } from '../website-places.js';
+
+interface Props {
+	title: string;
+	description: string;
+}
+
+const { title, description } = Astro.props;
+const address = new URL(Astro.url.pathname, Astro.site);
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>{title}</title>
+		<meta name="description" content={description} />
+		<link rel="canonical" href={address} />
+		<link rel="icon" href={places.favicon} type="image/png" />
+		<link rel="sitemap" href={places.sitemap} />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		<meta property="og:type" content="website" />
+		<meta property="og:url" content={address} />
+		<!-- The page takes the colour mode chosen here or in the docs, or else the computer's own, before it is drawn. -->
+		<script is:inline>
+			(() => {
+				let chosen = null;
+				try { chosen = localStorage.getItem('starlight-theme'); } catch { /* the computer's own mode is used */ }
+				const itsOwn = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+				document.documentElement.dataset.theme = chosen === 'light' || chosen === 'dark' ? chosen : itsOwn;
+			})();
+		</script>
+	</head>
+	<body>
+		<a class="skip" href="#page">Skip to the page</a>
+		<header class="top">
+			<a class="wordmark" href={places.home}>
+				<Image src={logo} alt="" width={32} height={32} />
+				<span>MP Forge</span>
+			</a>
+			<nav aria-label="MP Forge">
+				<a href={places.docs}>Docs</a>
+				<a href={places.source}>GitHub</a>
+				<a class="button small" href={places.download}>Download</a>
+			</nav>
+		</header>
+
+		<main id="page">
+			<slot />
+		</main>
+
+		<footer class="foot">
+			<nav aria-label="More of MP Forge">
+				<a href={places.download}>Download</a>
+				<a href={places.docs}>Docs</a>
+				<a href={places.status}>Where it stands</a>
+				<a href={places.source}>GitHub</a>
+			</nav>
+			<p>
+				MP Forge is free and open source, under the{' '}
+				<a href={places.licence}>GNU General Public License, version 3 or later</a>.
+			</p>
+			<p>
+				MP Forge is an independent tool made by Forge Audio. It is not affiliated with, sponsored by or endorsed by
+				Akai Professional or inMusic Brands. MPC and Akai are trademarks of their owners.
+			</p>
+			<div class="mode" role="group" aria-label="Colour mode">
+				<button type="button" data-mode="dark">Dark</button>
+				<button type="button" data-mode="light">Light</button>
+			</div>
+		</footer>
+
+		<script>
+			// The two colour modes, as in the app's own settings. The choice is kept where the docs keep theirs.
+			const buttons = [...document.querySelectorAll<HTMLButtonElement>('.mode button')];
+
+			function show(mode: string) {
+				document.documentElement.dataset.theme = mode;
+				buttons.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.mode === mode)));
+			}
+
+			function choose(mode: string) {
+				try { localStorage.setItem('starlight-theme', mode); } catch { /* the choice just is not kept */ }
+				show(mode);
+			}
+
+			buttons.forEach((button) => button.addEventListener('click', () => choose(button.dataset.mode ?? 'dark')));
+			show(document.documentElement.dataset.theme ?? 'dark');
+		</script>
+	</body>
+</html>

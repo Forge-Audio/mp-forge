@@ -2,6 +2,7 @@
 name = "workbench-engine"
 version = "0.1.0"
 edition = "2024"
+license = "GPL-3.0-or-later"
 description = "The engine behind the MPC plugin workbench: safety gate first, AI agent next."
 
 [[bin]]

@@ -1,0 +1,437 @@
+/* The docs in MP Forge's own look: the app's hard two-pixel lines, its raised panels and its fonts.
+   The colours come from app-colours.css, which the website's pages share. */
+
+/* What Starlight draws with, set from the app's colours. */
+:root,
+:root[data-theme='light'],
+::backdrop,
+[data-theme='light'] ::backdrop {
+	--sl-color-white: var(--ink);
+	--sl-color-gray-1: var(--ink);
+	--sl-color-gray-2: var(--ink);
+	--sl-color-gray-3: var(--soft);
+	--sl-color-gray-4: var(--hi);
+	--sl-color-gray-5: var(--lo);
+	--sl-color-gray-6: var(--well);
+	--sl-color-gray-7: var(--face);
+	--sl-color-black: var(--face);
+
+	--sl-color-accent-low: var(--well);
+	--sl-color-accent: var(--accent);
+	--sl-color-accent-high: var(--ink);
+
+	--sl-color-text: var(--ink);
+	--sl-color-text-accent: var(--ink);
+	--sl-color-text-invert: var(--accent-ink);
+	--sl-color-bg: var(--face);
+	--sl-color-bg-nav: var(--face);
+	--sl-color-bg-sidebar: var(--face);
+	--sl-color-bg-inline-code: var(--well);
+	--sl-color-bg-accent: var(--accent);
+	--sl-color-hairline-light: var(--line);
+	--sl-color-hairline: var(--line);
+	--sl-color-hairline-shade: var(--line);
+	--sl-color-backdrop-overlay: rgba(12, 11, 16, 0.7);
+
+	--sl-shadow-sm: 2px 2px 0 var(--line);
+	--sl-shadow-md: 4px 4px 0 var(--line);
+	--sl-shadow-lg: 4px 4px 0 var(--line);
+
+	--sl-font: 'Pixelify Sans', 'Courier New', monospace;
+	--sl-font-mono: ui-monospace, Menlo, Consolas, monospace;
+	--sl-text-body: 1.0625rem;
+	--sl-text-code: 0.875rem;
+	--sl-line-height: 1.55;
+	--sl-text-h1: 2.875rem;
+	--sl-text-h2: 0.9375rem;
+	--sl-text-h3: 1.5rem;
+	--sl-text-h4: 0.875rem;
+	--sl-nav-height: 3.25rem;
+	--sl-content-width: 50rem;
+}
+
+*,
+*::before,
+*::after {
+	border-radius: 0 !important;
+}
+
+:focus-visible {
+	outline: 3px solid var(--accent);
+	outline-offset: 2px;
+}
+
+/* --- The top bar ---------------------------------------------------------------------------------- */
+
+header.header {
+	padding: 0;
+	padding-inline-end: var(--sl-nav-pad-x);
+	background: var(--face);
+	border-bottom: 2px solid var(--line);
+	box-shadow: var(--raised);
+}
+
+.title-wrapper {
+	align-self: stretch;
+}
+
+/* The wordmark, as at the left end of the app's own bar. */
+.site-title {
+	align-self: stretch;
+	gap: 10px;
+	padding: 0 14px;
+	background: var(--accent);
+	color: var(--accent-ink);
+	border-inline-end: 2px solid var(--line);
+	font-family: var(--font-labels);
+	font-size: 0.875rem;
+	font-weight: 700;
+	text-transform: uppercase;
+}
+
+.site-title img {
+	height: 30px;
+	width: 30px;
+	border: 2px solid var(--line);
+	image-rendering: pixelated;
+}
+
+site-search > button {
+	background: var(--well);
+	border: 2px solid var(--line);
+	box-shadow: var(--pressed-in);
+	color: var(--soft);
+}
+
+site-search > button kbd {
+	background: var(--face);
+	border: 0;
+	font-family: var(--font-labels);
+	font-size: 0.6875rem;
+}
+
+site-search dialog {
+	background: var(--face);
+	border: 2px solid var(--line);
+	box-shadow: var(--raised-window);
+}
+
+.social-icons::after {
+	border-inline-end: 2px solid var(--line);
+}
+
+starlight-theme-select select,
+.sidebar-content select {
+	font-family: var(--font-labels);
+	font-size: 0.6875rem;
+	text-transform: uppercase;
+}
+
+/* --- The list of pages ---------------------------------------------------------------------------- */
+
+.sidebar-pane {
+	background: var(--face);
+	border-inline-end: 2px solid var(--line);
+}
+
+.sidebar-content .group-label .large,
+.right-sidebar-panel h2,
+mobile-starlight-toc summary {
+	font-size: 0.875rem;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--soft);
+}
+
+.sidebar-content a {
+	font-size: 1rem;
+	font-weight: 500;
+	color: var(--ink);
+}
+
+.sidebar-content a:hover,
+.sidebar-content a:focus-visible {
+	background: var(--accent);
+	color: var(--accent-ink);
+}
+
+.sidebar-content a[aria-current='page'],
+.sidebar-content a[aria-current='page']:hover {
+	background: var(--well);
+	color: var(--ink);
+	font-weight: 700;
+	box-shadow: inset 4px 0 0 var(--accent), inset 0 0 0 2px var(--line);
+}
+
+/* --- The page itself ------------------------------------------------------------------------------ */
+
+body {
+	background: var(--desk);
+	/* The app's font joins "fi" into one shape that reads as another letter at this size. */
+	font-variant-ligatures: none;
+}
+
+.main-frame {
+	background: var(--desk);
+}
+
+.right-sidebar {
+	border-inline-start: 2px solid var(--line);
+	background: var(--face);
+}
+
+.right-sidebar-panel a {
+	font-size: 0.9375rem;
+	color: var(--soft);
+}
+
+.right-sidebar-panel a[aria-current='true'],
+.right-sidebar-panel a:hover {
+	color: var(--ink);
+	font-weight: 600;
+}
+
+.content-panel {
+	border-top: 0;
+}
+
+.content-panel h1 {
+	font-weight: 700;
+	line-height: 1;
+}
+
+/* A section's heading is the title bar of one of the app's windows. The bar is the heading's wrapper, so the
+   link to the section sits on it too. */
+.sl-markdown-content .sl-heading-wrapper.level-h2 {
+	margin-top: 2.25rem;
+	padding: 7px 12px 8px;
+	background: var(--bar);
+	color: var(--bar-ink);
+	border: 2px solid var(--line);
+	box-shadow: var(--sl-shadow-md);
+	font-family: var(--font-labels);
+	line-height: 1.3;
+	text-transform: uppercase;
+}
+
+.sl-markdown-content .sl-heading-wrapper.level-h2 > h2 {
+	color: inherit;
+	font-weight: 400;
+	line-height: inherit;
+}
+
+.sl-markdown-content .sl-heading-wrapper.level-h2 > .sl-anchor-link {
+	color: inherit;
+}
+
+.sl-markdown-content h3 {
+	font-weight: 700;
+}
+
+.sl-markdown-content h4 {
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--soft);
+}
+
+.sl-markdown-content .sl-anchor-link {
+	color: var(--soft);
+}
+
+.sl-markdown-content strong {
+	font-weight: 700;
+}
+
+/* A link is plain words over the accent colour, and takes that colour whole when pointed at, as the app's menus do. */
+.sl-markdown-content a:not(.sl-anchor-link, .sl-link-button) {
+	color: var(--ink);
+	font-weight: 600;
+	text-decoration: underline;
+	text-decoration-color: var(--accent);
+	text-decoration-thickness: 2px;
+	text-underline-offset: 3px;
+}
+
+.sl-markdown-content a:not(.sl-anchor-link, .sl-link-button):hover {
+	background: var(--accent);
+	color: var(--accent-ink);
+}
+
+/* A picture of the app stands in the app's own hard frame. */
+.sl-markdown-content img {
+	border: 2px solid var(--line);
+	box-shadow: var(--sl-shadow-md);
+}
+
+/* A note stands in a dashed frame, like a note in the app's conversation. */
+.sl-markdown-content blockquote {
+	padding: 10px 14px;
+	border: 2px dashed var(--soft);
+	color: var(--ink);
+}
+
+.sl-markdown-content hr {
+	border-top: 2px solid var(--line);
+}
+
+.sl-markdown-content code:not(pre code) {
+	padding: 1px 6px;
+	background: var(--well);
+	border: 2px solid var(--line);
+	color: var(--ink);
+}
+
+.sl-markdown-content table {
+	display: table;
+	width: 100%;
+	background: var(--face);
+	border: 2px solid var(--line);
+	box-shadow: var(--sl-shadow-md);
+}
+
+.sl-markdown-content th {
+	background: var(--bar);
+	color: var(--bar-ink);
+	border: 0;
+	font-family: var(--font-labels);
+	font-size: 0.75rem;
+	font-weight: 400;
+	text-transform: uppercase;
+	text-align: start;
+}
+
+.sl-markdown-content td {
+	border-top: 2px solid var(--line);
+	border-bottom: 0;
+	vertical-align: top;
+}
+
+.sl-markdown-content tr:nth-child(2n):not(:where(.not-content *)) {
+	background: transparent;
+}
+
+.sl-markdown-content td {
+	overflow-wrap: anywhere;
+}
+
+.sl-markdown-content td:first-child {
+	min-width: 7.5rem;
+	overflow-wrap: normal;
+}
+
+.sl-markdown-content td + td,
+.sl-markdown-content th + th {
+	border-inline-start: 2px solid var(--line);
+}
+
+.sl-markdown-content ol > li::marker {
+	font-family: var(--font-labels);
+	font-size: 0.8125rem;
+	color: var(--soft);
+}
+
+.sl-markdown-content ul > li::marker {
+	color: var(--accent);
+}
+
+/* Commands to type stand in a well with the window's hard shadow. */
+.expressive-code .frame {
+	box-shadow: var(--sl-shadow-md);
+}
+
+/* --- Buttons -------------------------------------------------------------------------------------- */
+
+.sl-link-button {
+	min-height: 44px;
+	padding: 0 18px;
+	border: 2px solid var(--line);
+	font-family: var(--font-labels);
+	font-size: 0.8125rem;
+	font-weight: 700;
+	text-transform: uppercase;
+}
+
+.sl-link-button.primary {
+	background: var(--accent);
+	color: var(--accent-ink);
+	border-color: var(--line);
+	box-shadow: inset -2px -2px 0 rgba(0, 0, 0, 0.3), inset 2px 2px 0 rgba(255, 255, 255, 0.35), 4px 4px 0 var(--line);
+}
+
+.sl-link-button.primary:hover {
+	filter: brightness(1.15);
+	color: var(--accent-ink);
+}
+
+.sl-link-button.secondary,
+.sl-link-button.minimal {
+	background: var(--well);
+	color: var(--ink);
+	border-color: var(--line);
+	box-shadow: var(--raised), 4px 4px 0 var(--line);
+	font-weight: 400;
+}
+
+.sl-link-button.secondary:hover,
+.sl-link-button.minimal:hover {
+	background: var(--accent);
+	color: var(--accent-ink);
+}
+
+.pagination-links a {
+	background: var(--face);
+	border: 2px solid var(--line);
+	box-shadow: var(--raised-window);
+	color: var(--soft);
+}
+
+.pagination-links a:hover {
+	border-color: var(--line);
+	background: var(--accent);
+	color: var(--accent-ink);
+}
+
+.pagination-links a .link-title {
+	color: var(--ink);
+	font-weight: 700;
+}
+
+.pagination-links a:hover .link-title {
+	color: var(--accent-ink);
+}
+
+/* --- A page with nothing but a heading and buttons, such as the one for an address that leads nowhere --- */
+
+.hero {
+	padding-block: clamp(2rem, 6vmin, 4.5rem);
+}
+
+.hero img {
+	width: min(100%, 256px);
+	height: auto;
+	border: 2px solid var(--line);
+	box-shadow: 6px 6px 0 var(--line);
+	image-rendering: pixelated;
+}
+
+.hero h1 {
+	font-size: clamp(2.75rem, 9vw, 4.5rem);
+	font-weight: 700;
+	line-height: 1;
+}
+
+.hero .tagline {
+	font-size: clamp(1.125rem, 2.5vw, 1.5rem);
+	color: var(--soft);
+}
+
+.hero .actions {
+	gap: 1rem;
+}
+
+footer .meta,
+footer .kudos {
+	color: var(--soft);
+}

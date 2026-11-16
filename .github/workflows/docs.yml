@@ -1,0 +1,81 @@
+# Builds the docs site whenever the docs change, and publishes it with GitHub Pages once the repository is public.
+#
+# GitHub Pages does not work for a private repository on GitHub's free plan. So while this one is private the site
+# is only built, which still shows whether a page or a link in it is broken. Publishing starts by itself with the
+# first run after the repository is made public. Before that run, Pages has to be switched on once by hand, in the
+# repository's settings: Pages, then "GitHub Actions" as the source.
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/**
+      - .github/workflows/docs.yml
+  workflow_dispatch:
+
+# A publishing that is under way is left to finish, so the site is never left half published.
+concurrency:
+  group: docs
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  ASTRO_TELEMETRY_DISABLED: 1
+
+jobs:
+  build:
+    name: Build the site
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Reading the repository's Pages settings is all the build asks of Pages.
+    permissions:
+      contents: read
+      pages: read
+    defaults:
+      run:
+        working-directory: docs
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+
+      - name: Install exactly what package-lock.json names
+        run: npm ci
+
+      # The build stops when a link on any page leads nowhere.
+      - name: Build the site
+        run: npm run build
+
+      - name: Check that Pages is switched on
+        if: ${{ !github.event.repository.private }}
+        uses: actions/configure-pages@v6
+
+      - name: Hand the built site over for publishing
+        if: ${{ !github.event.repository.private }}
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/dist
+
+  publish:
+    name: Publish the site
+    if: ${{ !github.event.repository.private }}
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Publishing to Pages needs these two and nothing else.
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.publishing.outputs.page_url }}
+    steps:
+      - id: publishing
+        uses: actions/deploy-pages@v5
