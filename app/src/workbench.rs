@@ -1,7 +1,8 @@
 //! Where the app keeps its things, and the rules about what may happen at the same time. The AI works on
-//! one plugin at a time. Safety checks run side by side, one to a plugin, and beside the AI's work on another
-//! plugin. A plugin with neither going on can be changed by hand.
+//! up to five plugins at once, each a job of its own. Safety checks run side by side, one to a plugin, and
+//! beside the AI's work on other plugins. A plugin with neither going on can be changed by hand.
 
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::ffi::OsStr;
@@ -19,7 +20,9 @@ const HOME_VARIABLE: &str = "WORKBENCH_HOME";
 const HOME_DURING_DEVELOPMENT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/..");
 const SDK_FOLDER: &str = "vendor/mpc-plugin-builder-sdk";
 const PLUGINS_FOLDER: &str = "plugins";
-const ONE_REQUEST_AT_A_TIME: &str = "The AI is still busy with the last request.";
+/// Each plugin being built has an AI, a compiler and a safety check of its own at work on this computer.
+const MOST_BUILT_AT_ONCE: usize = 5;
+const NO_ROOM_FOR_ANOTHER: &str = "The AI is already building five plugins. Build this one once one of them has finished.";
 /// The note the app keeps, among its own settings, of the folder the musician chose for their plugins.
 const PLACES_NOTE: &str = "places.json";
 const FOLDER_ON_THE_NOTE: &str = "pluginsFolder";
@@ -30,8 +33,8 @@ const NOT_INSIDE_ITSELF: &str = "Choose a folder that is not inside the one your
 /// What the workbench is in the middle of.
 #[derive(Default)]
 struct Work {
-    /// The plugin the AI is working on.
-    ai_working_on: Option<String>,
+    /// The plugins the AI is working on.
+    ai_working_on: Vec<String>,
     /// The plugins having their safety check run, or being put back a version, which ends in a check.
     checking: Vec<String>,
     /// The plugins with a quick change by hand under way, once for each such change.
@@ -42,7 +45,7 @@ impl Work {
     /// Why nothing new may be started on this plugin just now. None when it is free.
     fn what_holds(&self, plugin_name: &str) -> Option<String> {
         let named = |plugins: &[String]| plugins.iter().any(|held| held == plugin_name);
-        if self.ai_working_on.as_deref() == Some(plugin_name) {
+        if named(&self.ai_working_on) {
             return Some(format!("The AI is working on `{plugin_name}`. Try again once it has finished."));
         }
         if named(&self.checking) {
@@ -52,11 +55,11 @@ impl Work {
     }
 
     fn is_idle(&self) -> bool {
-        self.ai_working_on.is_none() && self.checking.is_empty() && self.changing_by_hand.is_empty()
+        self.ai_working_on.is_empty() && self.checking.is_empty() && self.changing_by_hand.is_empty()
     }
 
     fn is_being_worked_on(&self, plugin_name: &str) -> bool {
-        self.ai_working_on.as_deref() == Some(plugin_name) || self.checking.iter().any(|checking| checking == plugin_name)
+        self.ai_working_on.iter().chain(&self.checking).any(|worked_on| worked_on == plugin_name)
     }
 }
 
@@ -68,8 +71,8 @@ pub struct Workbench {
     /// Where the chosen folder is written down, so it is still the one when the app is next opened.
     places_note: Option<PathBuf>,
     work: Arc<Mutex<Work>>,
-    /// The signal held by whichever job is running, so the musician can stop it.
-    stop: Mutex<StopSignal>,
+    /// The signal held by the AI's job on each plugin, so the musician can stop that job and no other.
+    stops: Mutex<HashMap<String, StopSignal>>,
 }
 
 impl Workbench {
@@ -85,7 +88,7 @@ impl Workbench {
     }
 
     fn keeping(sdk_folder: Result<PathBuf, String>, plugins: PathBuf) -> Self {
-        Self { sdk_folder, plugins: Mutex::new(plugins), places_note: None, work: Arc::default(), stop: Mutex::new(StopSignal::default()) }
+        Self { sdk_folder, plugins: Mutex::new(plugins), places_note: None, work: Arc::default(), stops: Mutex::default() }
     }
 
     /// The same workbench, keeping its plugins in the folder noted among the app's settings, if one was chosen,
@@ -142,31 +145,34 @@ impl Workbench {
         Ok(Maker::new(self.sdk()?, self.plugins_dir()))
     }
 
-    /// A fresh signal for a job that is about to start. Asking to stop reaches that job and no later one.
-    pub fn stop_signal_for_next_job(&self) -> StopSignal {
+    /// A fresh signal for the job about to start on a plugin. Asking to stop reaches that job and no later one.
+    pub fn stop_signal_for_job_on(&self, plugin_name: &str) -> StopSignal {
         let fresh = StopSignal::default();
-        *self.held_signal() = fresh.clone();
+        self.held_signals().insert(plugin_name.to_string(), fresh.clone());
         fresh
     }
 
-    pub fn ask_running_job_to_stop(&self) {
-        self.held_signal().ask_to_stop();
+    pub fn ask_job_to_stop_on(&self, plugin_name: &str) {
+        if let Some(signal) = self.held_signals().get(plugin_name) {
+            signal.ask_to_stop();
+        }
     }
 
-    fn held_signal(&self) -> MutexGuard<'_, StopSignal> {
-        self.stop.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    fn held_signals(&self) -> MutexGuard<'_, HashMap<String, StopSignal>> {
+        self.stops.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    /// Claims a plugin for the AI to work on. The AI works on one plugin at a time, and never on one that
-    /// is being checked or changed by hand. Each claim is given up when the returned value is dropped.
+    /// Claims a plugin for the AI to work on. The AI works on a few plugins at once, and never on one that
+    /// is being worked on, checked or changed by hand already. Each claim is given up when the returned value
+    /// is dropped.
     pub fn claim_for_ai_work(&self, plugin_name: &str) -> Result<Claim, String> {
         let mut work = work_of(&self.work);
-        if work.ai_working_on.is_some() {
-            return Err(ONE_REQUEST_AT_A_TIME.to_string());
-        }
         refuse_if_held(&work, plugin_name)?;
-        work.ai_working_on = Some(plugin_name.to_string());
-        Ok(self.claim_holding(Held::AiWork))
+        if work.ai_working_on.len() >= MOST_BUILT_AT_ONCE {
+            return Err(NO_ROOM_FOR_ANOTHER.to_string());
+        }
+        work.ai_working_on.push(plugin_name.to_string());
+        Ok(self.claim_holding(Held::AiWork(plugin_name.to_string())))
     }
 
     /// Claims a plugin for its safety check. Other plugins can be checked at the same time, and the AI can
@@ -240,7 +246,7 @@ fn work_of(work: &Mutex<Work>) -> MutexGuard<'_, Work> {
 }
 
 enum Held {
-    AiWork,
+    AiWork(String),
     Check(String),
     ChangeByHand(String),
 }
@@ -254,7 +260,7 @@ impl Drop for Claim {
     fn drop(&mut self) {
         let mut work = work_of(&self.work);
         match &self.held {
-            Held::AiWork => work.ai_working_on = None,
+            Held::AiWork(plugin_name) => forget_once(&mut work.ai_working_on, plugin_name),
             Held::Check(plugin_name) => forget_once(&mut work.checking, plugin_name),
             Held::ChangeByHand(plugin_name) => forget_once(&mut work.changing_by_hand, plugin_name),
         }
@@ -283,15 +289,26 @@ mod tests {
     }
 
     #[test]
-    fn the_ai_works_on_one_plugin_at_a_time() {
+    fn the_ai_works_on_five_plugins_at_once_and_no_more() {
+        let workbench = Workbench::at_home();
+        let five = ["Dusty Tape", "Glass Pad", "Moon Verb", "Brick Wall", "Sea Organ"];
+
+        let mut at_work: Vec<Claim> = five.iter().map(|plugin| workbench.claim_for_ai_work(plugin).unwrap()).collect();
+        assert!(workbench.claim_for_ai_work("One Too Many").is_err_and(|why| why == NO_ROOM_FOR_ANOTHER));
+        at_work.pop();
+
+        assert!(workbench.claim_for_ai_work("One Too Many").is_ok());
+    }
+
+    #[test]
+    fn the_ai_never_works_twice_on_one_plugin() {
         let workbench = Workbench::at_home();
 
         let first = workbench.claim_for_ai_work("Dusty Tape").unwrap();
-        assert!(workbench.claim_for_ai_work("Dusty Tape").is_err());
-        assert!(workbench.claim_for_ai_work("Glass Pad").is_err());
+        assert!(workbench.claim_for_ai_work("Dusty Tape").is_err_and(|why| why.contains("working on `Dusty Tape`")));
         drop(first);
 
-        assert!(workbench.claim_for_ai_work("Glass Pad").is_ok());
+        assert!(workbench.claim_for_ai_work("Dusty Tape").is_ok());
     }
 
     #[test]
@@ -410,14 +427,15 @@ mod tests {
     }
 
     #[test]
-    fn asking_to_stop_reaches_the_running_job_and_not_the_next_one() {
+    fn asking_to_stop_reaches_the_job_on_that_plugin_and_neither_another_plugins_nor_its_next() {
         let workbench = Workbench::at_home();
-        let running = workbench.stop_signal_for_next_job();
+        let running = workbench.stop_signal_for_job_on("Dusty Tape");
+        let beside_it = workbench.stop_signal_for_job_on("Glass Pad");
 
-        workbench.ask_running_job_to_stop();
-        let next = workbench.stop_signal_for_next_job();
+        workbench.ask_job_to_stop_on("Dusty Tape");
+        let next = workbench.stop_signal_for_job_on("Dusty Tape");
 
         assert!(running.is_asked());
-        assert!(!next.is_asked());
+        assert!(!beside_it.is_asked() && !next.is_asked());
     }
 }

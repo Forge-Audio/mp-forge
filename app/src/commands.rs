@@ -278,10 +278,10 @@ pub fn preview_plugin(name: String, workbench: State<Workbench>) -> Result<Respo
     fs::read(sound_file).map(Response::new).map_err(|error| error.to_string())
 }
 
-/// Asks the AI work that is running to stop. It gives up at its next step and reports that it was stopped.
+/// Asks the AI's work on one plugin to stop. It gives up at its next step and reports that it was stopped.
 #[tauri::command]
-pub fn stop_work(workbench: State<Workbench>) {
-    workbench.ask_running_job_to_stop();
+pub fn stop_work(name: String, workbench: State<Workbench>) {
+    workbench.ask_job_to_stop_on(&name);
 }
 
 /// What has been said about a plugin, as it was last kept. A plugin that is still being made has nothing yet.
@@ -592,7 +592,21 @@ fn ai_for_a_job(route: AiChoice, picks: &AiPicks) -> Result<AiForAJob, String> {
 
 type Job = dyn FnOnce(&Maker, Connection, &mut dyn FnMut(Event)) -> Result<Delivery, MakeError> + Send;
 
-/// Starts the AI's work on its own thread. Refuses if it is still at work on something else.
+/// Tells the screen how the AI's work on one plugin is going. Several plugins are worked on at once, so
+/// all that is told names the plugin it is about.
+struct NewsOfTheWork {
+    app: AppHandle,
+    plugin_name: String,
+}
+
+impl NewsOfTheWork {
+    fn tell(&self, event: &str, mut news: Value) {
+        news["plugin"] = json!(self.plugin_name);
+        let _ = self.app.emit(event, news);
+    }
+}
+
+/// Starts the AI's work on its own thread. Refuses if it has as many plugins in hand as it takes at once.
 fn run_in_background(
     workbench: &Workbench,
     app: AppHandle,
@@ -602,34 +616,33 @@ fn run_in_background(
 ) -> Result<(), String> {
     let claim = workbench.claim_for_ai_work(&plugin_name)?;
     let sdk = workbench.sdk()?;
-    let maker = workbench.maker()?.compacting_at(ai.compact_at).stopped_by(workbench.stop_signal_for_next_job());
+    let maker = workbench.maker()?.compacting_at(ai.compact_at).stopped_by(workbench.stop_signal_for_job_on(&plugin_name));
+    let news = NewsOfTheWork { app, plugin_name };
     thread::spawn(move || {
-        let outcome = with_all_a_build_needs(&sdk, &app).and_then(|()| run_job(&maker, Box::new(job), ai.ai, &app));
+        let outcome = with_all_a_build_needs(&sdk, &news).and_then(|()| run_job(&maker, Box::new(job), ai.ai, &news));
         let message = match outcome {
-            Ok(delivery) => payloads::finished(&plugin_name, &delivery),
-            Err(explanation) => payloads::failed(&plugin_name, &explanation),
+            Ok(delivery) => payloads::finished(&news.plugin_name, &delivery),
+            Err(explanation) => payloads::failed(&news.plugin_name, &explanation),
         };
         drop(claim);
-        let _ = app.emit(FINISHED_EVENT, message);
+        news.tell(FINISHED_EVENT, message);
     });
     Ok(())
 }
 
 /// A build never starts without Python and Akai's build tools. Whichever has gone missing since the app last
 /// looked is fetched first, and the musician is told what the wait is for.
-fn with_all_a_build_needs(sdk: &Sdk, app: &AppHandle) -> Result<(), String> {
-    readiness::fetch_what_is_missing(sdk, &|fetching| {
-        let _ = app.emit(PROGRESS_EVENT, payloads::fetching(fetching));
-    })
+fn with_all_a_build_needs(sdk: &Sdk, news: &NewsOfTheWork) -> Result<(), String> {
+    readiness::fetch_what_is_missing(sdk, &|fetching| news.tell(PROGRESS_EVENT, payloads::fetching(fetching)))
 }
 
-fn run_job(maker: &Maker, job: Box<Job>, ai: ChosenAi, app: &AppHandle) -> Result<Delivery, String> {
+fn run_job(maker: &Maker, job: Box<Job>, ai: ChosenAi, news: &NewsOfTheWork) -> Result<Delivery, String> {
     let mut report_progress = |event: Event| {
         if let Some(line) = payloads::progress(&event) {
-            let _ = app.emit(PROGRESS_EVENT, line);
+            news.tell(PROGRESS_EVENT, line);
         }
         if let Some(held) = payloads::context(&event) {
-            let _ = app.emit(CONTEXT_EVENT, held);
+            news.tell(CONTEXT_EVENT, held);
         }
     };
     match ai {

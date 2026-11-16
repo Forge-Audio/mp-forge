@@ -313,6 +313,10 @@
     const withoutAScreenYet = new Set();
     const NO_SCREEN_YET = { pages: [{ name: "MAIN", controls: ["Gain"] }] };
 
+    // The steps the stand-in has yet to take for each plugin it pretends to work on.
+    const stepsToCome = new Map();
+    const DEMO_STOPPED = "Stopped. Whatever was changed up to then has been kept, and GO BACK returns to the version before.";
+
     function pretendToWork(pluginName, asked) {
       const lines = [
         { kind: "step", text: "reading docs/overview.md" },
@@ -321,13 +325,23 @@
         { kind: "step", text: "writing src/Plugin.cpp" },
         { kind: "step", text: "running the safety check (this builds and tests the plugin)" },
       ];
-      lines.forEach((line, index) => setTimeout(() => {
+      const later = (what, afterSteps) => stepsToCome.get(pluginName).push(setTimeout(what, 500 * afterSteps));
+      stepsToCome.set(pluginName, []);
+      lines.forEach((line, index) => later(() => {
         if (line.text === "writing src/Plugin.cpp") withoutAScreenYet.delete(pluginName);
-        emit("work-progress", line);
-      }, 500 * (index + 1)));
-      lines.forEach((_, index) => setTimeout(() => emit("work-context", { tokens: 21000 + 58000 * index }), 500 * (index + 1)));
+        emit("work-progress", { ...line, plugin: pluginName });
+      }, index + 1));
+      lines.forEach((_, index) => later(() => emit("work-context", { plugin: pluginName, tokens: 21000 + 58000 * index }), index + 1));
       const closingWords = demoClosingWords(asked);
-      setTimeout(() => emit("work-finished", { ok: true, plugin: pluginName, closingWords, report: DEMO_REPORT }), 500 * (lines.length + 1));
+      later(() => emit("work-finished", { ok: true, plugin: pluginName, closingWords, report: DEMO_REPORT }), lines.length + 1);
+    }
+
+    // As in the real app, work that is stopped takes no further step and says that it was stopped.
+    function stopPretendingToWork(pluginName) {
+      (stepsToCome.get(pluginName) || []).forEach(clearTimeout);
+      stepsToCome.delete(pluginName);
+      withoutAScreenYet.delete(pluginName);
+      setTimeout(() => emit("work-finished", { ok: false, plugin: pluginName, error: DEMO_STOPPED }), 200);
     }
 
     const samples = {};
@@ -460,7 +474,7 @@
         [DEMO_SCREENS, DEMO_PICTURES, looks, samples].forEach((known) => { known[newName] = known[name]; delete known[name]; });
       },
       delete_plugin: ({ name }) => { plugins.splice(plugins.findIndex((plugin) => plugin.name === name), 1); },
-      stop_work: () => {},
+      stop_work: ({ name }) => stopPretendingToWork(name),
       attachment_image: () => { throw "The demo keeps no pictures."; },
       // The demo's player makes no sound, but it plays in silence, so the piano and the presets can be tried.
       player_start: ({ name, run }) => {

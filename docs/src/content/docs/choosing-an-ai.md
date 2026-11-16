@@ -21,6 +21,15 @@ every model can look at pictures you add.
 The first time you pick a model from a service you have not connected, MP Forge asks you to sign in or to
 add a key. You can also do that beforehand under **Settings → AI accounts**.
 
+### A model for each plugin
+
+Each plugin keeps the model you picked for it, and the button shows the model of the plugin that is open. So
+one plugin can be built by Claude while another is built by a model of another service, and you can give a
+plugin a different model at any time: the next change you ask for is made by that one.
+
+A new plugin starts with the model you picked last. So does a plugin that has not been given one yet.
+Effort, Connection and Web lookups are the same for every plugin.
+
 ## The services
 
 | In the menu | How you connect it |

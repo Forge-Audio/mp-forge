@@ -51,8 +51,13 @@ The **+** beside the message box adds things to go with your words:
 The conversation shows what the AI is doing, step by step. **STATUS** in the top bar says **WORKING**,
 **BUILDING** or **CHECKING**. To end the work, press **STOP**.
 
-The AI works on one plugin at a time. You can open another plugin in the meantime, but not build it until
-the first has finished.
+You need not wait to say what comes next. Type it and press Enter or **QUEUE IT**: it waits under the work
+in progress and goes out by itself once that work has ended well. **SEND NOW** on a waiting request stops
+the work in hand and sends it at once, and **REMOVE** takes it back. If the work fails or you stop it, what
+was waiting stays put until you send it. Requests that are waiting are not kept when MP Forge is closed.
+
+The AI works on up to five plugins at once. While one is being built you can start another, or open one
+you made earlier and ask for a change. Each tab shows a mark while its plugin is being worked on.
 
 ## See it and hear it
 

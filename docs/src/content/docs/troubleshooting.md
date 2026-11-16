@@ -77,10 +77,11 @@ When it says your Claude Code is older than MP Forge needs, run `claude update` 
 MP Forge starts Claude Code with its own tools switched off, and an older Claude Code does not know how to
 be started that way. `claude --version` should then say 2.1.259 or newer.
 
-### "The AI is still busy with another plugin."
+### "The AI is already building five plugins."
 
-The AI works on one plugin at a time. Build this one once the other has finished, or open the other and
-press **STOP** there.
+The AI works on up to five plugins at once. Build this one once one of them has finished, or open one of
+them and press **STOP** there. Each plugin being built keeps an AI, a compiler and a safety check busy on
+your computer, so several at once take longer each, and use your AI plan or credit faster.
 
 ## Building and checking
 

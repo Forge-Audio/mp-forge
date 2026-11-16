@@ -250,6 +250,9 @@ body.in-settings .conversation, body.in-settings .mirror { display: none; }
 .message-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .message.you .message-text { padding: 10px 12px; background: var(--well); border: 2px solid var(--line); font-weight: 500; }
 .message.problem .message-text { padding: 10px 12px; border: 2px solid var(--accent); }
+.message.waiting .message-text { border-style: dashed; color: var(--soft); }
+.waiting-answers { display: flex; gap: 6px; }
+.waiting-answers .item-button { padding: 0 12px; }
 .message.note .message-text { padding: 6px 12px; border: 2px dashed var(--soft); color: var(--soft); }
 
 /* Choices the AI offers. The musician presses one and it is sent as their next message. */

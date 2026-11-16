@@ -34,6 +34,8 @@
   const SMITH_WORKS_WHILE = [STATUS.building, STATUS.checking, STATUS.stopping];
   // Whatever the musician did not say themselves is said by MP Forge, whichever AI did the work.
   const SPEAKER = { you: "You", mpForge: "MP Forge" };
+  const WAITS_ITS_TURN = `${SPEAKER.you} · waiting its turn`;
+  const NO_PICTURES = { names: [], addresses: [], handed: [] };
   const WORKING_WORDS = { [STATUS.checking]: "Its safety check is running.", [STATUS.sending]: "It is being sent to your MPC." };
   const WIDEN_THE_CONVERSATION = "Give the conversation the whole window.";
   const SHOW_THE_PLUGIN = "Bring the plugin's view back beside the conversation.";
@@ -47,7 +49,9 @@
   const LONGEST_PLUGIN_NAME = 32;
   const FINISHED_WITHOUT_WORDS = "Done.";
   const ARCHITECT_IS_THINKING = "The plugin architect is thinking of questions…";
-  const AI_IS_BUSY_ELSEWHERE = "The AI is still busy with another plugin. Build this one once it has finished.";
+  // Each plugin being built has an AI, a compiler and a safety check of its own at work on this computer.
+  const MOST_BUILT_AT_ONCE = 5;
+  const AI_HAS_NO_ROOM = "The AI is already building five plugins. Build this one once one of them has finished.";
   const ABOUT_THE_CONTEXT = "How much the AI is holding in mind for this request, in tokens: your words, the files it has read and the pictures it was shown. It starts again with every request. Settings has the limit at which older material is dropped to make room.";
   const TOKENS_IN_A_THOUSAND = 1000;
   const NO_SUCH_VERSION = "That version could not be found, so nothing was changed.";
@@ -146,19 +150,16 @@
     openName: NEW_PLUGIN,
     openPlugin: null,
     screenPage: 0,
-    // The plugin the AI is working on. It works on one at a time.
-    aiWorkingOn: undefined,
-    // What the AI is doing to that plugin, in the status's own words.
-    aiStatus: undefined,
-    canBeStopped: false,
+    // The AI's work in progress, by the name of the plugin it is on. Each job holds its status in the status's
+    // own words, whether it can still be stopped, the moment it began, the steps taken so far, and whether it is
+    // a new plugin whose own screen the AI has not written yet.
+    aiJobs: new Map(),
     // The plugins being checked or sent to the MPC, each with the status word for which. These run side by side,
-    // and beside the AI's work on another plugin.
+    // and beside the AI's work on other plugins.
     checking: new Map(),
-    // The moment the AI's work began, so its closing words can say how long it took.
-    aiWorkBeganAt: undefined,
-    // The new plugin whose own screen the AI has not written yet. Until it has, the MPC view is left empty.
-    awaitingScreenOf: undefined,
-    stepsSoFar: [],
+    // What was asked for while the AI was at work on a plugin, by the plugin's name, the oldest first. Each
+    // waits its turn with the model the menu showed as it was typed.
+    waitingToBeSent: new Map(),
     beatWords: 0,
     beatWordsTimer: undefined,
     conversations: new Map(),
@@ -192,15 +193,19 @@
     return { block, words: part("words"), fold: part("fold"), count: part("count"), latest: part("latest"), steps: part("steps") };
   }
 
-  // The AI works on one plugin at a time, so a second request has to wait for the first.
-  function aiIsBusy() {
-    return state.aiWorkingOn !== undefined;
+  // The AI works on a few plugins at once. With that many in hand, one more has to wait for one of them.
+  function aiHasNoRoom() {
+    return state.aiJobs.size >= MOST_BUILT_AT_ONCE;
+  }
+
+  function aiJobOn(pluginName) {
+    return state.aiJobs.get(pluginName);
   }
 
   // A plugin is out of reach while the AI works on it or its safety check runs. Any other plugin can still be
-  // edited by hand, played and checked.
+  // built, changed, edited by hand, played and checked.
   function isBeingWorkedOn(pluginName) {
-    return state.aiWorkingOn === pluginName || state.checking.has(pluginName);
+    return state.aiJobs.has(pluginName) || state.checking.has(pluginName);
   }
 
   function architectIsThinking() {
@@ -208,12 +213,13 @@
   }
 
   function somethingIsBeingWorkedOn() {
-    return aiIsBusy() || state.checking.size > 0 || architectIsThinking() || state.scouting;
+    return state.aiJobs.size > 0 || state.checking.size > 0 || architectIsThinking() || state.scouting;
   }
 
   // The AI's work can be stopped from the conversation of the plugin it is working on.
   function canBeStoppedHere() {
-    return state.canBeStopped && state.aiWorkingOn === state.openName;
+    const job = aiJobOn(state.openName);
+    return Boolean(job && job.canBeStopped);
   }
 
   function describeProblem(problem) {
@@ -369,14 +375,33 @@
     return box;
   }
 
-  // Choices can be picked only from the newest message, and only while nothing else is being worked on.
+  function pressable(words, whenPressed) {
+    const button = element("button", "item-button", words);
+    button.type = "button";
+    button.addEventListener("click", whenPressed);
+    return button;
+  }
+
+  // A request that waits its turn is shown under the work it waits for, with the two things that can be done
+  // about it meanwhile.
+  function waitingMessage(waited) {
+    const pluginName = state.openName;
+    const box = element("div", "message you waiting");
+    const answers = element("div", "waiting-answers");
+    answers.append(pressable("SEND NOW", () => sendNow(pluginName, waited)), pressable("REMOVE", () => stopWaiting(pluginName, waited)));
+    box.append(element("div", "field-label", WAITS_ITS_TURN), element("div", "message-text", waited.words), answers);
+    return box;
+  }
+
+  // Choices can be picked only from the newest message, and only while the AI has room for what is picked.
   function drawMessages() {
     const conversation = conversationAbout(state.openName);
     const newest = conversation.length - 1;
-    const drawn = conversation.map((message, index) => spokenMessage(message, index === newest && !aiIsBusy()));
+    const drawn = conversation.map((message, index) => spokenMessage(message, index === newest && !aiHasNoRoom()));
     if (!drawn.length || nothingSaidYet()) drawn.unshift(...openingLines());
     if (state.openName === NEW_PLUGIN) drawn.push(...whatIsBeingThoughtOver());
     if (isBeingWorkedOn(state.openName)) drawn.push(working.block);
+    drawn.push(...waitingFor(state.openName).map(waitingMessage));
     page.messages.replaceChildren(...drawn);
     document.body.classList.toggle("nothing-said-yet", nothingSaidYet());
     chatEnd.glide();
@@ -385,7 +410,8 @@
   // The steps are the AI's. A plugin that is only having its safety check run has none to show. They are kept
   // folded away, with only the newest showing beside how many there have been, until the musician opens them.
   function drawSteps() {
-    const steps = state.aiWorkingOn === state.openName ? state.stepsSoFar : [];
+    const job = aiJobOn(state.openName);
+    const steps = job ? job.steps : [];
     working.fold.hidden = steps.length === 0;
     working.count.textContent = countOfSteps(steps);
     working.latest.textContent = steps.length ? wordsOfStep(steps[steps.length - 1]) : "";
@@ -461,7 +487,8 @@
 
   // A new plugin starts from a stock layout that is not its own, so that is never shown.
   function isAwaitingItsScreen(plugin) {
-    return Boolean(plugin) && state.awaitingScreenOf === state.openName;
+    const job = aiJobOn(state.openName);
+    return Boolean(plugin && job && job.awaitsItsScreen);
   }
 
   function drawEmptyScreen() {
@@ -510,24 +537,49 @@
     drawMirror();
   }
 
+  function canTakeNoRequest() {
+    const startingNew = state.openName === NEW_PLUGIN;
+    return aiHasNoRoom() || isBeingWorkedOn(state.openName) || (startingNew && (architectIsThinking() || state.scouting));
+  }
+
+  // While the AI works on the open plugin, what is typed waits its turn. With nothing typed, the button stops the work.
+  function typedWaitsItsTurn() {
+    return state.aiJobs.has(state.openName) && page.message.value.trim() !== "";
+  }
+
+  function wordsOnTheRequestButton() {
+    if (typedWaitsItsTurn()) return "QUEUE IT";
+    if (canBeStoppedHere()) return "STOP";
+    return state.openName === NEW_PLUGIN ? "BUILD IT" : "DO IT";
+  }
+
+  function drawRequestButton() {
+    page.send.textContent = wordsOnTheRequestButton();
+    page.send.disabled = canTakeNoRequest() && !canBeStoppedHere() && !typedWaitsItsTurn();
+  }
+
+  // A plugin being worked on cannot be played. A sound that is playing can always be stopped.
+  function playCannotBePressed() {
+    return state.openName === NEW_PLUGIN || (isBeingWorkedOn(state.openName) && !livePlayer.isSounding());
+  }
+
   function drawComposer() {
     const startingNew = state.openName === NEW_PLUGIN;
     const asked = !startingNew ? ASK_FOR_A_CHANGE : state.remixOf ? ASK_WHAT_IS_DIFFERENT : ASK_FOR_A_PLUGIN;
     page.newPluginFields.hidden = !startingNew;
     page.message.placeholder = asked;
     page.message.setAttribute("aria-label", asked);
-    const cannotTakeARequest = aiIsBusy() || isBeingWorkedOn(state.openName) || (startingNew && (architectIsThinking() || state.scouting));
+    const cannotTakeARequest = canTakeNoRequest();
     page.addButton.disabled = cannotTakeARequest;
     page.starters.hidden = !startingNew || Boolean(state.architect);
     page.feelLucky.disabled = cannotTakeARequest;
     page.remix.disabled = cannotTakeARequest;
     drawRemixNote(startingNew);
-    page.send.textContent = canBeStoppedHere() ? "STOP" : startingNew ? "BUILD IT" : "DO IT";
-    page.send.disabled = cannotTakeARequest && !canBeStoppedHere();
+    drawRequestButton();
     page.goBack.hidden = startingNew;
     page.goBack.disabled = isBeingWorkedOn(state.openName) || !(state.openPlugin && state.openPlugin.versionsKept);
     page.editLook.disabled = isBeingWorkedOn(state.openName) || !hasPagesToArrange(state.openPlugin);
-    page.play.disabled = isBeingWorkedOn(state.openName) || startingNew;
+    page.play.disabled = playCannotBePressed();
     drawSendButton();
     page.moreButton.disabled = isBeingWorkedOn(state.openName) || startingNew;
     sampleShelf.setBusy(cannotTakeARequest);
@@ -585,6 +637,7 @@
   function emptyMessageBox() {
     page.message.value = "";
     fitMessageBox();
+    drawRequestButton();
   }
 
   // Until there is a plugin to look at, the conversation has the whole window. As soon as one is opened or begun,
@@ -646,8 +699,8 @@
   }
 
   function contextHeard(heard) {
-    if (state.aiWorkingOn === undefined) return;
-    state.contextOf.set(state.aiWorkingOn, heard.tokens);
+    if (!aiJobOn(heard.plugin)) return;
+    state.contextOf.set(heard.plugin, heard.tokens);
     drawContext();
   }
 
@@ -678,6 +731,7 @@
   async function open(pluginName) {
     const isAnotherConversation = pluginName !== state.openName;
     state.openName = pluginName;
+    aiMenu.showModelOf(pluginName === NEW_PLUGIN ? null : pluginName);
     appSettings.noteOpened(pluginName);
     state.screenPage = 0;
     if (isAnotherConversation) state.openPlugin = null;
@@ -711,7 +765,7 @@
   // What is happening to a plugin, or failing that whether it has passed its safety check.
   function statusOf(pluginName) {
     if (state.checking.has(pluginName)) return state.checking.get(pluginName);
-    if (state.aiWorkingOn === pluginName) return state.aiStatus;
+    if (aiJobOn(pluginName)) return aiJobOn(pluginName).status;
     return safetyOf(pluginName);
   }
 
@@ -721,7 +775,7 @@
   // A plugin the AI has only just begun has no screen to look at yet, so he works there until it has one.
   function smithIsAtWork() {
     const hasNoScreenOfItsOwn = isAwaitingItsScreen(state.openPlugin) || !hasPagesToArrange(state.openPlugin);
-    const isBeingBegun = aiIsBusy() && state.aiWorkingOn === state.openName && hasNoScreenOfItsOwn;
+    const isBeingBegun = state.aiJobs.has(state.openName) && hasNoScreenOfItsOwn;
     return isBeingBegun || SMITH_WORKS_WHILE.includes(statusOf(state.openName));
   }
 
@@ -775,21 +829,15 @@
 
   // Only the AI's work can be stopped.
   function startAiWork(pluginName) {
-    state.aiWorkingOn = pluginName;
+    state.aiJobs.set(pluginName, { status: STATUS.working, canBeStopped: true, beganAt: timeTaken.now(), steps: [], awaitsItsScreen: false });
     state.contextOf.set(pluginName, 0);
     drawContext();
-    state.aiWorkBeganAt = timeTaken.now();
-    state.aiStatus = STATUS.working;
-    state.canBeStopped = true;
-    state.stepsSoFar = [];
     working.fold.open = false;
     drawWork();
   }
 
-  function endAiWork() {
-    state.aiWorkingOn = undefined;
-    state.awaitingScreenOf = undefined;
-    state.canBeStopped = false;
+  function endAiWork(pluginName) {
+    state.aiJobs.delete(pluginName);
     drawWork();
   }
 
@@ -873,8 +921,8 @@
     listWhileBeingMade(request);
     foreword.forEach((message) => addMessage(request.name, message));
     addMessage(request.name, { kind: "you", text: asShown(request), pictures: pictures.addresses, pictureFiles: pictures.names });
-    state.awaitingScreenOf = request.name;
     startAiWork(request.name);
+    aiJobOn(request.name).awaitsItsScreen = true;
     page.pluginName.value = "";
     emptyMessageBox();
     await open(request.name);
@@ -950,7 +998,7 @@
   // The name, the maker and the kind are read from the form again, in case they were changed meanwhile.
   function buildWhatWasPlanned() {
     if (architectIsThinking()) return undefined;
-    if (aiIsBusy()) return addMessage(NEW_PLUGIN, { kind: "problem", text: AI_IS_BUSY_ELSEWHERE });
+    if (aiHasNoRoom()) return addMessage(NEW_PLUGIN, { kind: "problem", text: AI_HAS_NO_ROOM });
     noteAnswers();
     const planning = state.architect;
     const planned = (firstIdea) => pluginArchitect.describedWith(firstIdea, planning.answered, page.message.value.trim());
@@ -1007,7 +1055,7 @@
   async function feelLucky() {
     const maker = page.makerName.value.trim();
     if (!maker) return addMessage(NEW_PLUGIN, { kind: "problem", text: LUCKY_NEEDS_A_MAKER });
-    if (aiIsBusy()) return addMessage(NEW_PLUGIN, { kind: "problem", text: AI_IS_BUSY_ELSEWHERE });
+    if (aiHasNoRoom()) return addMessage(NEW_PLUGIN, { kind: "problem", text: AI_HAS_NO_ROOM });
     state.scouting = true;
     drawWork();
     await rollAndBuild(maker).catch((problem) => addMessage(NEW_PLUGIN, { kind: "problem", text: describeProblem(problem) }));
@@ -1087,22 +1135,81 @@
     if (!alreadyListed) state.plugins.push({ name: request.name, maker: request.maker, kind: request.kind });
   }
 
-  // Asks the AI for a change, in words that were typed or picked from its choices. Says whether the request went out.
-  async function changeOpenPlugin(words) {
-    const pluginName = state.openName;
-    if (!words || aiIsBusy() || isBeingWorkedOn(pluginName) || pluginName === NEW_PLUGIN) return false;
+  // A request made now goes out with the pictures in the tray and the model the menu shows.
+  function requestMadeNow(words) {
+    return { words, picturesFor: pictureTray.handOverFor, sentWith: aiMenu.chosen() };
+  }
+
+  // One that waited goes out with the model the menu showed as it was typed. It has no pictures: none can be
+  // added while the AI works, and the tray may by now hold another plugin's.
+  function requestThatWaited(waited) {
+    return { words: waited.words, picturesFor: async () => NO_PICTURES, sentWith: waited.sentWith };
+  }
+
+  // Asks the AI for a change to a plugin. Says whether the request went out.
+  async function askForAChange(pluginName, request) {
+    if (!request.words || aiHasNoRoom() || isBeingWorkedOn(pluginName) || pluginName === NEW_PLUGIN) return false;
     let pictures;
     try {
-      pictures = await pictureTray.handOverFor(pluginName);
-      await ask("change_plugin", { name: pluginName, change: { words, pictures: pictures.names }, ...aiMenu.chosen() });
+      pictures = await request.picturesFor(pluginName);
+      await ask("change_plugin", { name: pluginName, change: { words: request.words, pictures: pictures.names }, ...request.sentWith });
     } catch (problem) {
       addMessage(pluginName, { kind: "problem", text: describeProblem(problem) });
       return false;
     }
     pictureTray.letGo(pictures);
-    addMessage(pluginName, { kind: "you", text: words, pictures: pictures.addresses, pictureFiles: pictures.names });
+    addMessage(pluginName, { kind: "you", text: request.words, pictures: pictures.addresses, pictureFiles: pictures.names });
     startAiWork(pluginName);
     return true;
+  }
+
+  // Asks for a change to the open plugin, in words that were typed or picked from the AI's choices.
+  function changeOpenPlugin(words) {
+    return askForAChange(state.openName, requestMadeNow(words));
+  }
+
+  // --- Requests that wait their turn ------------------------------------------------------------
+
+  // What is asked for while the AI works on a plugin waits its turn. It goes out once that work has ended well,
+  // the oldest first, or as soon as the musician says SEND NOW, which ends the work in hand.
+  function waitingFor(pluginName) {
+    if (!state.waitingToBeSent.has(pluginName)) state.waitingToBeSent.set(pluginName, []);
+    return state.waitingToBeSent.get(pluginName);
+  }
+
+  function letTypedWaitItsTurn() {
+    waitingFor(state.openName).push({ words: page.message.value.trim(), sentWith: aiMenu.chosen() });
+    emptyMessageBox();
+    chatEnd.followAgain();
+    drawMessages();
+  }
+
+  function stopWaiting(pluginName, waited) {
+    const waiting = waitingFor(pluginName);
+    waiting.splice(waiting.indexOf(waited), 1);
+    if (pluginName === state.openName) drawMessages();
+  }
+
+  // Sends the request that has waited longest. One that could not go out goes on waiting.
+  async function sendWhatWaitedLongest(pluginName) {
+    const [next] = waitingFor(pluginName);
+    if (next && (await askForAChange(pluginName, requestThatWaited(next)))) stopWaiting(pluginName, next);
+  }
+
+  function putFirst(pluginName, waited) {
+    const waiting = waitingFor(pluginName);
+    waiting.unshift(...waiting.splice(waiting.indexOf(waited), 1));
+  }
+
+  // The request goes out next. Work the AI has in hand on the plugin is ended first, and the request follows
+  // as soon as that work has stopped.
+  function sendNow(pluginName, waited) {
+    putFirst(pluginName, waited);
+    const job = aiJobOn(pluginName);
+    if (!job) return sendWhatWaitedLongest(pluginName);
+    job.makesWayForWhatWaits = true;
+    if (job.canBeStopped) stopWorkOn(pluginName);
+    return drawMessages();
   }
 
   // What was typed stays in the box until the request has gone out, so nothing is lost when it could not.
@@ -1112,19 +1219,21 @@
 
   // The AI's steps show under the working line as it takes them. When it finishes, they fold away under its closing words.
   // A step is heard of as it starts, so the plugin is being built from the step that builds it until the next one.
-  function statusDuring(line) {
-    if (state.aiStatus === STATUS.stopping) return STATUS.stopping;
+  function statusDuring(job, line) {
+    if (job.status === STATUS.stopping) return STATUS.stopping;
     return line.kind !== "said" && line.text.startsWith(STEP_THAT_BUILDS) ? STATUS.building : STATUS.working;
   }
 
   function workProgressed(line) {
-    const itsScreenJustAppeared = Boolean(state.awaitingScreenOf) && hasWrittenItsScreen();
-    if (itsScreenJustAppeared) state.awaitingScreenOf = undefined;
-    state.stepsSoFar.push({ kind: line.kind, text: line.text });
-    state.aiStatus = statusDuring(line);
+    const job = aiJobOn(line.plugin);
+    if (!job) return;
+    const itsScreenJustAppeared = job.awaitsItsScreen && hasWrittenItsScreen(job);
+    if (itsScreenJustAppeared) job.awaitsItsScreen = false;
+    job.steps.push({ kind: line.kind, text: line.text });
+    job.status = statusDuring(job, line);
     drawStatus();
     drawSteps();
-    if (itsScreenJustAppeared || changesTheScreen(line)) showLatestScreen();
+    if (itsScreenJustAppeared || changesTheScreen(line)) showLatestScreen(line.plugin);
   }
 
   function changesTheScreen(line) {
@@ -1132,22 +1241,23 @@
   }
 
   // A step is heard of as it starts. So the screen's layout is known to be written once that step is no longer the newest.
-  function hasWrittenItsScreen() {
-    return state.stepsSoFar.some((step) => step.text === WRITING_THE_SCREEN);
+  function hasWrittenItsScreen(job) {
+    return job.steps.some((step) => step.text === WRITING_THE_SCREEN);
   }
 
-  // The AI gives up at its next step and the workbench then says it was stopped.
-  function stopWork() {
-    state.canBeStopped = false;
-    state.aiStatus = STATUS.stopping;
+  // The AI's work on a plugin gives up at its next step, and the workbench then says it was stopped.
+  function stopWorkOn(pluginName) {
+    const job = aiJobOn(pluginName);
+    job.canBeStopped = false;
+    job.status = STATUS.stopping;
     drawStatus();
     drawComposer();
-    ask("stop_work").catch(() => {});
+    ask("stop_work", { name: pluginName }).catch(() => {});
   }
 
-  // While the AI works, the MPC view follows what it has written so far.
-  async function showLatestScreen() {
-    if (state.openName !== state.aiWorkingOn) return;
+  // While the AI works on the open plugin, the MPC view follows what it has written so far.
+  async function showLatestScreen(pluginName) {
+    if (state.openName !== pluginName) return;
     const latest = await loadPlugin(state.openName);
     if (!latest || state.openName !== latest.summary.name) return;
     state.openPlugin = latest;
@@ -1158,20 +1268,23 @@
   }
 
   async function workFinished(result) {
-    const howItWent = { steps: state.stepsSoFar, tookSeconds: timeTaken.secondsSince(state.aiWorkBeganAt) };
+    const job = aiJobOn(result.plugin);
+    const howItWent = { steps: job.steps, tookSeconds: timeTaken.secondsSince(job.beganAt) };
     if (result.ok) {
       addMessage(result.plugin, { kind: "said", text: result.closingWords || FINISHED_WITHOUT_WORDS, ...howItWent });
       showReport(result.plugin, result.report);
     } else {
       showProblem(result.plugin, { kind: "problem", text: result.error, ...howItWent });
     }
-    endAiWork();
+    endAiWork(result.plugin);
     await refreshLibrary();
     const stillExists = state.plugins.some((plugin) => plugin.name === result.plugin);
     if (stillExists) await foldOldVersions(result.plugin);
     if (!stillExists) moveConversation(result.plugin, NEW_PLUGIN);
     if (state.openName === result.plugin) await open(stillExists ? result.plugin : NEW_PLUGIN);
     else drawTabs();
+    if (!stillExists) state.waitingToBeSent.delete(result.plugin);
+    else if (result.ok || job.makesWayForWhatWaits) await sendWhatWaitedLongest(result.plugin);
   }
 
   // When nothing could be made, what was said about it belongs with the empty "new plugin" form.
@@ -1224,6 +1337,7 @@
     state.conversations.delete(conversationKey(pluginName));
     state.reports.delete(pluginName);
     state.editedSinceCheck.delete(pluginName);
+    state.waitingToBeSent.delete(pluginName);
   }
 
   // Asks the app to do something to the open plugin, with the live player stopped first so it holds none of its files.
@@ -1248,6 +1362,7 @@
     if (!newName || newName === oldName) return;
     if (!(await doToOpenPlugin("rename_plugin", { newName }))) return;
     forget(oldName);
+    aiMenu.pluginWasRenamed(oldName, newName);
     tabStrip.renamed(oldName, newName);
     await refreshLibrary();
     await open(newName);
@@ -1259,6 +1374,7 @@
     if (!(await askBeforeDeleting(page.appSheet, pluginName))) return;
     if (!(await doToOpenPlugin("delete_plugin", {}))) return;
     forget(pluginName);
+    aiMenu.pluginWasDeleted(pluginName);
     await refreshLibrary();
     await open(NEW_PLUGIN);
   }
@@ -1444,8 +1560,9 @@
   function toggleLiveSound() {
     const pluginName = state.openName;
     const sayWhy = (problem) => addMessage(pluginName, { kind: "problem", text: describeProblem(problem) });
+    if (livePlayer.isSounding()) return livePlayer.setSound(state.openPlugin, false).catch(sayWhy);
     if (isKnownToBeBlocked(pluginName)) return sayWhy(NOT_PLAYED_UNTIL_SAFE);
-    livePlayer.setSound(state.openPlugin, !livePlayer.isSounding()).catch(sayWhy);
+    return livePlayer.setSound(state.openPlugin, true).catch(sayWhy);
   }
 
   function soundChanged(sounding) {
@@ -1453,6 +1570,7 @@
     page.play.title = words;
     page.play.setAttribute("aria-label", words);
     page.play.setAttribute("aria-pressed", String(sounding));
+    page.play.disabled = playCannotBePressed();
     page.piano.hidden = !livePlayer.isPlayingAnInstrument();
     const anEffectIsPlaying = sounding && !livePlayer.isPlayingAnInstrument();
     testSound.follow(anEffectIsPlaying);
@@ -1571,12 +1689,13 @@
 
   // --- Starting up ----------------------------------------------------------------------------
 
-  // Enter sends the message. Shift with Enter starts a new line. While the AI works, Enter does nothing,
-  // so typing the next request can never stop the one in progress.
+  // Enter sends the message. Shift with Enter starts a new line. While the AI works on the open plugin, Enter
+  // has what was typed wait its turn, and does nothing else, so typing can never stop the work in progress.
   function sendOnEnter(event) {
     if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
-    if (aiIsBusy()) return event.preventDefault();
     event.preventDefault();
+    if (typedWaitsItsTurn()) return letTypedWaitItsTurn();
+    if (isBeingWorkedOn(state.openName)) return;
     page.composer.requestSubmit();
   }
 
@@ -1601,10 +1720,12 @@
     page.deletePlugin.addEventListener("click", deleteOpenPlugin);
     page.message.addEventListener("keydown", sendOnEnter);
     page.message.addEventListener("input", fitMessageBox);
+    page.message.addEventListener("input", drawRequestButton);
     page.composer.addEventListener("submit", (event) => {
       event.preventDefault();
-      if (canBeStoppedHere()) return stopWork();
-      if (aiIsBusy() || isBeingWorkedOn(state.openName)) return;
+      if (typedWaitsItsTurn()) return letTypedWaitItsTurn();
+      if (canBeStoppedHere()) return stopWorkOn(state.openName);
+      if (aiHasNoRoom() || isBeingWorkedOn(state.openName)) return;
       if (state.openName === NEW_PLUGIN) startNewPlugin(); else sendTypedChange();
     });
   }

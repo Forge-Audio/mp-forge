@@ -80,7 +80,15 @@
   const listings = new Map();
   // The Claude model the workbench starts with. It is named, so the musician always sees which model builds.
   const MODEL_TO_START_WITH = { provider: ANTHROPIC, ...CLAUDE_MODELS.find((model) => model.id === "opus"), seesPictures: true };
+  // The model the menu shows, which is the open plugin's.
   let pickedModel = MODEL_TO_START_WITH;
+  // The model picked last, whichever plugin it was picked for. A new plugin starts with it.
+  let pickedLast = MODEL_TO_START_WITH;
+  // Each plugin keeps a model of its own, so one can be built by Claude while another is built by a model of
+  // another service. They are kept together under this word, by the plugin's name.
+  const KEPT_FOR_EACH_PLUGIN = "modelOfEachPlugin";
+  // The plugin whose model the menu shows. None while a new plugin is being described.
+  let pluginShown = null;
   const pickListeners = [];
   let openService = ANTHROPIC;
   let opener;
@@ -129,7 +137,52 @@
       if (claude) pickedModel = { provider: ANTHROPIC, ...claude, seesPictures: true };
     }
     pickedModel = { ...pickedModel, contextWindow: contextWindowOf(pickedModel) };
+    pickedLast = pickedModel;
     openService = pickedModel.provider;
+  }
+
+  // --- A model for each plugin ------------------------------------------------------------------
+
+  function modelsKeptForPlugins() {
+    try {
+      return JSON.parse(recall(KEPT_FOR_EACH_PLUGIN)) || {};
+    } catch (notKeptThatWay) {
+      return {};
+    }
+  }
+
+  function keepForPlugins(models) {
+    remember(KEPT_FOR_EACH_PLUGIN, JSON.stringify(models));
+  }
+
+  function keepForThePluginShown() {
+    if (pluginShown) keepForPlugins({ ...modelsKeptForPlugins(), [pluginShown]: pickedModel });
+  }
+
+  // The model for a new plugin is the one picked last. An open plugin has the model it was given, and one that
+  // was given none takes the model picked last and keeps it from then on.
+  function modelFor(pluginName) {
+    const kept = pluginName && modelsKeptForPlugins()[pluginName];
+    return kept && kept.provider && kept.id && isStillOffered(kept) ? kept : pickedLast;
+  }
+
+  function showModelOf(pluginName) {
+    pluginShown = pluginName;
+    pickedModel = modelFor(pluginName);
+    keepForThePluginShown();
+    openService = pickedModel.provider;
+    draw(!menu.hidden);
+    pickListeners.forEach((tell) => tell());
+  }
+
+  function pluginWasRenamed(oldName, newName) {
+    const { [oldName]: itsModel, ...others } = modelsKeptForPlugins();
+    keepForPlugins(itsModel ? { ...others, [newName]: itsModel } : others);
+  }
+
+  function pluginWasDeleted(pluginName) {
+    const { [pluginName]: gone, ...others } = modelsKeptForPlugins();
+    keepForPlugins(others);
   }
 
   // The effort levels the picked model's own service says it accepts. A Claude or Codex model takes them all.
@@ -207,7 +260,9 @@
 
   function keepModel(service, model) {
     pickedModel = { provider: service.word, id: model.id, name: model.name, seesPictures: Boolean(model.seesPictures), contextWindow: model.contextWindow || null, efforts: model.efforts || [] };
-    remember("pickedModel", JSON.stringify(pickedModel));
+    pickedLast = pickedModel;
+    remember("pickedModel", JSON.stringify(pickedLast));
+    keepForThePluginShown();
     openService = service.word;
     opener.textContent = summary();
     pickListeners.forEach((tell) => tell());
@@ -244,8 +299,13 @@
     const asListedToday = pickedModel.provider === service.word && models.find((model) => model.id === pickedModel.id);
     if (!asListedToday) return;
     const effortsBefore = effortsOfPickedModel().join(" ");
+    const isTheOnePickedLast = pickedLast.provider === pickedModel.provider && pickedLast.id === pickedModel.id;
     pickedModel = { ...pickedModel, efforts: asListedToday.efforts || [], contextWindow: asListedToday.contextWindow || pickedModel.contextWindow };
-    remember("pickedModel", JSON.stringify(pickedModel));
+    keepForThePluginShown();
+    if (isTheOnePickedLast) {
+      pickedLast = pickedModel;
+      remember("pickedModel", JSON.stringify(pickedLast));
+    }
     if (effortsOfPickedModel().join(" ") !== effortsBefore && !search.value) draw(!menu.hidden);
   }
 
@@ -483,5 +543,8 @@
     return Boolean(service && service.usesChatGptPlan && service.hasKey);
   }
 
-  window.aiMenu = { start, chosen, contextWindow, usesChatGptPlan, looksThingsUp, onPicked: (listener) => pickListeners.push(listener) };
+  window.aiMenu = {
+    start, chosen, contextWindow, usesChatGptPlan, looksThingsUp, showModelOf, pluginWasRenamed, pluginWasDeleted,
+    onPicked: (listener) => pickListeners.push(listener),
+  };
 })();
