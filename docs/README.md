@@ -9,8 +9,8 @@ One Astro project holds two things, published together:
 
 Both draw with the app's colours, which are written down once, in `src/styles/app-colours.css`.
 
-The home page's first screen has a place for the launch video. Once the video is on YouTube, write its name
-in `src/launch-video.js`. Until then a picture of the app stands there.
+The home page's first screen shows the launch video. The name YouTube gives the video is written in
+`src/launch-video.js`. With no name there, a picture of the app stands in its place.
 
 ```sh
 npm install        # once
