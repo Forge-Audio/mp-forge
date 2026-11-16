@@ -138,6 +138,7 @@ fn open_window() -> ExitCode {
             commands::fold_old_versions,
             commands::send_to_mpc,
             commands::clipboard_words,
+            commands::this_copy,
             accounts::ai_accounts,
             accounts::claude_code_standing,
             accounts::keep_key,

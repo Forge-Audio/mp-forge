@@ -162,6 +162,20 @@
     parts.accounts.replaceChildren(...aiAccounts.all().map(accountRow));
   }
 
+  // --- Which copy this is -----------------------------------------------------------------------
+
+  // Copies of one version can differ, so the commit a copy was built from is said beside its version.
+  function wordsFor(copy) {
+    return copy.builtFrom ? `Version ${copy.version} · build ${copy.builtFrom}` : `Version ${copy.version}`;
+  }
+
+  async function sayWhichCopyThisIs() {
+    const copy = await ask("this_copy").catch(() => null);
+    if (!copy) return;
+    parts.thisCopy.textContent = wordsFor(copy);
+    parts.thisCopy.hidden = false;
+  }
+
   // --- Starting up ----------------------------------------------------------------------------
 
   function start(pageParts) {
@@ -183,6 +197,7 @@
     aiAccounts.onChange(drawAccounts);
     drawAccounts();
     readMpcPassword();
+    sayWhichCopyThisIs();
   }
 
   window.appSettings = { start, mpc, rememberMpcAddress, noteOpened, pluginToOpenFirst, mostVersionsKept, compactAt };

@@ -354,6 +354,13 @@ fn mpc_of(asked: &MpcAsked) -> Result<Mpc, String> {
     Ok(reached.with_password(key_store::kept(MPC_ACCOUNT)))
 }
 
+/// Which copy of MP Forge this is: its version, and the commit it was built from with that commit's day.
+/// Copies of one version can differ, and the commit tells them apart.
+#[tauri::command]
+pub fn this_copy(app: AppHandle) -> Value {
+    json!({ "version": app.package_info().version.to_string(), "builtFrom": option_env!("MP_FORGE_BUILT_FROM") })
+}
+
 /// The words on this computer's clipboard, for the app's own Paste.
 #[tauri::command]
 pub fn clipboard_words() -> Result<String, String> {
@@ -672,4 +679,17 @@ fn run_job(maker: &Maker, job: Box<Job>, ai: ChosenAi, news: &NewsOfTheWork) -> 
 
 fn explain(error: MakeError) -> String {
     error.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    /// These tests are built in a checkout, where git is at hand, so the note is always there to read.
+    #[test]
+    fn a_copy_built_in_a_checkout_knows_the_commit_it_was_built_from_and_its_day() {
+        let built_from = option_env!("MP_FORGE_BUILT_FROM").expect("the build made no note of its commit");
+
+        let (commit, day) = built_from.split_once(" of ").expect("the note names a commit and a day");
+        assert!(commit.len() >= 7 && commit.chars().all(|letter| letter.is_ascii_hexdigit()), "{commit}");
+        assert!(day.len() == 10 && day.split('-').count() == 3, "{day}");
+    }
 }
