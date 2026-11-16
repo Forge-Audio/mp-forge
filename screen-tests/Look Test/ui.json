@@ -1,0 +1,24 @@
+{
+  "kit": "amber",
+  "pages": [
+    {
+      "name": "STYLED",
+      "controls": [
+        { "param": "Gain", "widget": "knob" },
+        { "param": "Tone", "widget": "knob" },
+        { "param": "Mix", "widget": "fader" },
+        { "widget": "text", "text": "MPC TEXT" }
+      ]
+    },
+    {
+      "name": "PLAIN",
+      "controls": [
+        { "param": "Gain", "widget": "knob" },
+        { "param": "Tone", "widget": "knob" },
+        { "param": "Mix", "widget": "fader" },
+        { "widget": "text", "text": "MPC TEXT" }
+      ]
+    }
+  ],
+  "style": { "background": "ff1e1d1e", "text": "ffffffff", "muted": "ff6a6a6c" }
+}

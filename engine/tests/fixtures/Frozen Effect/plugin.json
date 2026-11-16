@@ -1,0 +1,17 @@
+{
+  "name": "Frozen Effect",
+  "manufacturer": "Workbench Tests",
+  "version": "1.0.0",
+  "format": "vst2",
+  "kind": "effect",
+  "uid": "WhGo",
+  "numInputs": 2,
+  "numOutputs": 2,
+  "category": "Effect",
+  "file32": "VST/frozen-effect-arm32.so",
+  "file64": "VST/frozen-effect-arm64.so",
+  "description": "Frozen Effect: a gain / tone / mix effect for the MPC. Describe your plugin here.",
+  "author": "Workbench Tests",
+  "url": "",
+  "license": "MIT"
+}

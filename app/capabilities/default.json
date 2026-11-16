@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "What the workbench window may use: the app's own commands and its progress events.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

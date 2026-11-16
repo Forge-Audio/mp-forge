@@ -1,0 +1,17 @@
+{
+  "name": "Look Test",
+  "manufacturer": "Workbench Tests",
+  "version": "1.0.0",
+  "format": "vst2",
+  "kind": "effect",
+  "uid": "WYd4",
+  "numInputs": 2,
+  "numOutputs": 2,
+  "category": "Effect",
+  "file32": "VST/look-test-arm32.so",
+  "file64": "VST/look-test-arm64.so",
+  "description": "Look Test: a gain / tone / mix effect for the MPC. Describe your plugin here.",
+  "author": "Workbench Tests",
+  "url": "",
+  "license": "MIT"
+}

@@ -1,0 +1,31 @@
+{
+  "pages": [
+    {
+      "page": "STYLED",
+      "artwork": [
+        { "kind": "block", "id": 1, "area": { "x": 0, "y": 0, "width": 1280, "height": 628 }, "colour": "#3a2a1a",
+          "fade": { "colour": "#0c0806", "from": { "x": 0, "y": 0 }, "to": { "x": 0, "y": 100 } } },
+        { "kind": "block", "id": 2, "area": { "x": 30, "y": 120, "width": 620, "height": 300 }, "colour": "#000000", "corner": 24, "opacity": 40,
+          "edge": { "colour": "#ffa21a", "width": 3 } },
+        { "kind": "words", "id": 3, "text": "LOOK TEST", "font": "Helvetica Neue", "size": 56, "bold": true, "colour": "#ffa21a", "place": { "x": 40, "y": 30 } },
+        { "kind": "block", "id": 4, "shape": "ellipse", "area": { "x": 60, "y": 470, "width": 120, "height": 120 }, "colour": "#ff5a1f", "opacity": 80 }
+      ],
+      "items": [
+        { "kind": "control", "name": "Gain", "place": { "x": 60, "y": 140 }, "shownName": "LOUDNESS", "parts": {
+            "art": { "x": 0, "y": 0, "width": 180, "height": 180 },
+            "name": { "area": { "x": 0, "y": 180, "width": 180, "height": 36 }, "font": "Roboto", "bold": true, "height": 30, "colour": "#ffa21a", "align": "centre" },
+            "value": { "area": { "x": 0, "y": 216, "width": 180, "height": 36 }, "font": "Titillium Web", "height": 28, "colour": "#ffffff", "align": "centre" } } },
+        { "kind": "control", "name": "Tone", "place": { "x": 300, "y": 160 }, "parts": {
+            "art": { "x": 0, "y": 0, "width": 120, "height": 120 },
+            "name": { "area": { "x": 130, "y": 30, "width": 200, "height": 60 }, "font": "Nexa", "height": 44, "colour": "#d8c9a8", "align": "left" },
+            "value": { "area": { "x": 130, "y": 90, "width": 200, "height": 30 }, "font": "Titillium Web", "height": 26, "colour": "#ffffff", "align": "left", "hidden": true } } },
+        { "kind": "control", "name": "Mix", "place": { "x": 240, "y": 470 }, "parts": {
+            "art": { "x": 0, "y": 40, "width": 420, "height": 44 },
+            "name": { "area": { "x": 0, "y": 0, "width": 210, "height": 36 }, "font": "Titillium Web", "height": 26, "colour": "#d8c9a8", "align": "left" },
+            "value": { "area": { "x": 210, "y": 0, "width": 210, "height": 36 }, "font": "Titillium Web", "bold": true, "height": 28, "colour": "#ffa21a", "align": "right" } } },
+        { "kind": "heading", "name": "MPC TEXT", "place": { "x": 680, "y": 140 }, "shownName": "RESTYLED", "parts": {
+            "name": { "area": { "x": 0, "y": 0, "width": 300, "height": 60 }, "font": "Roboto", "bold": true, "height": 44, "colour": "#ffa21a", "align": "right" } } }
+      ]
+    }
+  ]
+}

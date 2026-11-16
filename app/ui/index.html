@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MP Forge</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&amp;family=Silkscreen:wght@400;700&amp;family=Titillium+Web:wght@400;600;700&amp;family=Roboto:wght@400;700&amp;display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-theme="dark" class="chat-only">
+
+<header class="bar">
+  <div class="wordmark">MP FORGE</div>
+  <button type="button" id="tabs-earlier" class="bar-icon tabs-arrow" title="Earlier plugins" aria-label="Earlier plugins" hidden>&lt;</button>
+  <nav id="plugin-tabs" class="tabs" aria-label="Your plugins"></nav>
+  <button type="button" id="tabs-later" class="bar-icon tabs-arrow" title="More plugins" aria-label="More plugins" hidden>&gt;</button>
+  <button type="button" id="new-plugin-tab" class="tab">+ New plugin</button>
+  <div class="bar-spacer"></div>
+  <div class="ai-menu-holder">
+    <button type="button" id="ai-menu-button" class="bar-button" aria-haspopup="menu" aria-expanded="false"></button>
+    <div id="ai-menu" class="menu ai-menu" role="menu" aria-label="Model and effort" hidden></div>
+  </div>
+  <div class="status-holder">
+    <button type="button" id="status-button" class="readout" aria-haspopup="menu" aria-expanded="false">
+      <span class="readout-label">Status</span>
+      <span id="status" class="readout-word" role="status"></span>
+    </button>
+    <div id="status-menu" class="menu status-menu" role="menu" aria-label="Safety check" hidden>
+      <div id="check-summary" class="menu-words"></div>
+      <button type="button" id="check" class="menu-row" role="menuitem">Run the safety check now</button>
+    </div>
+  </div>
+  <button type="button" id="settings-button" class="bar-icon" title="Settings" aria-label="Settings" aria-pressed="false">
+    <svg class="tool-icon" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><path fill-rule="evenodd" d="M7 1h2v2h1v1h1V3h2v2h-1v1h1v1h2v2h-2v1h-1v1h1v2h-2v-1h-1v1H9v2H7v-2H6v-1H5v1H3v-2h1v-1H3V9H1V7h2V6h1V5H3V3h2v1h1V3h1zM7 6v1H6v2h1v1h2V9h1V7H9V6z"/></svg>
+  </button>
+</header>
+
+<div class="desk">
+
+  <aside id="conversation" class="window conversation" aria-label="Conversation">
+    <div class="titlebar with-button">
+      <span>CONVERSATION</span>
+      <div class="titlebar-buttons">
+        <button type="button" id="widen-chat" class="titlebar-button" aria-pressed="false"></button>
+        <button type="button" id="go-back" class="titlebar-button" title="Step through this plugin's versions, go back to any of them, or delete the ones you no longer want.">VERSIONS</button>
+      </div>
+    </div>
+    <div class="window-body">
+      <div id="messages" class="messages" aria-live="polite"></div>
+      <div class="drop-hint" aria-hidden="true">DROP THE PICTURE HERE</div>
+
+      <template id="working-template">
+        <div class="working-block">
+          <div class="working">
+            <svg class="beat" viewBox="0 0 14 15" shape-rendering="crispEdges" aria-hidden="true">
+              <rect class="pad" x="0" y="1" width="6" height="6"/>
+              <rect class="pad" x="8" y="1" width="6" height="6"/>
+              <rect class="pad" x="0" y="9" width="6" height="6"/>
+              <rect class="pad" x="8" y="9" width="6" height="6"/>
+            </svg>
+            <span class="working-words"></span>
+          </div>
+          <details class="working-fold" hidden>
+            <summary><span class="working-count"></span><span class="working-latest"></span></summary>
+            <div class="working-steps"></div>
+          </details>
+        </div>
+      </template>
+
+      <form id="composer" class="composer">
+        <fieldset id="new-plugin-fields" class="new-plugin-fields">
+          <legend class="field-label">New plugin</legend>
+          <label class="field-label" for="plugin-name">Its name</label>
+          <input id="plugin-name" type="text" maxlength="32" placeholder="Dusty Tape" autocomplete="off">
+          <label class="field-label" for="maker-name">Your name, shown as its maker</label>
+          <input id="maker-name" type="text" maxlength="32" placeholder="Your name or brand" autocomplete="off">
+          <div class="kind-choice" role="radiogroup" aria-label="Kind of plugin">
+            <label><input type="radio" name="kind" value="effect" checked> Effect</label>
+            <label><input type="radio" name="kind" value="instrument"> Instrument</label>
+          </div>
+          <label class="architect-choice" title="Before anything is built, the plugin architect asks you a few questions about your idea and offers choices for each, so the plugin comes out more your own.">
+            <input type="checkbox" id="architect"> <span>Plugin architect: asks you a few questions first</span>
+          </label>
+        </fieldset>
+        <div class="attached">
+          <div id="picture-list" class="sample-list" aria-label="Pictures to send with this message"></div>
+          <div id="sample-list" class="sample-list" aria-label="Sound files for this plugin"></div>
+        </div>
+        <div id="remix-of" class="remix-of" hidden>
+          <span id="remix-of-words"></span>
+          <button type="button" id="remix-of-clear" class="remix-of-clear" title="Do not remix it after all" aria-label="Do not remix it after all">X</button>
+        </div>
+        <div class="message-box">
+          <div class="add-holder">
+            <button type="button" id="add-button" class="add-button" aria-haspopup="menu" aria-expanded="false" aria-label="Add a picture or a sound file">+</button>
+            <div id="add-menu" class="menu opens-up" role="menu" aria-label="What to add" hidden>
+              <button type="button" id="add-pictures" class="menu-row" role="menuitem">Picture</button>
+              <button type="button" id="add-samples" class="menu-row" role="menuitem">Sound file (WAV or MP3)</button>
+            </div>
+          </div>
+          <textarea id="message" rows="1"></textarea>
+          <button type="submit" id="send" class="send-button">DO IT</button>
+        </div>
+        <div id="starters" class="starters">
+          <button type="button" id="feel-lucky" class="item-button" title="Rolls the dice for a theme, looks for something new and interesting in it, and builds a plugin from what it finds.">I'M FEELING LUCKY</button>
+          <button type="button" id="remix" class="item-button" title="Pick a plugin from the Open MPC catalog and build your own version of it.">REMIX A PLUGIN</button>
+        </div>
+        <div class="composer-notes">
+          <div id="plan-note" class="plan-note" hidden>
+            <span>Using ChatGPT plan</span>
+            <button type="button" id="manage-usage" class="plan-link" title="Opens ChatGPT's settings in your browser, where you see what MP Forge has used and set its limit">MANAGE USAGE</button>
+          </div>
+          <div id="context-readout" class="context-readout" role="status"></div>
+        </div>
+        <input type="file" id="picture-picker" accept="image/*" multiple hidden>
+        <input type="file" id="sample-picker" accept=".wav,.mp3,audio/wav,audio/x-wav,audio/mpeg" multiple hidden>
+      </form>
+    </div>
+  </aside>
+
+  <main class="window mirror">
+    <div class="titlebar">HOW IT LOOKS ON YOUR MPC</div>
+    <div class="window-body">
+      <div class="mirror-heading">
+        <div class="mirror-title">
+          <h1 id="plugin-title">New plugin</h1>
+          <div id="plugin-subtitle" class="soft"></div>
+        </div>
+        <button type="button" id="play" class="play-button" title="Play plugin" aria-label="Play plugin" aria-pressed="false">
+          <svg class="tool-icon when-silent" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><path d="M5 3h2v1h2v1h2v1h1v1h1v2h-1v1h-1v1H9v1H7v1H5z"/></svg>
+          <svg class="tool-icon when-sounding" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><path d="M4 4h8v8H4z"/></svg>
+        </button>
+        <button type="button" id="send-to-mpc" class="edit-look-button" title="Send to your MPC" aria-label="Send to your MPC">
+          <svg class="tool-icon" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><path d="M7 2h2v1h1v1h1v1h1v1h-2v4H6V6H4V5h1V4h1V3h1zM2 11h2v2h8v-2h2v4H2z"/></svg>
+        </button>
+        <button type="button" id="edit-look" class="edit-look-button" title="Edit the look" aria-label="Edit the look">
+          <svg class="tool-icon" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><path d="M12 1h2v1h-2zM11 2h3v1h-3zM9 3h2v1h-2zM12 3h1v1h-1zM8 4h4v1h-4zM7 5h4v1h-4zM6 6h4v1h-4zM5 7h4v1h-4zM4 8h4v1h-4zM3 9h4v1h-4zM3 10h3v1h-3zM1 11h2v1h-2zM4 11h1v1h-1zM1 12h3v1h-3zM1 13h2v1h-2zM1 14h1v1h-1z"/></svg>
+        </button>
+        <div class="more-holder">
+          <button type="button" id="more-button" class="edit-look-button" title="Rename or delete this plugin" aria-label="Rename or delete this plugin" aria-haspopup="menu" aria-expanded="false">
+            <svg class="tool-icon" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><path d="M2 7h3v3H2zM7 7h3v3H7zM12 7h3v3h-3z"/></svg>
+          </button>
+          <div id="more-menu" class="menu" role="menu" aria-label="This plugin" hidden>
+            <button type="button" id="rename-plugin" class="menu-row" role="menuitem">Rename…</button>
+            <button type="button" id="delete-plugin" class="menu-row" role="menuitem">Delete…</button>
+          </div>
+        </div>
+      </div>
+      <div class="playing-row">
+      <div id="presets" class="presets" role="group" aria-label="Presets built into the plugin" hidden>
+        <span class="field-label">Preset</span>
+        <button type="button" id="preset-before" class="item-button preset-step" title="The preset before" aria-label="The preset before">&lt;</button>
+        <div class="preset-holder">
+          <button type="button" id="preset-list" class="item-input preset-list" aria-label="Preset" aria-haspopup="menu" aria-expanded="false"></button>
+          <div id="preset-menu" class="menu preset-menu" role="menu" aria-label="Presets" hidden></div>
+        </div>
+        <button type="button" id="preset-after" class="item-button preset-step" title="The next preset" aria-label="The next preset">&gt;</button>
+      </div>
+      <div class="volume">
+        <span class="field-label">Volume</span>
+        <div id="output-volume" class="output-volume"></div>
+      </div>
+      </div>
+      <div class="mirror-row">
+        <div class="mpc-screen-frame">
+          <section id="mpc-screen" class="mpc-screen" aria-label="MPC touch screen preview"></section>
+          <div id="smith" class="smith-at-work" aria-live="polite" hidden></div>
+        </div>
+        <div class="screen-caption">
+          <div id="piano" class="piano" hidden></div>
+          <div id="test-sound" class="test-sound" hidden>
+            <span class="field-label">Effect</span>
+            <span class="effect-switch" role="group" aria-label="Effect">
+              <button type="button" id="effect-on" class="mode-button" aria-pressed="true" title="Hear the sound with the effect on it">ON</button>
+              <button type="button" id="effect-off" class="mode-button" aria-pressed="false" title="Hear the sound as it is, without the effect">OFF</button>
+            </span>
+            <span class="field-label">Playing through it</span>
+            <button type="button" id="test-sound-beat" class="mode-button">THE BUILT-IN BEAT</button>
+            <button type="button" id="test-sound-own" class="mode-button" hidden></button>
+            <button type="button" id="test-sound-choose" class="item-button" title="Pick a WAV or MP3 file on this computer to hear the effect work on. It stays where it is and is never sent to your MPC."></button>
+          </div>
+          <div class="soft small">Drag a control to turn it. Double-click puts it back.</div>
+        </div>
+        <section class="hardware" aria-label="Hardware knobs">
+          <div class="hardware-fit">
+            <div class="field-label">The 16 hardware knobs on this page</div>
+            <div id="hardware-grid" class="hardware-grid"></div>
+          </div>
+        </section>
+        <div id="hardware-note" class="hardware-note soft small"></div>
+      </div>
+    </div>
+  </main>
+
+  <section id="settings" class="window settings" aria-label="Settings" hidden>
+    <div class="titlebar with-button">
+      <span>SETTINGS</span>
+      <button type="button" id="settings-done" class="titlebar-button">DONE</button>
+    </div>
+    <div class="window-body settings-body">
+      <div class="setting">
+        <div class="field-label">Colour mode</div>
+        <div class="mode" role="group" aria-label="Colour mode">
+          <button type="button" id="mode-dark" class="mode-button">DARK</button>
+          <button type="button" id="mode-light" class="mode-button">LIGHT</button>
+        </div>
+      </div>
+      <div class="setting">
+        <div class="field-label">New here?</div>
+        <button type="button" id="show-guide" class="item-button">SHOW ME ROUND</button>
+      </div>
+      <div class="setting">
+        <div class="field-label">When the app starts, open</div>
+        <div class="mode" role="group" aria-label="What the app opens when it starts">
+          <button type="button" id="starts-new" class="mode-button">A NEW PLUGIN</button>
+          <button type="button" id="starts-last" class="mode-button">THE PLUGIN I HAD OPEN</button>
+        </div>
+      </div>
+      <div class="setting">
+        <div class="field-label">Where your plugins are kept</div>
+        <div class="soft small">Each plugin is a folder of its own on this computer, holding its code, its screen, its versions and your conversation about it. You can keep them in any folder you like, for instance one that gets backed up.</div>
+        <div id="plugins-folder-path" class="folder-path"></div>
+        <div id="plugins-folder-state" class="soft small"></div>
+        <div class="folder-answers">
+          <button type="button" id="plugins-folder-show" class="item-button">SHOW THE FOLDER</button>
+          <button type="button" id="plugins-folder-choose" class="item-button">CHOOSE ANOTHER FOLDER</button>
+        </div>
+        <div id="plugins-folder-asking" class="folder-asking" hidden></div>
+        <div id="plugins-folder-said" class="sheet-problem" role="status" hidden></div>
+      </div>
+      <div class="setting">
+        <div class="field-label">Versions kept of each plugin</div>
+        <div class="soft small">A version is kept before every change, so you can always go back. With a limit, a plugin's oldest versions are thrown away for good once it has more than that. You can also delete single versions from VERSIONS.</div>
+        <div id="versions-kept" class="mode" role="group" aria-label="Versions kept of each plugin"></div>
+      </div>
+      <div class="setting">
+        <div class="field-label">AI context</div>
+        <div class="soft small">The context is everything the AI is holding in mind while it works on one request: your words, the files it has read, the pictures it was shown. It is counted in tokens and shown at the top of the conversation. Past the limit you set here, what the AI read longest ago is dropped to make room (compaction). It can read anything again when it needs to. A lower limit costs less and keeps the AI focused. A higher one lets it hold more at once.</div>
+        <div id="compact-at" class="mode" role="group" aria-label="Compact the AI's context at"></div>
+      </div>
+      <div class="setting">
+        <div class="field-label">What MP Forge needs on this computer</div>
+        <div class="soft small">MP Forge builds and checks every plugin on this computer, with Akai's own tools. This is what those tools need, and whether it is here.</div>
+        <div id="needs-list" class="needs"></div>
+        <div class="setting-field"><button type="button" id="needs-check" class="item-button">CHECK AGAIN</button><button type="button" id="needs-fetch" class="item-button" hidden>GET THE BUILD TOOLS</button></div>
+        <div id="needs-said" class="soft small" role="status" hidden></div>
+      </div>
+      <div class="setting">
+        <div class="field-label">Your MPC</div>
+        <div class="soft small">Used when you send a plugin to it. The MPC shows its address under its Wi-Fi settings, and has to have developer mode on. A plugin only ever goes on a USB drive or SD card in the MPC, never on its built-in storage.</div>
+        <label class="setting-field"><span>Address</span><input id="mpc-address" type="text" class="item-input" maxlength="253" placeholder="192.168.1.50" autocomplete="off" spellcheck="false"></label>
+        <label class="setting-field"><span>Removable drive, if it has several</span><input id="mpc-drive" type="text" class="item-input" maxlength="64" placeholder="Its name or number" autocomplete="off" spellcheck="false"></label>
+        <div class="setting-field"><span>Password, if it asks for one</span><span id="mpc-password-state" class="soft"></span><button type="button" id="mpc-password" class="item-button"></button></div>
+      </div>
+      <div class="setting">
+        <div class="field-label">AI accounts</div>
+        <div class="soft small">A key is kept in this computer's own store for secrets: the keychain on a Mac, the Credential Manager on Windows, the keyring on Linux. It is never written into a plugin's files and the AI is never shown it. Claude works without a key, through Claude Code's own sign-in.</div>
+        <div id="ai-accounts" class="accounts"></div>
+      </div>
+      <div class="setting">
+        <div class="field-label">About MP Forge</div>
+        <div class="soft small">MP Forge is an independent tool for making plugins for Akai MPC hardware. It is not affiliated with, sponsored by or endorsed by Akai Professional or inMusic Brands. MPC and Akai are trademarks of their owners.</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="editor" class="window editor" aria-label="Edit the look" hidden>
+    <div class="titlebar">EDIT THE LOOK</div>
+    <div class="editor-title-row">
+      <h1 id="editor-title" class="editor-title"></h1>
+      <nav id="editor-pages" class="editor-pages" aria-label="Pages of the screen"></nav>
+      <button type="button" id="editor-copy-design" class="statusbar-button" title="Copy this page's design to another page. You choose what goes across.">COPY TO PAGE</button>
+      <button type="button" id="editor-undo" class="statusbar-button icon" title="Undo (Cmd Z)" aria-label="Undo">
+        <svg class="tool-icon" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><path d="M5 2h1v1h-1zM4 3h2v1h-2zM3 4h9v1h-9zM2 5h11v1h-11zM3 6h11v1h-11zM4 7h2v1h-2zM11 7h3v1h-3zM5 8h1v1h-1zM12 8h2v1h-2zM12 9h2v1h-2zM11 10h3v1h-3zM6 11h7v1h-7zM6 12h6v1h-6z"/></svg>
+      </button>
+      <button type="button" id="editor-redo" class="statusbar-button icon" title="Redo (Shift Cmd Z)" aria-label="Redo">
+        <svg class="tool-icon" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><path transform="matrix(-1 0 0 1 16 0)" d="M5 2h1v1h-1zM4 3h2v1h-2zM3 4h9v1h-9zM2 5h11v1h-11zM3 6h11v1h-11zM4 7h2v1h-2zM11 7h3v1h-3zM5 8h1v1h-1zM12 8h2v1h-2zM12 9h2v1h-2zM11 10h3v1h-3zM6 11h7v1h-7zM6 12h6v1h-6z"/></svg>
+      </button>
+      <button type="button" id="editor-done" class="statusbar-button done">DONE</button>
+    </div>
+    <div class="editor-toolbar">
+      <div id="editor-palette" class="editor-palette" role="toolbar" aria-label="Tools"></div>
+      <div id="editor-options" class="editor-options" aria-label="Options for the chosen tool"></div>
+    </div>
+    <div class="editor-body">
+      <div id="editor-view" class="editor-view">
+        <section id="editor-canvas" class="mpc-screen editor-canvas" aria-label="The MPC's page, to arrange"></section>
+      </div>
+      <aside class="editor-panels">
+        <div class="editor-panels-scroll">
+          <div class="field-label">Layers</div>
+          <div id="editor-layers" class="editor-layers"></div>
+          <div class="field-label">This item</div>
+          <div id="editor-item" class="editor-item"></div>
+          <div class="field-label">Not on this page</div>
+          <div id="editor-shelf" class="editor-shelf"></div>
+        </div>
+        <div class="editor-comment">
+          <div class="field-label">Ask MP Forge</div>
+          <div id="editor-comment-about" class="soft small"></div>
+          <textarea id="editor-comment-words" class="item-input editor-comment-words" rows="2" placeholder="Say what to change here, and MP Forge will do it." aria-label="What MP Forge should change about what is selected"></textarea>
+          <button type="button" id="editor-comment-send" class="item-button" title="Closes the editor and asks MP Forge to do it (Cmd+Enter)">SEND TO MP FORGE</button>
+        </div>
+      </aside>
+      <input type="file" id="editor-picker" accept="image/*" hidden>
+      <div id="editor-menu" class="menu context-menu" role="menu" aria-label="What can be done here" hidden></div>
+      <div id="editor-sheet" class="sheet-veil" hidden></div>
+    </div>
+    <div class="statusbar">
+      <div id="editor-hint" class="statusbar-text" role="status"></div>
+      <div id="editor-zoom" class="statusbar-text zoom-readout" aria-label="Zoom"></div>
+    </div>
+  </section>
+
+</div>
+
+<div id="app-menu" class="menu context-menu" role="menu" aria-label="What can be done here" hidden></div>
+<div id="app-sheet" class="sheet-veil" hidden></div>
+<div id="guide" class="guide" hidden>
+  <div id="guide-spot" class="guide-spot"></div>
+  <div id="guide-card" class="window guide-card" role="dialog" aria-live="polite">
+    <div id="guide-title" class="titlebar"></div>
+    <div class="window-body">
+      <div id="guide-words"></div>
+      <div class="guide-buttons">
+        <span id="guide-count" class="soft small"></span>
+        <button type="button" id="guide-skip" class="item-button">SKIP</button>
+        <button type="button" id="guide-back" class="item-button">BACK</button>
+        <button type="button" id="guide-next" class="item-button done">NEXT</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="helpers.js"></script>
+<script src="plain-typing.js"></script>
+<script src="hover-names.js"></script>
+<script src="popup.js"></script>
+<script src="pick-list.js"></script>
+<script src="sheets.js"></script>
+<script src="options.js"></script>
+<script src="following.js"></script>
+<script src="time-taken.js"></script>
+<script src="tab-strip.js"></script>
+<script src="backend.js"></script>
+<script src="images.js"></script>
+<script src="stage.js"></script>
+<script src="look.js"></script>
+<script src="pictures.js"></script>
+<script src="screen.js"></script>
+<script src="blacksmith.js"></script>
+<script src="editor-geometry.js"></script>
+<script src="editor-widgets.js"></script>
+<script src="editor-tools.js"></script>
+<script src="editor-art-tools.js"></script>
+<script src="editor-palette.js"></script>
+<script src="editor-panels.js"></script>
+<script src="shown-colour.js"></script>
+<script src="editor-menu.js"></script>
+<script src="editor-copy.js"></script>
+<script src="editor-comment.js"></script>
+<script src="editor.js"></script>
+<script src="player.js"></script>
+<script src="piano.js"></script>
+<script src="test-sound.js"></script>
+<script src="effect-switch.js"></script>
+<script src="output-volume.js"></script>
+<script src="accounts.js"></script>
+<script src="ai-menu.js"></script>
+<script src="samples.js"></script>
+<script src="attachments.js"></script>
+<script src="plugin-sheets.js"></script>
+<script src="versions.js"></script>
+<script src="architect.js"></script>
+<script src="remix.js"></script>
+<script src="guide-example.js"></script>
+<script src="guide.js"></script>
+<script src="settings.js"></script>
+<script src="plugins-folder.js"></script>
+<script src="needs.js"></script>
+<script src="app-menu.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

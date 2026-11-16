@@ -1,0 +1,27 @@
+[package]
+name = "workbench-app"
+version = "0.1.0"
+edition = "2024"
+description = "The desktop app for the MPC plugin workbench."
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+workbench-engine = { path = "../engine" }
+keyring = "4.2"
+
+# The musician's keys and passwords are kept in the macOS keychain.
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "3"
+
+# Decoding an MP3 unoptimised takes seconds for one song, so the decoder is optimised in development builds too.
+[profile.dev.package.symphonia-bundle-mp3]
+opt-level = 3
+
+[profile.dev.package.symphonia-core]
+opt-level = 3

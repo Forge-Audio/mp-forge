@@ -1,0 +1,25 @@
+# Akai's SDK is fetched at the version in sdk.pin, never committed here
+vendor/mpc-plugin-builder-sdk/
+
+# Check reports, logs, rendered audio, and plugin build output
+build/
+
+# Rust build output
+engine/target/
+
+.DS_Store
+
+# The desktop app's build output and generated files
+app/target/
+app/gen/
+
+# The plugins made on this computer are the musician's own work, with their conversations and the pictures they
+# showed the AI. They are never part of MP Forge itself.
+plugins/
+
+# The working plan and record of how MP Forge was built. Nothing reads it, and it stays on this computer.
+PLAN.md
+
+# The drawings and scripts the app's own pictures were made with. The app needs only the finished pictures,
+# which are in app/ui and app/icons.
+app/art/

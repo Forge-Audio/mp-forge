@@ -1,0 +1,17 @@
+{
+  "name": "Draw Path",
+  "manufacturer": "Workbench Tests",
+  "version": "1.0.0",
+  "format": "vst2",
+  "kind": "effect",
+  "uid": "WCLO",
+  "numInputs": 2,
+  "numOutputs": 2,
+  "category": "Effect",
+  "file32": "VST/draw-path-arm32.so",
+  "file64": "VST/draw-path-arm64.so",
+  "description": "Draw Path: a gain / tone / mix effect for the MPC. Describe your plugin here.",
+  "author": "Workbench Tests",
+  "url": "",
+  "license": "MIT"
+}

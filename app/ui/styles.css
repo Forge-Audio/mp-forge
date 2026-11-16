@@ -1,0 +1,810 @@
+/* The workbench's own look: retro pixel style, dark and light. A plugin's screen never uses these colours. */
+
+:root {
+  --accent: #b5271f;
+  --accent-ink: #ffffff;
+  --device: #111214;
+  --device-ink: #f4f4f2;
+  --device-soft: #c9c9cf;
+}
+
+body[data-theme="dark"] {
+  --desk: #22212a;
+  --face: #34323d;
+  --well: #18171d;
+  --line: #0c0b10;
+  --ink: #ecebf2;
+  --soft: #b0adbd;
+  --bar: #0c0b10;
+  --bar-ink: #ecebf2;
+  --hi: #5d5a6b;
+  --lo: #1f1e26;
+}
+
+body[data-theme="light"] {
+  --desk: #a9a6b8;
+  --face: #d9d6e2;
+  --well: #ffffff;
+  --line: #1b1a22;
+  --ink: #1b1a22;
+  --soft: #4a4759;
+  --bar: #1b1a22;
+  --bar-ink: #ffffff;
+  --hi: #ffffff;
+  --lo: #8b879c;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--desk);
+  color: var(--ink);
+  font-family: "Pixelify Sans", "Courier New", monospace;
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+button, input, select, textarea { font: inherit; color: inherit; border-radius: 0; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: 0.55; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.soft { color: var(--soft); }
+.small { font-size: 15px; }
+
+/* Top bar */
+
+.bar {
+  display: flex;
+  align-items: stretch;
+  background: var(--face);
+  border: 2px solid var(--line);
+  box-shadow: inset 2px 2px 0 var(--hi), inset -2px -2px 0 var(--lo);
+}
+
+.wordmark {
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-right: 2px solid var(--line);
+  font-family: Silkscreen, monospace;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+/* The bar stays on one line however many plugins there are. Only the strip of tabs gives way, and it scrolls. */
+.bar > * { flex: none; }
+.bar > .tabs { display: flex; flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tabs .tab { flex: none; touch-action: pan-y; }
+.tab { white-space: nowrap; }
+.tab.is-being-moved { background: var(--well); color: var(--ink); box-shadow: inset 0 0 0 2px var(--accent); cursor: grabbing; }
+.tabs-arrow[hidden] { display: none; }
+.tabs-arrow { border-left: 0; border-right: 2px solid var(--line); font-family: Silkscreen, monospace; font-size: 12px; }
+
+.tab {
+  min-height: 30px;
+  padding: 0 12px;
+  font-size: 15px;
+  border: 0;
+  border-right: 2px solid var(--line);
+  background: transparent;
+  color: var(--soft);
+  font-weight: 500;
+}
+
+.tab[aria-current="page"] { background: var(--well); color: var(--ink); font-weight: 700; }
+
+/* A plugin that is being built or checked has a pulsing square on its tab. */
+.tab.working::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; background: var(--accent); animation: tab-working 900ms steps(2, jump-none) infinite; }
+@keyframes tab-working { from { opacity: 1; } to { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .tab.working::before { animation: none; } }
+
+.bar > .bar-spacer { flex: 1 1 auto; }
+
+/* One button in the bar opens the menu for the model, its effort and the connection. */
+.ai-menu-holder { position: relative; display: flex; border-left: 2px solid var(--line); }
+
+.bar-button { display: flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 10px; border: 0; background: transparent; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.bar-button::after { content: ""; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid currentColor; }
+.bar-button[aria-expanded="true"] { background: var(--well); }
+
+.menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 10;
+  min-width: 210px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  background: var(--face);
+  border: 2px solid var(--line);
+  box-shadow: inset 2px 2px 0 var(--hi), inset -2px -2px 0 var(--lo), 4px 4px 0 var(--line);
+}
+
+.menu[hidden] { display: none; }
+
+.menu-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; width: 100%; min-height: 32px; padding: 0 10px; border: 0; background: transparent; font-size: 15px; text-align: left; white-space: nowrap; }
+.menu-row[aria-checked="true"] { font-weight: 700; }
+.menu-row:hover, .menu-row:focus-visible, .menu-row[aria-expanded="true"] { background: var(--accent); color: var(--accent-ink); outline: 0; }
+.menu-mark { width: 10px; height: 10px; background: var(--accent); }
+.menu-row:hover .menu-mark, .menu-row:focus-visible .menu-mark { background: currentColor; }
+.menu-value { color: var(--soft); }
+.menu-row:hover .menu-value, .menu-row:focus-visible .menu-value, .menu-row[aria-expanded="true"] .menu-value { color: inherit; }
+.menu-divider { height: 2px; margin: 4px 0; background: var(--line); }
+.menu-row:disabled { color: var(--soft); background: transparent; }
+
+/* The menu a right-click opens sits wherever the pointer was. */
+.context-menu { position: fixed; top: 0; right: auto; z-index: 40; }
+
+.menu-branch { position: relative; }
+.side-menu { top: -6px; right: calc(100% + 8px); min-width: 150px; }
+.side-menu .menu-words { width: 230px; }
+/* The lowest setting opens its choices upward, so they never run off the bottom of the window. */
+.menu-branch:last-child .side-menu { top: auto; bottom: -6px; }
+
+.mode { display: inline-flex; flex-wrap: wrap; border: 2px solid var(--line); }
+
+/* A small square button at the end of the top bar, such as the one that opens the settings. */
+.bar-icon { display: grid; place-items: center; min-width: 38px; min-height: 30px; padding: 0; border: 0; border-left: 2px solid var(--line); background: transparent; }
+.bar-icon .tool-icon { width: 18px; height: 18px; }
+.bar-icon[aria-pressed="true"] { background: var(--ink); color: var(--face); }
+body.editing .bar-icon { pointer-events: none; opacity: 0.55; }
+
+.mode-button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  font-family: Silkscreen, monospace;
+  font-size: 11px;
+}
+
+.mode-button + .mode-button { border-left: 2px solid var(--line); }
+.mode-button[aria-pressed="true"] { background: var(--ink); color: var(--face); }
+
+/* Windows */
+
+/* The desk hides whatever is slid off its right edge. Its own padding leaves room for the windows' shadows. */
+.desk { --chat-width: clamp(340px, 28vw, 440px); flex: 1 1 auto; min-height: 0; display: flex; align-items: stretch; gap: 12px; overflow: hidden; padding: 0 6px 6px 0; margin: 0 -6px -6px 0; }
+
+.window {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--face);
+  border: 2px solid var(--line);
+  box-shadow: inset 2px 2px 0 var(--hi), inset -2px -2px 0 var(--lo), 4px 4px 0 var(--line);
+}
+
+/* With no plugin to look at, the conversation has the whole window and the MPC view waits off the right edge.
+   When there is one, the conversation narrows and that pushes the MPC view into sight. The view keeps its final
+   width throughout, so nothing inside it is laid out again while it moves and it glides at the screen's own rate. */
+.conversation { flex: none; width: var(--chat-width); transition: width 420ms cubic-bezier(0.22, 1, 0.36, 1); }
+.mirror { flex: none; width: calc(100% - var(--chat-width) - 12px); max-height: 400vh; }
+body.chat-only .conversation { width: 100%; }
+body.chat-only .mirror { max-height: 0; overflow: hidden; visibility: hidden; transition: max-height 0s 420ms, visibility 0s 420ms; }
+@media (prefers-reduced-motion: reduce) { .conversation, body.chat-only .mirror { transition: none; } }
+
+/* The settings take the place of the conversation and the MPC view. */
+.settings { flex: 1 1 100%; }
+.settings[hidden] { display: none; }
+body.in-settings .conversation, body.in-settings .mirror { display: none; }
+.setting { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+
+.titlebar.with-button { display: flex; align-items: stretch; justify-content: space-between; padding: 0 0 0 12px; }
+.titlebar.with-button > span { align-self: center; padding: 6px 0; }
+.titlebar-button { padding: 0 12px; border: 0; border-left: 2px solid var(--line); background: transparent; color: inherit; font-family: Silkscreen, monospace; font-size: 11px; }
+.titlebar-button:hover:not(:disabled) { background: var(--accent); color: var(--accent-ink); }
+.titlebar-button[hidden] { display: none; }
+.titlebar-buttons { display: flex; align-items: stretch; }
+/* How full the AI's context is, read off under the message box. */
+/* Under the message box: what the AI's work is being counted against, and how full its context is. */
+.composer-notes { display: flex; align-items: baseline; justify-content: flex-end; gap: 14px; }
+.plan-note { display: flex; align-items: baseline; gap: 8px; margin-right: auto; font-family: Silkscreen, monospace; font-size: 11px; color: var(--soft); white-space: nowrap; }
+.plan-note[hidden] { display: none; }
+.plan-link { padding: 0; border: 0; background: transparent; font: inherit; color: var(--accent); text-decoration: underline; cursor: pointer; }
+.context-readout { align-self: flex-end; font-family: Silkscreen, monospace; font-size: 11px; color: var(--soft); cursor: help; white-space: nowrap; }
+.context-readout.is-nearly-full { color: var(--accent); }
+.context-readout[hidden] { display: none; }
+
+.titlebar {
+  padding: 6px 12px;
+  background: var(--bar);
+  color: var(--bar-ink);
+  border-bottom: 2px solid var(--line);
+  font-family: Silkscreen, monospace;
+  font-size: 13px;
+}
+
+.window-body { flex: 1 1 auto; min-height: 0; padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+
+.field-label {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--soft);
+}
+
+/* Conversation */
+
+.messages { flex: 1 1 120px; min-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 4px; }
+
+/* A long conversation scrolls. Nothing in it is ever squeezed shorter than its own words to make it fit. */
+.messages > * { flex: none; }
+.message { display: flex; flex-direction: column; gap: 6px; }
+.message-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.message.you .message-text { padding: 10px 12px; background: var(--well); border: 2px solid var(--line); font-weight: 500; }
+.message.problem .message-text { padding: 10px 12px; border: 2px solid var(--accent); }
+.message.note .message-text { padding: 6px 12px; border: 2px dashed var(--soft); color: var(--soft); }
+
+/* Choices the AI offers. The musician presses one and it is sent as their next message. */
+.options { display: flex; flex-wrap: wrap; gap: 6px; }
+.option-button { min-height: 36px; padding: 4px 12px; border: 2px solid var(--line); background: var(--well); box-shadow: inset -2px -2px 0 var(--lo), inset 2px 2px 0 var(--hi); font-weight: 600; text-align: left; }
+.option-button:hover:not(:disabled) { background: var(--accent); color: var(--accent-ink); }
+
+/* The plugin architect's questions. A choice that is picked stays lit. */
+.message.architect { gap: 14px; padding: 12px; border: 2px dashed var(--soft); }
+.architect-question { display: flex; flex-direction: column; gap: 6px; }
+.architect-question[hidden], .architect-buttons .item-button[hidden] { display: none; }
+.architect-asks { font-weight: 600; }
+.architect-choice-button[aria-pressed="true"] { background: var(--ink); color: var(--face); box-shadow: none; }
+.architect-own-words { min-height: 36px; }
+.architect-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.architect-buttons .item-button { padding: 0 12px; }
+.architect-choice { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.architect-choice input { flex: none; width: 20px; height: 20px; accent-color: var(--accent); }
+
+/* What the AI is doing now, shown as the last thing in the conversation, and afterwards what it did. */
+.working-block { display: flex; flex-direction: column; gap: 6px; }
+.working-steps { display: flex; flex-direction: column; gap: 2px; padding-left: 12px; border-left: 2px solid var(--lo); font-size: 14px; color: var(--soft); }
+.working-steps:empty { display: none; }
+.working-fold { font-size: 14px; color: var(--soft); }
+.working-fold[hidden] { display: none; }
+.working-fold summary { display: flex; align-items: baseline; gap: 8px; cursor: pointer; list-style: none; }
+.working-fold summary::-webkit-details-marker { display: none; }
+.working-fold summary::before { content: ">"; flex: none; font-family: Silkscreen, monospace; font-size: 11px; }
+.working-fold[open] summary::before { content: "v"; }
+.working-count { flex: none; font-family: Silkscreen, monospace; font-size: 11px; text-transform: uppercase; }
+.working-latest { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.working-fold[open] .working-latest { display: none; }
+.working-fold:not([open]) .working-steps { display: none; }
+.working-fold[open] .working-steps { margin-top: 6px; }
+.step { overflow-wrap: anywhere; }
+.step.said { font-style: italic; }
+.steps { font-size: 14px; color: var(--soft); }
+.message-took { font-family: Silkscreen, monospace; font-size: 11px; color: var(--soft); text-transform: uppercase; }
+.steps summary { cursor: pointer; }
+.steps-list { margin: 6px 0 0; padding-left: 22px; display: flex; flex-direction: column; gap: 2px; }
+
+/* The status readout sits in the top bar, out of the conversation. While the open plugin has not been checked,
+   it is a button that offers to run the safety check. */
+.status-holder { position: relative; display: flex; border-left: 2px solid var(--line); }
+.readout { display: flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 10px; border: 0; background: transparent; }
+.readout:disabled { opacity: 1; cursor: default; pointer-events: none; }
+.readout:not(:disabled)::after { content: ""; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid currentColor; }
+.readout[aria-expanded="true"] { background: var(--well); }
+.status-menu { min-width: 300px; }
+.menu-words { padding: 6px 10px 8px; font-size: 14px; line-height: 1.35; white-space: normal; }
+.status-menu .menu-row { justify-content: center; border: 2px solid var(--line); background: var(--accent); color: var(--accent-ink); font-family: Silkscreen, monospace; font-size: 12px; }
+.readout-label { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--soft); }
+.readout-word { padding: 1px 6px; background: var(--accent); color: var(--accent-ink); font-family: Silkscreen, monospace; font-size: 11px; white-space: nowrap; }
+
+/* The working line: four pads, two over two, beside a few words. A wave rolls across the top pair, then the bottom pair. */
+.working { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 500; }
+.beat { --pad-resting: var(--lo); --pad-rising: color-mix(in srgb, var(--accent) 55%, var(--lo)); width: 28px; height: 30px; flex: none; }
+.pad { fill: var(--pad-resting); animation: wave 1.6s steps(1, end) infinite; }
+.pad:nth-child(2) { animation-delay: 0.2s; }
+.pad:nth-child(3) { animation-delay: 0.4s; }
+.pad:nth-child(4) { animation-delay: 0.6s; }
+
+@keyframes wave {
+  0% { fill: var(--pad-rising); transform: translateY(0); }
+  12% { fill: var(--accent); transform: translateY(-1px); }
+  30% { fill: var(--pad-rising); transform: translateY(0); }
+  42%, 100% { fill: var(--pad-resting); transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pad { animation: none; fill: var(--accent); }
+  .mpc-picture.loops { animation: none; }
+}
+
+.composer { display: flex; flex-direction: column; gap: 8px; }
+
+/* The frame's dashes run all the way round. Its title sits on the top edge and covers only the dashes behind it. */
+.new-plugin-fields { position: relative; margin: 8px 0 0; padding: 16px 12px 12px; border: 2px dashed var(--soft); display: flex; flex-direction: column; gap: 8px; }
+.new-plugin-fields > legend { position: absolute; top: -10px; left: 10px; padding: 0 6px; background: var(--face); line-height: 18px; }
+.new-plugin-fields[hidden] { display: none; }
+
+.composer input[type="text"], .composer textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  background: var(--well);
+  border: 2px solid var(--line);
+  box-shadow: inset 2px 2px 0 var(--lo);
+}
+
+/* The message box: a plus button that adds a picture or a sound file, the words, and a small send button. */
+.message-box { display: flex; align-items: flex-end; gap: 6px; padding: 4px; background: var(--well); border: 2px solid var(--line); box-shadow: inset 2px 2px 0 var(--lo); }
+.message-box:has(textarea:focus-visible) { outline: 3px solid var(--accent); outline-offset: 2px; }
+.composer .message-box textarea { flex: 1 1 auto; min-width: 0; min-height: 36px; max-height: 168px; padding: 6px 4px; border: 0; background: transparent; box-shadow: none; outline: 0; resize: none; }
+.add-holder { position: relative; flex: none; display: flex; }
+.add-button { width: 36px; height: 36px; padding: 0; border: 2px dashed var(--soft); background: transparent; color: var(--soft); font-family: Silkscreen, monospace; font-size: 18px; line-height: 1; }
+.add-button:hover:not(:disabled), .add-button[aria-expanded="true"] { border-style: solid; color: var(--ink); }
+.menu.opens-up { top: auto; bottom: calc(100% + 8px); left: -6px; right: auto; }
+.send-button { flex: none; min-height: 36px; padding: 0 12px; border: 2px solid var(--line); background: var(--accent); color: var(--accent-ink); box-shadow: inset -2px -2px 0 rgba(0, 0, 0, 0.3), inset 2px 2px 0 rgba(255, 255, 255, 0.35); font-family: Silkscreen, monospace; font-size: 13px; font-weight: 700; }
+
+/* Pictures waiting to be sent and the plugin's sound files, in one row that takes no room while it is empty. */
+.attached { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.attached:not(:has(.sample, .attachment)) { display: none; }
+.sample-list { display: contents; }
+.sample { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 30px; padding: 0 4px 0 8px; background: var(--well); border: 2px solid var(--line); font-size: 14px; }
+.sample-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sample-remove { min-width: 24px; min-height: 24px; padding: 0; border: 0; background: transparent; color: var(--soft); font-family: Silkscreen, monospace; font-size: 12px; }
+.sample-remove:hover:not(:disabled) { background: var(--accent); color: var(--accent-ink); }
+
+/* Pictures waiting to go with the message, and pictures already sent. */
+.attachment { position: relative; display: inline-flex; background: var(--well); border: 2px solid var(--line); }
+.attachment-image { display: block; height: 52px; max-width: 120px; object-fit: cover; }
+.attachment .sample-remove { position: absolute; top: 0; right: 0; background: var(--well); }
+.message-pictures { display: flex; flex-wrap: wrap; gap: 6px; }
+.message-picture { display: block; max-height: 120px; max-width: 100%; border: 2px solid var(--line); }
+
+.kind-choice { display: flex; flex-wrap: wrap; gap: 18px; min-height: 44px; align-items: center; }
+.kind-choice label { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.kind-choice input { width: 20px; height: 20px; accent-color: var(--accent); }
+
+/* The MPC view */
+
+.mirror-heading { display: flex; align-items: flex-start; gap: 8px; }
+.mirror-title { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; }
+.mirror-heading h1 { margin: 0; font-size: 46px; font-weight: 700; line-height: 1; }
+
+/* The presets built into the plugin, stepped through one at a time or picked from the list. */
+.presets { display: flex; align-items: center; gap: 6px; }
+.presets[hidden] { display: none; }
+.presets .field-label { margin-right: 4px; }
+.preset-step { flex: none; width: 44px; min-height: 44px; font-size: 14px; }
+.preset-holder { position: relative; flex: 0 1 280px; width: 280px; min-width: 0; }
+.preset-list { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; text-align: left; white-space: nowrap; overflow: hidden; }
+.preset-list::after { content: ""; flex: none; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid currentColor; }
+.preset-list[aria-expanded="true"] { background: var(--face); }
+.preset-menu { left: 0; right: 0; max-height: min(50vh, 360px); overflow-y: auto; }
+
+/* The one round button in the workbench plays the plugin through the speakers, and stops it again. */
+.play-button { flex: none; width: 44px; height: 44px; display: grid; place-items: center; padding: 0; border: 2px solid var(--line); border-radius: 50%; background: var(--accent); color: var(--accent-ink); box-shadow: 2px 2px 0 var(--line); }
+.play-button:hover:not(:disabled) { filter: brightness(1.15); }
+.play-button[aria-pressed="true"] { background: var(--ink); color: var(--face); }
+.play-button .when-sounding, .play-button[aria-pressed="true"] .when-silent { display: none; }
+.play-button[aria-pressed="true"] .when-sounding { display: block; }
+/* What is set for playing: the plugin's presets when it has any, and how loud MP Forge plays, one knob for every plugin. */
+.playing-row { display: flex; align-items: center; gap: 6px 24px; }
+.playing-row .presets { flex: 0 1 auto; min-width: 0; }
+.volume { flex: none; height: 44px; display: flex; flex-direction: column; justify-content: space-between; gap: 2px; }
+.volume .field-label { line-height: 1; }
+.output-volume { display: flex; align-items: center; gap: 8px; cursor: ns-resize; touch-action: none; user-select: none; }
+.output-volume .hardware-knob { width: 28px; height: 28px; }
+.output-volume .volume-reading { min-width: 3ch; font-size: 13px; white-space: nowrap; }
+.more-holder { position: relative; flex: none; }
+
+/* The way into the editor is one pencil at the top right of the MPC view. */
+.edit-look-button { flex: none; width: 44px; height: 44px; display: grid; place-items: center; padding: 0; border: 2px solid var(--line); background: var(--well); box-shadow: inset -2px -2px 0 var(--lo), inset 2px 2px 0 var(--hi); }
+.edit-look-button:hover:not(:disabled) { background: var(--accent); color: var(--accent-ink); }
+
+/* The knob panel is exactly as tall as the plugin's screen beside it. Its own contents never set the row's height. */
+/* The view is never laid out wider than the window is tall enough for, so the screen always fits with what sits
+   above and below it, and nothing is cut off. --room-for-the-rest is the height of everything but the screen's
+   page: the heading, the presets, the page names and the caption. An instrument that is being played needs
+   room for its piano as well. The number after it turns the height left for the page into the row's width:
+   the screen takes five sevenths of the row, and its page is 1280 wide for every 628 high. */
+.mirror .window-body { container-type: size; overflow-y: auto; }
+.mirror-row { --room-for-the-rest: 236px; max-width: calc((100cqh - var(--room-for-the-rest)) * 2.85 + 20px); }
+.mirror-row:has(.piano:not([hidden])) { --room-for-the-rest: 364px; }
+.mirror-row { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 2fr); grid-template-areas: "screen hardware" "caption note"; align-items: start; gap: 10px 20px; }
+.screen-caption { grid-area: caption; }
+.hardware { grid-area: hardware; align-self: stretch; position: relative; min-width: 0; }
+.hardware-note { grid-area: note; }
+.hardware-fit { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 8px; }
+
+/* The grid is as tall as the screen beside it, but never taller than it is wide: in a big window its boxes stay
+   square, and the room left over is under the grid, not inside every box. */
+.hardware-grid { flex: 0 1 auto; aspect-ratio: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(0, 1fr)); gap: 6px; }
+
+.hardware-cell {
+  position: relative;
+  min-height: 0;
+  padding: 3px 4px;
+  border: 2px dashed var(--soft);
+  color: var(--soft);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.15;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+  overflow: hidden;
+  container-type: size;
+}
+
+/* Too narrow for side by side: the knob panel drops below the screen and takes its own height. */
+@container (max-width: 640px) {
+  .mirror-row { grid-template-columns: minmax(0, 1fr); grid-template-areas: "screen" "caption" "hardware" "note"; max-width: none; }
+  .hardware-fit { position: static; }
+  .hardware-grid { aspect-ratio: auto; }
+  .hardware-cell { min-height: 60px; }
+}
+
+.hardware-cell.in-use { border: 2px solid var(--line); background: var(--well); color: var(--ink); }
+.hardware-number { position: absolute; top: 2px; left: 4px; font-family: Silkscreen, monospace; font-size: 11px; }
+.hardware-name { max-width: 100%; font-size: clamp(12px, 10cqw, 15px); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* The knob grows with its box, so a big window gets a big knob. */
+.hardware-knob { flex: none; width: clamp(22px, min(58cqh, 58cqw), 84px); height: clamp(22px, min(58cqh, 58cqw), 84px); }
+.hardware-knob .knob-edge { fill: var(--line); }
+.hardware-knob .knob-face { fill: var(--hi); }
+.hardware-knob .knob-shine { fill: var(--well); opacity: 0.6; }
+.hardware-knob .knob-pointer { fill: var(--accent); }
+.hardware-cell:not(.in-use) .hardware-knob { opacity: 0.4; }
+
+/* Pads for playing an instrument while it sounds. */
+/* The piano under an instrument's screen. Its keys keep their own colours in either colour mode, and a key
+   that is down takes the accent colour and loses the lip along its front edge. */
+.piano { display: flex; justify-content: center; margin-bottom: 8px; }
+.piano[hidden] { display: none; }
+.piano-keys { width: min(100%, 543px); height: auto; touch-action: none; user-select: none; -webkit-user-select: none; }
+.piano-key { cursor: pointer; }
+.piano-edge { fill: #17161c; }
+.piano-key.white .piano-face { fill: #efe9d9; }
+.piano-key.white .piano-lip { fill: #b9b19c; }
+.piano-key.black .piano-face { fill: #2b2a33; }
+.piano-key.black .piano-lip { fill: #4b4a58; }
+.piano-key.down .piano-face, .piano-key.down .piano-lip { fill: var(--accent); }
+.piano-letter { font-family: Silkscreen, monospace; font-size: 5px; fill: #6d6657; pointer-events: none; }
+.piano-key.black .piano-letter { fill: #b9b6c4; }
+.piano-key.down .piano-letter { fill: var(--accent-ink); }
+.statusbar-button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+
+.statusbar { display: flex; flex-wrap: wrap; align-items: stretch; border-top: 2px solid var(--line); background: var(--well); font-size: 15px; }
+.statusbar-text { flex: 1 1 220px; display: flex; align-items: center; padding: 10px 14px; }
+.statusbar-button { min-height: 44px; padding: 0 16px; border: 0; border-left: 2px solid var(--line); background: transparent; font-family: Silkscreen, monospace; font-size: 13px; }
+.statusbar-button:hover:not(:disabled) { background: var(--face); }
+
+/* A plugin's own screen. It mimics the MPC, not the workbench, so it has its own fonts and colours. */
+
+.mpc-screen {
+  --kit: #d31145;
+  --text: #ffffff;
+  --muted: #6a6a6c;
+  container-type: inline-size;
+  background: var(--device);
+  color: var(--text);
+  border: 2px solid var(--line);
+  font-family: "Titillium Web", Roboto, system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The page is 1280 by 628 of the MPC's own pixels. --px is the size one of them is drawn at, so the whole page shrinks to fit. */
+.mpc-stage { --px: calc(100cqw / 1280); position: relative; aspect-ratio: 1280 / 628; overflow: hidden; }
+
+/* While a plugin is being built or checked, a blacksmith covers its view. His frames sit side by side in one strip. */
+.mpc-screen-frame { grid-area: screen; position: relative; min-width: 0; }
+.smith-at-work { position: absolute; inset: 2px; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(17, 18, 20, 0.9); color: var(--device-ink); }
+.smith-at-work[hidden] { display: none; }
+.smith-figure { width: min(24%, 198px); aspect-ratio: 64 / 67; background: url("blacksmith.png") 0 0 no-repeat; image-rendering: pixelated; }
+.smith-words { font-family: Silkscreen, monospace; font-size: 12px; letter-spacing: 1px; }
+
+.mpc-empty { aspect-ratio: 1280 / 628; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--device-soft); padding: 0 24px; }
+
+/* Anything placed by the MPC's measurements: --x, --y, --w and --h are in the MPC's pixels. */
+.at { position: absolute; left: calc(var(--x) * var(--px)); top: calc(var(--y) * var(--px)); width: calc(var(--w) * var(--px)); height: calc(var(--h) * var(--px)); }
+
+/* A slot is far bigger than the control it shows, so only the part that turns takes a press. */
+.mpc-slot { pointer-events: none; user-select: none; -webkit-user-select: none; }
+.mpc-art.turns, .mpc-bar.turns { pointer-events: auto; cursor: grab; touch-action: none; }
+.mpc-art.turns:active, .mpc-bar.turns:active { cursor: grabbing; }
+.mpc-slot:focus-visible { outline: max(1px, calc(2 * var(--px))) solid var(--kit); outline-offset: 0; background: rgba(255, 255, 255, 0.1); }
+
+/* The MPC gives a letter's full height. The letters themselves come out at about two thirds of it. */
+.mpc-label { display: flex; align-items: center; font-size: calc(var(--size) * 0.66 * var(--px)); line-height: 1; white-space: nowrap; overflow: hidden; pointer-events: none; }
+.mpc-label.name { color: var(--muted); }
+.mpc-label.right { justify-content: flex-end; }
+.mpc-label.caption { justify-content: center; }
+
+.mpc-art, .mpc-picture { background-repeat: no-repeat; background-position: 0 0; pointer-events: none; }
+.mpc-picture.loops { animation-name: play-frames; animation-iteration-count: infinite; }
+@keyframes play-frames { from { background-position-y: 0%; } to { background-position-y: 100%; } }
+
+.mpc-art.button { pointer-events: auto; cursor: pointer; }
+.mpc-button-image { position: absolute; inset: 0; background: center / contain no-repeat; }
+.mpc-button-image.on, .mpc-art.button.is-on .mpc-button-image.off { display: none; }
+.mpc-art.button.is-on .mpc-button-image.on { display: block; }
+
+/* Before a plugin's first build there is no artwork to show, so plain shapes stand in for it. */
+.mpc-art.knob.missing { border-radius: 50%; background: #2a2a2d; box-shadow: inset 0 0 0 calc(4 * var(--px)) #434347; }
+.mpc-art.fader.missing { background: linear-gradient(#434347, #434347) center / 100% 30% no-repeat; }
+.mpc-button-image.missing { background: #434347; border-radius: calc(8 * var(--px)); }
+.mpc-button-image.on.missing { background: var(--kit); }
+
+.mpc-plain-knob { display: block; width: 100%; height: 100%; }
+.mpc-plain-knob .track { stroke: #434347; }
+.mpc-plain-knob .amount { stroke: var(--kit); }
+
+.mpc-bar { background: #434347; pointer-events: none; }
+.mpc-bar-fill { height: 100%; background: var(--kit); }
+
+.mpc-pages { display: flex; border-top: 2px solid #000000; }
+.mpc-page { flex: 1 1 0; min-height: 44px; padding: 6px 4px 8px; border: 0; border-top: 3px solid transparent; background: transparent; color: var(--device-soft); font: inherit; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; }
+.mpc-page[aria-current="page"] { border-top-color: var(--kit); color: var(--device-ink); }
+
+/* What something is, shown beside it once the pointer has rested on it for a second. */
+.hover-name { position: fixed; z-index: 50; max-width: 280px; padding: 4px 8px; border: 2px solid var(--line); background: var(--ink); color: var(--face); box-shadow: 3px 3px 0 var(--line); font-size: 13px; line-height: 1.3; pointer-events: none; }
+.hover-name[hidden] { display: none; }
+
+/* The editor, where the musician arranges a plugin's screen by hand. It takes the whole window while it is open. */
+
+body.editing .conversation, body.editing .mirror { display: none; }
+body.editing .tabs { pointer-events: none; opacity: 0.55; }
+
+.editor { flex: 1 1 100%; height: calc(100vh - 84px); min-height: 420px; }
+.editor[hidden] { display: none; }
+
+.editor-title-row { display: flex; flex-wrap: wrap; align-items: stretch; border-bottom: 2px solid var(--line); background: var(--well); }
+.editor-title { align-self: center; margin: 0; padding: 4px 14px; font-size: 26px; line-height: 1.2; }
+.editor-pages { flex: 1 1 auto; display: flex; align-items: stretch; }
+.editor-page { min-height: 44px; padding: 0 16px; border: 0; border-left: 2px solid var(--line); background: transparent; font-family: Silkscreen, monospace; font-size: 13px; }
+.editor-page:last-child { border-right: 2px solid var(--line); }
+.editor-page[aria-current="page"] { background: var(--ink); color: var(--face); }
+.statusbar-button.icon { display: grid; place-items: center; min-width: 46px; padding: 0 10px; }
+.statusbar-button[hidden] { display: none; }
+.statusbar-button.done, .item-button.done { background: var(--accent); color: var(--accent-ink); }
+.statusbar-button.done:hover:not(:disabled) { background: var(--accent); filter: brightness(1.15); }
+
+/* The bar under the title holds the tools, the two colours, and then what the chosen tool can do. */
+.editor-toolbar { display: flex; flex-wrap: wrap; align-items: stretch; border-bottom: 2px solid var(--line); }
+.editor-options { flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 48px; padding: 6px 10px; border-left: 2px solid var(--line); }
+.strip-label { margin: 0 2px 0 10px; color: var(--soft); font-family: Silkscreen, monospace; font-size: 11px; }
+.strip-label:first-child { margin-left: 0; }
+.strip-gap { flex: 1 1 auto; }
+.strip-button { min-height: 30px; padding: 0 10px; border: 2px solid var(--line); background: var(--well); box-shadow: inset -2px -2px 0 var(--lo), inset 2px 2px 0 var(--hi); font-family: Silkscreen, monospace; font-size: 11px; }
+.strip-button[aria-pressed="true"] { background: var(--ink); color: var(--face); box-shadow: none; }
+
+.editor-body { flex: 1 1 auto; min-height: 0; display: flex; }
+
+.editor-palette { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 3px 8px; }
+.tool-button { width: 40px; height: 40px; display: grid; place-items: center; padding: 0; border: 2px solid transparent; background: transparent; }
+.tool-button:hover { border-color: var(--line); }
+.tool-button[aria-pressed="true"] { border-color: var(--line); background: var(--well); box-shadow: inset 2px 2px 0 var(--lo); }
+.tool-icon { width: 24px; height: 24px; fill: currentColor; }
+
+/* The page sits in the middle of the view with room round it, and the view slides when the page is zoomed past its edges. */
+.editor-view { flex: 1 1 auto; min-width: 0; display: flex; overflow: auto; padding: 24px; background: var(--well); }
+.editor-canvas { flex: none; margin: auto; cursor: default; touch-action: none; user-select: none; -webkit-user-select: none; }
+.editor-canvas[data-tool="select-box"] { cursor: crosshair; }
+.editor-canvas[data-tool="hand"] { cursor: grab; }
+.editor-canvas[data-tool="zoom"] { cursor: zoom-in; }
+/* Nothing on the page takes the pointer itself: the editor works out what is under it. */
+.editor-canvas .mpc-stage, .editor-canvas .mpc-stage * { pointer-events: none; }
+
+/* What the editor draws over the page. These lines keep their thickness however far the page is zoomed. */
+.edit-layer { position: absolute; inset: 0; }
+.edit-outline { box-shadow: 0 0 0 1px #000000, 0 0 0 3px #ffffff, 0 0 0 4px #000000; }
+.edit-outline.faint { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55); }
+.edit-outline.part { box-shadow: 0 0 0 1px #000000, 0 0 0 3px #ffd23b, 0 0 0 4px #000000; }
+.edit-handle::after { content: ""; position: absolute; left: -5px; top: -5px; width: 9px; height: 9px; border: 1px solid #000000; background: #ffffff; }
+/* The handle that tilts artwork is the one round one, standing off the top edge. */
+.edit-handle.tilts::after { left: -6px; top: -6px; width: 11px; height: 11px; border-radius: 50%; background: #ffd23b; }
+.edit-guide.upright { border-left: 1px solid #ff3bd4; }
+.edit-guide.level { border-top: 1px solid #ff3bd4; }
+.edit-band { border: 1px dashed #ffffff; background: rgba(255, 255, 255, 0.12); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); }
+.edit-layer.lines { width: 100%; height: 100%; }
+.edit-line { stroke: #ffffff; stroke-width: 2; stroke-dasharray: 8 6; paint-order: stroke; filter: drop-shadow(0 0 1px #000000); vector-effect: non-scaling-stroke; }
+.edit-easel { position: absolute; inset: 0; width: 100%; height: 100%; }
+.edit-covered { display: flex; align-items: flex-end; padding: 6px; border-left: 1px dashed #ffd23b; background: repeating-linear-gradient(135deg, rgba(255, 210, 59, 0.2) 0 6px, transparent 6px 14px); color: #ffd23b; font-family: Silkscreen, monospace; font-size: 9px; line-height: 1.3; text-shadow: 0 0 2px #000000; }
+
+/* Artwork the musician laid behind the controls. In the editor each layer is drawn by itself, at its own place. */
+.mpc-layer, .mpc-picture.page-art { background-repeat: no-repeat; background-size: 100% 100%; }
+.mpc-layer.hidden-layer { display: none; }
+.editor-canvas[data-tool="block"], .editor-canvas[data-tool="picture"], .editor-canvas[data-tool="crop"], .editor-canvas[data-tool="fade"],
+.editor-canvas[data-tool="brush"], .editor-canvas[data-tool="eraser"], .editor-canvas[data-tool="picker"] { cursor: crosshair; }
+.editor-canvas[data-tool="words"] { cursor: text; }
+
+/* The two colours after the tools: the front one overlaps the back one, as in a picture editor. */
+.tool-gap { flex: none; width: 2px; height: 28px; margin: 0 6px; background: var(--line); opacity: 0.35; }
+.swatches { position: relative; flex: none; width: 40px; height: 40px; margin-right: 4px; }
+.swatch { position: absolute; width: 26px; height: 26px; border: 2px solid var(--line); box-shadow: 0 0 0 1px var(--face); cursor: pointer; }
+.swatch.front { left: 0; top: 0; }
+.swatch.back { right: 0; bottom: 0; }
+.swatch-chooser { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; opacity: 0; cursor: pointer; }
+.swatch-buttons { display: flex; flex-direction: column; gap: 2px; }
+.swatch-button { min-width: 40px; min-height: 20px; padding: 0 2px; border: 1px solid var(--line); background: var(--well); font-family: Silkscreen, monospace; font-size: 8px; }
+
+.editor-panels { flex: none; width: 280px; display: flex; flex-direction: column; border-left: 2px solid var(--line); overflow: hidden; }
+.editor-panels-scroll { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 10px; overflow: auto; }
+.editor-layers { flex: none; max-height: 32%; display: flex; flex-direction: column; overflow: auto; border: 2px solid var(--line); background: var(--well); }
+.layer-row { flex: none; display: flex; align-items: stretch; width: 100%; min-height: 32px; border-bottom: 1px solid var(--lo); }
+.layer-row[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
+.layer-pick { flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; gap: 8px; padding: 5px 8px; border: 0; background: transparent; color: inherit; font-size: 15px; text-align: left; }
+.layer-kind { flex: none; width: 66px; font-family: Silkscreen, monospace; font-size: 10px; text-transform: uppercase; }
+.layer-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.layer-eye { flex: none; width: 38px; border: 0; border-left: 1px solid var(--lo); background: transparent; color: inherit; font-family: Silkscreen, monospace; font-size: 9px; }
+.layer-remove { flex: none; width: 28px; border: 0; border-left: 1px solid var(--lo); background: transparent; color: inherit; font-family: Silkscreen, monospace; font-size: 10px; }
+.layer-remove:hover { background: var(--ink); color: var(--face); }
+
+/* A sheet is laid over the editor for one question, such as what to copy to another page. */
+.sheet-veil { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, 0.55); }
+.sheet-veil[hidden] { display: none; }
+.sheet { width: min(460px, 100%); max-height: 100%; overflow: auto; }
+.sheet .window-body { gap: 10px; }
+.sheet-tick { display: flex; align-items: center; gap: 10px; }
+.sheet-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.sheet-buttons .item-button { min-width: 110px; }
+
+.editor-item { display: flex; flex-direction: column; gap: 8px; }
+.item-kind { color: var(--soft); font-family: Silkscreen, monospace; font-size: 11px; text-transform: uppercase; }
+.item-own-name { font-weight: 700; }
+.item-field { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 8px; }
+.item-field-name { flex: none; min-width: 20px; }
+.item-pair { display: flex; gap: 8px; }
+.item-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.item-pair > * { flex: 1 1 0; min-width: 0; }
+.item-input { flex: 1 1 auto; width: 100%; min-width: 0; min-height: 34px; padding: 2px 8px; border: 2px solid var(--line); background: var(--well); color: inherit; font: inherit; }
+.item-input.colour { padding: 2px; }
+.item-tick { flex: none; width: 22px; height: 22px; }
+.item-button { min-height: 36px; border: 2px solid var(--line); background: var(--well); box-shadow: inset -2px -2px 0 var(--lo), inset 2px 2px 0 var(--hi); font-family: Silkscreen, monospace; font-size: 11px; }
+.editor-options .item-input { flex: none; width: auto; min-height: 30px; max-width: 220px; }
+.editor-options .item-input.number { width: 76px; }
+
+/* Asking the AI about what is selected stays in sight below the panels, however long they are. */
+.editor-comment { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 10px; border-top: 2px solid var(--line); }
+.editor-comment-words { flex: none; min-height: 52px; max-height: 30vh; padding: 6px 8px; resize: vertical; line-height: 1.35; }
+.editor-shelf { display: flex; flex-direction: column; gap: 4px; }
+.shelf-row { min-height: 32px; padding: 4px 8px; border: 2px solid var(--line); background: var(--well); font-size: 15px; text-align: left; }
+
+.statusbar-text.problem { color: var(--accent); font-weight: 700; }
+.zoom-readout { flex: none; border-left: 2px solid var(--line); font-family: Silkscreen, monospace; font-size: 12px; }
+
+@media (max-width: 760px) {
+  .menu { left: 0; right: auto; }
+  .menu.opens-up { left: -6px; }
+  .side-menu { position: static; margin: 0 0 4px 12px; box-shadow: none; }
+  body { padding: 10px; gap: 10px; }
+  .desk { flex-wrap: wrap; overflow: visible; }
+  .conversation { width: 100%; max-height: none; transition: none; }
+  .mirror { width: 100%; }
+  .mirror .window-body { container-type: inline-size; overflow-y: visible; }
+  .mirror-row { max-width: none; }
+  body.chat-only .mirror { display: none; }
+  .mirror-heading h1 { font-size: 34px; }
+}
+
+/* The model menu: a box to search every model, then each service's models under its name. */
+.ai-menu { width: min(380px, calc(100vw - 24px)); }
+.menu-search { -webkit-appearance: none; appearance: none; border-radius: 0; display: block; width: calc(100% - 12px); margin: 0 6px 6px; min-height: 34px; padding: 4px 8px; background: var(--well); border: 2px solid var(--line); box-shadow: inset 2px 2px 0 var(--lo); font-size: 15px; }
+/* Every service fits without scrolling in a window of the usual size. When the list is longer than its room,
+   its scrollbar always shows, so nothing below the fold goes unseen. */
+.menu-models { max-height: min(62vh, 580px); overflow-y: auto; }
+.menu-models::-webkit-scrollbar { width: 10px; }
+.menu-models::-webkit-scrollbar-track { background: var(--well); }
+.menu-models::-webkit-scrollbar-thumb { background: var(--soft); border: 2px solid var(--well); }
+.service-row { font-family: Silkscreen, monospace; font-size: 11px; color: var(--soft); }
+.service-row[aria-expanded="true"]:not(:hover):not(:focus-visible) { background: transparent; color: var(--ink); }
+.service-row .menu-value { padding: 1px 6px; border: 2px solid currentColor; font-size: 10px; }
+.service-row .menu-value:empty { display: none; }
+.model-row { padding-left: 24px; white-space: normal; text-align: left; }
+.model-name { overflow-wrap: anywhere; }
+.model-row .menu-mark { flex: none; }
+#ai-menu-button { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The send button is dimmed until the plugin has passed its safety check. It can still be pressed, to say why. */
+.edit-look-button.is-held:not(:disabled) { opacity: 0.55; }
+
+/* A picture held over the conversation: the conversation shows it will take it. */
+.conversation { position: relative; }
+.drop-hint { display: none; position: absolute; inset: 8px; z-index: 5; place-items: center; border: 4px dashed var(--accent); background: color-mix(in srgb, var(--well) 88%, transparent); font-family: Silkscreen, monospace; font-size: 14px; pointer-events: none; }
+.conversation.taking-a-drop .drop-hint { display: grid; }
+
+/* The versions of a plugin as a timeline of square stops joined by a line, oldest on the left. */
+.sheet.wide { width: min(720px, 100%); }
+.timeline { display: flex; align-items: center; gap: 0; padding: 18px 6px 10px 4px; overflow-x: auto; }
+.timeline-stop { position: relative; flex: none; min-width: 44px; height: 44px; padding: 0 8px; border: 2px solid var(--line); background: var(--well); box-shadow: 2px 2px 0 var(--line); font-family: Silkscreen, monospace; font-size: 13px; }
+/* The dashes between two stops sit midway between them, clear of the stop's shadow, and drift back towards the
+   older version: going back is what the timeline is for. */
+.timeline-link { flex: none; width: 28px; height: 4px; margin: 0 5px 0 7px; background: repeating-linear-gradient(to right, var(--soft) 0 4px, transparent 4px 8px); animation: versions-flow-back 700ms steps(4) infinite; }
+@keyframes versions-flow-back { from { background-position-x: 0; } to { background-position-x: -8px; } }
+@media (prefers-reduced-motion: reduce) { .timeline-link { animation: none; } }
+.timeline-stop:hover { background: var(--face); }
+.timeline-stop[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.timeline-stop.is-now { border-style: double; border-width: 6px; }
+.timeline-stop.is-now::before { content: "NOW"; position: absolute; left: 50%; top: -16px; transform: translateX(-50%); font-size: 9px; color: var(--soft); }
+.timeline-stop.is-now[data-stop="now"]::before { content: ""; }
+.timeline-stop.is-marked { border-style: dashed; }
+.timeline-stop.is-marked::after { content: "X"; position: absolute; right: -8px; top: -9px; width: 16px; height: 16px; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); border: 2px solid var(--line); font-size: 9px; line-height: 1; }
+.timeline-heading { font-family: Silkscreen, monospace; font-size: 14px; }
+.sheet .item-button { padding: 0 12px; }
+.sheet .window-body > .item-button { align-self: flex-start; }
+.sheet .item-button.is-asking { background: var(--accent); color: var(--accent-ink); }
+.sheet-problem[hidden] { display: none; }
+.sheet-problem { padding: 6px 10px; border: 2px solid var(--accent); font-size: 15px; }
+
+/* Settings */
+.settings-body { overflow-y: auto; gap: 22px; }
+.folder-path { align-self: stretch; padding: 6px 10px; border: 2px solid var(--line); background: var(--well); font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; overflow-wrap: anywhere; user-select: text; }
+.folder-answers { display: flex; flex-wrap: wrap; gap: 8px; }
+.folder-asking { align-self: stretch; display: flex; flex-direction: column; gap: 8px; padding: 8px 10px; border: 2px dashed var(--soft); overflow-wrap: anywhere; }
+.folder-asking[hidden] { display: none; }
+.setting-field { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.needs { display: flex; flex-direction: column; gap: 8px; }
+.need { display: flex; align-items: baseline; gap: 10px; }
+.need-mark { flex: none; min-width: 84px; font-family: Silkscreen, monospace; font-size: 11px; color: var(--soft); }
+.need.is-missing .need-mark { color: var(--accent); }
+.setting-field > span:first-child { min-width: 220px; }
+.setting-field .item-input { width: min(260px, 100%); }
+.accounts { display: flex; flex-direction: column; gap: 6px; width: min(520px, 100%); }
+.account { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px; padding: 6px 10px; border: 2px solid var(--line); background: var(--well); }
+.account-name { font-weight: 600; }
+
+/* A new plugin is talked over in a column down the middle of the window. With nothing said yet, the opening
+   question and the form sit in the middle of it. */
+body.starting-new .messages, body.starting-new .composer { width: min(100%, 760px); align-self: center; }
+body.nothing-said-yet .conversation .window-body { justify-content: center; }
+body.nothing-said-yet .messages { flex: 0 1 auto; min-height: 0; align-items: center; text-align: center; }
+.opening-question { font-family: Silkscreen, monospace; font-size: 24px; line-height: 1.2; }
+.starters { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.starters[hidden], .remix-of[hidden] { display: none; }
+.starters .item-button { padding: 0 14px; }
+.remix-of { align-self: flex-start; display: flex; align-items: center; gap: 10px; padding: 4px 4px 4px 10px; border: 2px solid var(--accent); font-size: 15px; }
+.remix-of-clear { min-width: 28px; min-height: 28px; border: 2px solid var(--line); background: var(--well); font-family: Silkscreen, monospace; font-size: 11px; }
+
+/* The Open MPC catalog, on its sheet. */
+.remix-list { max-height: 38vh; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); align-content: start; gap: 6px; padding: 6px; background: var(--well); border: 2px solid var(--line); box-shadow: inset 2px 2px 0 var(--lo); }
+.remix-note { grid-column: 1 / -1; }
+.remix-tile { min-width: 0; display: flex; flex-direction: column; gap: 3px; padding: 6px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; }
+.remix-tile:hover { background: var(--face); }
+.remix-tile[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
+.remix-tile[aria-selected="true"] .soft { color: inherit; }
+.remix-tile > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.remix-thumbnail { position: relative; width: 100%; aspect-ratio: 16 / 10; display: grid; place-items: center; border: 2px solid var(--line); background: var(--face); color: var(--soft); font-size: 11px; text-transform: uppercase; }
+.remix-thumbnail-picture { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.remix-name { font-weight: 700; }
+.remix-about { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 14px; }
+.remix-about:empty { display: none; }
+.remix-screenshot { flex: none; max-width: min(100%, 300px); max-height: 170px; object-fit: contain; border: 2px solid var(--line); }
+.remix-words { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.remix-readme { max-height: 108px; overflow-y: auto; padding: 6px 8px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--well); border: 2px solid var(--line); }
+.remix-readme .field-label { margin-bottom: 4px; font-size: 11px; }
+
+/* The guide that shows a new musician round. The part it points at is left bright, and the rest is dimmed. */
+.guide { position: fixed; inset: 0; z-index: 40; }
+.guide[hidden], .guide-buttons .item-button[hidden] { display: none; }
+.guide.points-at-nothing { background: rgba(0, 0, 0, 0.6); }
+.guide.points-at-nothing .guide-spot { display: none; }
+.guide-spot { position: fixed; border: 3px solid var(--accent); box-shadow: 0 0 0 200vmax rgba(0, 0, 0, 0.6); pointer-events: none; }
+.guide-card { position: fixed; width: min(430px, calc(100vw - 20px)); }
+.guide-card .window-body { gap: 14px; }
+.guide-buttons { display: flex; align-items: center; gap: 8px; }
+.guide-buttons .soft { margin-right: auto; }
+.guide-buttons .item-button { padding: 0 12px; }
+
+/* What an effect is given to work on while it plays. */
+.test-sound { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+.test-sound[hidden], .test-sound [hidden] { display: none; }
+.test-sound .field-label { margin-right: 4px; }
+.test-sound .item-button { padding: 0 12px; }
+.effect-switch { display: inline-flex; margin-right: 10px; border: 2px solid var(--line); }
