@@ -1,0 +1,3 @@
+# Text is kept with the same line endings on every system. Windows would otherwise check files out with its own,
+# and the instructions the AI is given, the scripts and the tests would no longer read the same there.
+* text=auto eol=lf

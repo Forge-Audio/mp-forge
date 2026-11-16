@@ -357,10 +357,19 @@ mod tests {
     }
 
     #[test]
-    fn the_folders_the_musicians_shell_looks_in_are_looked_in_too() {
-        let of_the_shell = folders_the_shell_looks_in().expect("this computer's shell says where it looks");
+    fn the_folders_the_shell_looks_in_are_looked_in_after_those_the_app_was_told_of() {
+        let both = both_searched(OsStr::new("/usr/bin:/bin"), OsStr::new("/bin:/opt/tools/bin")).unwrap();
 
-        assert!(env::split_paths(searched_folders()).any(|folder| env::split_paths(&of_the_shell).any(|of_the_shell| of_the_shell == folder)));
+        assert_eq!(env::split_paths(&both).collect::<Vec<_>>(), ["/usr/bin", "/bin", "/bin", "/opt/tools/bin"].map(PathBuf::from));
+    }
+
+    /// Not every computer that runs these tests has a shell of the musician's: one that builds them unattended
+    /// may have none. Where there is one, what it says is among the folders looked in.
+    #[test]
+    fn where_this_computer_has_a_shell_its_folders_are_looked_in() {
+        let Some(of_the_shell) = folders_the_shell_looks_in() else { return };
+
+        assert!(env::split_paths(&of_the_shell).all(|of_the_shell| env::split_paths(searched_folders()).any(|folder| folder == of_the_shell)));
     }
 
     #[test]
