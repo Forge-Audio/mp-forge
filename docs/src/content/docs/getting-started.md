@@ -14,9 +14,6 @@ whole first run.
 2. Download MP Forge for your system: macOS, Windows or Linux.
 3. Install it the way you install any app on your system, then open it.
 
-If the page has no download for your system yet, [what is and is not finished](./status.md) says where
-things stand.
-
 ### The first time you open it
 
 MP Forge's installers are not signed yet, so macOS and Windows cannot tell who made it. Each stops it once,
@@ -144,4 +141,5 @@ been restarted.
 
 ## If something goes wrong
 
-[Troubleshooting](./troubleshooting.md) lists the messages MP Forge shows and what to do about each.
+[Troubleshooting](./troubleshooting.md) lists the messages MP Forge shows and what to do about each. If you
+are still stuck, ask in the [Forge Audio Discord](https://discord.gg/EWkFTAEgJr).

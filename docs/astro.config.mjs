@@ -7,11 +7,11 @@ import starlight from '@astrojs/starlight';
 import starlightLinksValidator from 'starlight-links-validator';
 
 import { linksBetweenPages } from './src/markdown/links-between-pages.mjs';
+import { DISCORD, SOURCE } from './src/outside-places.js';
 
 // The site is published by GitHub Pages as a project site, so every address on it starts with the project's name.
 const SITE = 'https://forge-audio.github.io';
 const BASE = '/mp-forge';
-const SOURCE = 'https://github.com/Forge-Audio/mp-forge';
 const PAGES_FOLDER = fileURLToPath(new URL('./src/content/docs', import.meta.url));
 // The website's home and its download page, which live in src/pages beside the docs.
 const WEBSITE_PAGES = [`${BASE}/`, `${BASE}/download/`];
@@ -35,11 +35,14 @@ export default defineConfig({
 	integrations: [
 		starlight({
 			title: 'MP Forge',
-			description: 'Make plugins for your Akai MPC by describing them. Free and open source.',
+			description: 'Make plugins for your Akai MPC creatively. Free and open source.',
 			logo: { src: './src/assets/logo.png', alt: '' },
 			favicon: '/favicon.png',
 			head: [{ tag: 'link', attrs: { rel: 'icon', href: `${BASE}/favicon.ico`, sizes: '32x32' } }],
-			social: [{ icon: 'github', label: 'MP Forge on GitHub', href: SOURCE }],
+			social: [
+				{ icon: 'discord', label: 'Forge Audio on Discord', href: DISCORD },
+				{ icon: 'github', label: 'MP Forge on GitHub', href: SOURCE },
+			],
 			customCss: [...APP_FONTS, './src/styles/app-colours.css', './src/styles/app-look.css'],
 			sidebar: [
 				{ label: 'Download MP Forge', link: '/download/' },

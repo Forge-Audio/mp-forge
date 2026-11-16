@@ -3,7 +3,7 @@
 // GitHub which files the latest release holds and links straight to them, the visitor's own system first.
 //
 // As it is written here the page needs no script: it is one plain link to the releases page. The script takes
-// that away and puts the buttons in its place, or says that the downloads are still on their way.
+// that away and puts the buttons in its place, or says where the downloads are when it could not list them.
 
 import Website from '../layouts/Website.astro';
 import { places } from '../website-places.js';
@@ -49,11 +49,11 @@ const systems = [
 			<p class="note" data-version />
 		</div>
 
-		<div class="on-their-way" data-shown-when="on-their-way" hidden>
-			<h2>The first downloads are on their way</h2>
+		<div class="not-listed" data-shown-when="not-listed" hidden>
+			<h2>The downloads are on GitHub</h2>
 			<p>
-				The installers for macOS, Windows and Linux are being built now. Their buttons will be here as soon as they are
-				ready. Until then, there are two other ways.
+				This page could not list the installers just now. They are kept with MP Forge’s releases on GitHub, for
+				macOS, Windows and Linux.
 			</p>
 			<p class="choices">
 				<a class="button quiet" href={places.releases}>The releases page</a>
@@ -139,7 +139,7 @@ const systems = [
 	async function showTheDownloads() {
 		show('looking');
 		const release = await latestRelease();
-		if (!release) return show('on-their-way');
+		if (!release) return show('not-listed');
 		SYSTEMS.forEach((system) => fill(system, release.installers[system]));
 		putFirst(systemOf(navigator));
 		page.querySelector('[data-version]')!.textContent = release.version ? `The latest version is ${release.version}.` : '';

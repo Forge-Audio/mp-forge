@@ -274,7 +274,31 @@ main > section {
 	display: flex;
 	flex-direction: column;
 	align-items: flex-start;
-	gap: 1.25rem;
+	gap: 1rem;
+}
+
+/* The way to leave a tip: a small, quiet button, so that the download stays the loudest thing on the screen. */
+.tip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 8px 14px 8px 10px;
+	background: var(--panel);
+	border: 2px solid var(--line);
+	box-shadow: var(--raised);
+	font-family: var(--font-labels);
+	font-size: 0.75rem;
+	text-decoration: none;
+	text-transform: uppercase;
+}
+
+.tip:hover {
+	background: var(--accent);
+	color: var(--accent-ink);
+}
+
+.pixel-cup {
+	flex: none;
 }
 
 /* The video's frame keeps the video's own shape, so the page does not jump when the video takes the picture's place. */
@@ -304,10 +328,12 @@ main > section {
 	transform: translate(-50%, -50%);
 }
 
+/* The facts stand side by side, however many there are. */
 .facts {
 	grid-column: 1 / -1;
 	display: grid;
-	grid-template-columns: repeat(5, minmax(0, 1fr));
+	grid-auto-flow: column;
+	grid-auto-columns: minmax(0, 1fr);
 	margin: 0;
 	padding: 0;
 	list-style: none;
@@ -375,6 +401,7 @@ main > section {
 }
 
 .needs,
+.joining,
 .after,
 .downloads {
 	display: flex;
@@ -430,6 +457,12 @@ main > section {
 	display: none;
 }
 
+/* A card's button stands at its foot, whatever the length of the words above it. */
+.card > .choices {
+	margin-top: auto;
+	padding-top: 0;
+}
+
 .titlebar {
 	display: flex;
 	align-items: center;
@@ -478,7 +511,7 @@ main > section {
 }
 
 /* A note stands in a dashed frame, like a note in the app's conversation. */
-.on-their-way {
+.not-listed {
 	max-width: var(--reading-width);
 	padding: 1.5rem;
 	border: 2px dashed var(--soft);
@@ -536,10 +569,13 @@ main > section {
 
 @media (max-width: 56rem) {
 	.first-screen,
-	.facts,
 	.step,
 	.step:nth-child(even) {
 		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.facts {
+		grid-auto-flow: row;
 	}
 
 	.fact + .fact {
@@ -557,7 +593,8 @@ main > section {
 		font-size: 0.6875rem;
 	}
 
-	.wordmark span {
+	.wordmark span,
+	.top nav .left-to-the-foot-on-a-phone {
 		display: none;
 	}
 

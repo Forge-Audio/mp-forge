@@ -3,6 +3,10 @@ title: Troubleshooting
 description: The messages MP Forge shows when something is in the way, and what to do about each.
 ---
 
+If your trouble is not on this page, ask in the **help** channel of the
+[Forge Audio Discord](https://discord.gg/EWkFTAEgJr). Say what you did, what you expected and what happened,
+and whether you are on macOS, Windows or Linux.
+
 ## Starting MP Forge
 
 ### macOS will not open MP Forge, or Windows says it protected your PC
@@ -134,4 +138,4 @@ building, start MP Forge again with `cargo run` from its `app` folder.
 
 ## Something else
 
-MP Forge is an early build, and [what is not finished](./status.md) is written down.
+[What is and is not finished](./status.md) says what MP Forge does not do yet.

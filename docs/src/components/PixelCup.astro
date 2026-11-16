@@ -1,0 +1,42 @@
+---
+// A cup with a heart on it, in pixels: the sign of a tip on Ko-fi, drawn in the app's own blocky hand.
+//
+// The cup is written out below as it looks, a letter to a pixel. Each run of one colour along a row becomes
+// one rectangle, and the edges are left hard so that the pixels stay square at any size.
+
+const CUP = [
+	'.KKKKKKKKKKK....',
+	'.KWWWWWWWWWKKK..',
+	'.KWWWWWWWWWKWWK.',
+	'.KWWRRWRRWWKWWK.',
+	'.KWRRRRRRRWKWWK.',
+	'.KWRRRRRRRWKKK..',
+	'.KWWRRRRRWWK....',
+	'.KWWWRRRWWWK....',
+	'.KWWWWRWWWWK....',
+	'.KWWWWWWWWWK....',
+	'..KKKKKKKKK.....',
+];
+const NOTHING = '.';
+const COLOURS = { K: 'var(--line)', W: '#ffffff', R: 'var(--accent)' };
+const PIXELS_ON_THE_PAGE = 3;
+
+function runsOfOneColour(row) {
+	return [...row.matchAll(/(.)\1*/g)].map((run) => ({ letter: run[1], from: run.index, length: run[0].length }));
+}
+
+const runs = CUP.flatMap((row, down) => runsOfOneColour(row).map((run) => ({ ...run, down })));
+const coloured = runs.filter((run) => run.letter !== NOTHING);
+const [across, rows] = [CUP[0].length, CUP.length];
+---
+
+<svg
+	class="pixel-cup"
+	viewBox={`0 0 ${across} ${rows}`}
+	width={across * PIXELS_ON_THE_PAGE}
+	height={rows * PIXELS_ON_THE_PAGE}
+	shape-rendering="crispEdges"
+	aria-hidden="true"
+>
+	{coloured.map((run) => <rect x={run.from} y={run.down} width={run.length} height="1" fill={COLOURS[run.letter]} />)}
+</svg>

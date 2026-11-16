@@ -56,7 +56,8 @@ const address = new URL(Astro.url.pathname, Astro.site);
 			</a>
 			<nav aria-label="MP Forge">
 				<a href={places.docs}>Docs</a>
-				<a href={places.source}>GitHub</a>
+				<a href={places.discord}>Discord</a>
+				<a class="left-to-the-foot-on-a-phone" href={places.source}>GitHub</a>
 				<a class="button small" href={places.download}>Download</a>
 			</nav>
 		</header>
@@ -70,7 +71,9 @@ const address = new URL(Astro.url.pathname, Astro.site);
 				<a href={places.download}>Download</a>
 				<a href={places.docs}>Docs</a>
 				<a href={places.status}>Where it stands</a>
+				<a href={places.discord}>Discord</a>
 				<a href={places.source}>GitHub</a>
+				{places.donations && <a href={places.donations}>Donate</a>}
 			</nav>
 			<p>
 				MP Forge is free and open source, under the{' '}

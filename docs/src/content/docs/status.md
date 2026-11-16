@@ -3,8 +3,7 @@ title: What is and is not finished
 description: Where MP Forge stands today, said plainly.
 ---
 
-MP Forge is an early build. This page says what works, what is still being tested, and what is not there
-yet.
+This page says what works, where MP Forge has been tested, and what is not there yet.
 
 It is free and open source, under the GNU General Public License, version 3 or later.
 
@@ -15,18 +14,15 @@ It is free and open source, under the GNU General Public License, version 3 or l
 - Seeing the plugin's screen as it will look on the MPC, and playing the real plugin on your computer.
 - Asking for changes, going back to an earlier version, and editing the look by hand.
 - Sending a plugin over the network to a USB drive or SD card in an MPC.
-
-All of this is written and tested by hand on a Mac.
-
-## Still being tested
-
-- **The installers.** There are installers for macOS, Windows and Linux, and the
-  [download page](/mp-forge/download/) fills when the first release is out. They are not signed yet, so
-  macOS and Windows each warn the first time MP Forge is opened.
+- Installers for macOS, Windows and Linux, on the [download page](/mp-forge/download/). They are not signed
+  yet, so macOS and Windows each warn the first time MP Forge is opened.
   [Getting started](./getting-started.md#the-first-time-you-open-it) says what to do.
-- **Windows and Linux.** MP Forge is made to work on both. So far they are tested by automated tests, which
-  build the app and run on both every time the code changes. They have not yet been tested by hand, so
-  expect rough edges there.
+
+## Where it has been tested
+
+- **On a Mac**, MP Forge is written, installed and used by hand.
+- **On Windows and Linux**, it is built and tested by automated tests every time the code changes. It has
+  not yet been tested by hand there.
 
 ## Not there yet
 
