@@ -12,7 +12,7 @@ use workbench_engine::process::command_for;
 use workbench_engine::providers::{OfferedModel, Provider, every_provider, provider_called};
 
 use crate::chatgpt;
-use crate::commands::OPENS_FILES_AND_PAGES;
+use crate::commands::OPENS_PAGES;
 use crate::key_store;
 
 /// The name the MPC's password is kept under.
@@ -121,7 +121,8 @@ fn patience_with_the_browser() -> Patience<'static> {
 }
 
 fn open_in_the_browser(page: &str) -> Result<(), String> {
-    command_for(OPENS_FILES_AND_PAGES).arg(page).spawn().map(drop).map_err(|problem| format!("Your browser could not be opened: {problem}."))
+    let (program, told_first) = OPENS_PAGES;
+    command_for(program).args(told_first).arg(page).spawn().map(drop).map_err(|problem| format!("Your browser could not be opened: {problem}."))
 }
 
 /// Keeps a key the musician typed in, in this computer's keychain.

@@ -22,7 +22,7 @@ use crate::agent::{AgentError, Event, ModelError, Worker};
 use crate::ai_settings::AiSettings;
 use crate::mcp_server::SERVER_NAME;
 use crate::plugin_tools::TOOL_NAMES;
-use crate::process::{command_for, end_with_all_it_started, temporary_file_of_its_own};
+use crate::process::{ErrorOutput, command_for, end_with_all_it_started, temporary_file_of_its_own};
 use crate::stop_signal::StopSignal;
 
 const PROGRAM: &str = "claude";
@@ -38,6 +38,13 @@ const LARGEST_COMPACTION_LIMIT: u64 = 1_000_000;
 const TOKENS_READ: [&str; 3] = ["input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"];
 const WATCH_INTERVAL: Duration = Duration::from_millis(500);
 const HOW_TO_SET_UP: &str = "Install Claude Code, run `claude` once in a terminal and sign in with /login, then try again.";
+const STOPPED_WITHOUT_FINISHING: &str = "Claude Code stopped without finishing.";
+/// What a Claude Code from before one of the switches it is started with says of that switch.
+const DOES_NOT_KNOW_A_SWITCH: &str = "unknown option";
+const HOW_TO_UPDATE: &str = "Your Claude Code is older than MP Forge needs. Run `claude update` in a terminal, then try again.";
+/// As much of what Claude Code said on its way out as a musician can read, or pass on to whoever helps them.
+const LAST_LINES_PASSED_ON: usize = 3;
+const LONGEST_PASSED_ON: usize = 400;
 
 /// The command that starts the workbench's own tool server for one plugin.
 pub struct ToolServer {
@@ -139,6 +146,8 @@ struct Overseen<'a> {
 struct MadeReady {
     command: Command,
     message: String,
+    /// What it says when something goes wrong for it, which is the only word of why it stopped early.
+    complaints: ErrorOutput,
     /// Kept for as long as Claude Code may read it, and cleared away with this.
     _instructions: InstructionsFile,
 }
@@ -164,12 +173,13 @@ impl Drop for InstructionsFile {
 fn made_ready(launch: &Launch) -> Result<MadeReady, AgentError> {
     let instructions = InstructionsFile::holding(launch.instructions).map_err(|problem| ModelError::Unreachable(format!("Its instructions could not be written for Claude Code: {problem}")))?;
     let mut command = command_for(PROGRAM);
-    command.current_dir(launch.directory).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit());
+    command.current_dir(launch.directory).stdin(Stdio::piped()).stdout(Stdio::piped());
+    let complaints = ErrorOutput::of(&mut command).map_err(|problem| ModelError::Unreachable(format!("Claude Code could not be listened to: {problem}")))?;
     command.args(["--print", "--output-format", "stream-json", "--verbose"]);
     command.arg("--system-prompt-file").arg(&instructions.0);
     command.args(lock_down_arguments(launch.tool_server, built_in_tools_for(launch.settings)));
     command.args(choice_arguments(launch.settings));
-    Ok(MadeReady { command, message: launch.message.to_string(), _instructions: instructions })
+    Ok(MadeReady { command, message: launch.message.to_string(), complaints, _instructions: instructions })
 }
 
 /// Hands Claude Code its request on a thread of its own, then closes its input so it knows that is all.
@@ -195,6 +205,7 @@ fn heard_from(mut ready: MadeReady, overseen: &Overseen, observer: &mut dyn FnMu
         }
     }
     watchdog.stand_down();
+    transcript.complaints = ready.complaints.said_so_far();
     if overseen.stop.is_asked() { Err(AgentError::Stopped) } else { Ok(transcript) }
 }
 
@@ -248,6 +259,8 @@ fn tool_server_config(tool_server: Option<&ToolServer>) -> Value {
 struct Transcript {
     session_id: Option<String>,
     result: Option<Result<String, String>>,
+    /// What Claude Code said on its error output, where it explains itself when it gives up before it begins.
+    complaints: String,
 }
 
 impl Transcript {
@@ -271,9 +284,25 @@ impl Transcript {
             Some(Ok(closing_words)) => Ok(closing_words),
             Some(Err(problem)) if problem.contains("authenticate") => Err(ModelError::NoCredential(format!("{problem}. {HOW_TO_SET_UP}"))),
             Some(Err(problem)) => Err(ModelError::Unreachable(format!("Claude Code stopped: {problem}"))),
-            None => Err(ModelError::Unreachable("Claude Code stopped without finishing.".to_string())),
+            None => Err(ModelError::Unreachable(why_it_stopped_early(&self.complaints))),
         }
     }
+}
+
+/// Why Claude Code ended with no result, in its own last words, with what to do when the cause is known.
+fn why_it_stopped_early(complaints: &str) -> String {
+    let last_words = last_words_of(complaints);
+    if last_words.is_empty() {
+        return STOPPED_WITHOUT_FINISHING.to_string();
+    }
+    let what_to_do = if complaints.contains(DOES_NOT_KNOW_A_SWITCH) { format!(" {HOW_TO_UPDATE}") } else { String::new() };
+    format!("{STOPPED_WITHOUT_FINISHING}{what_to_do} It said: {last_words}")
+}
+
+fn last_words_of(complaints: &str) -> String {
+    let lines: Vec<&str> = complaints.lines().map(str::trim).filter(|line| !line.is_empty()).collect();
+    let last_lines = lines[lines.len().saturating_sub(LAST_LINES_PASSED_ON)..].join(" ");
+    last_lines.chars().take(LONGEST_PASSED_ON).collect()
 }
 
 fn result_in(event: &Value) -> Result<String, String> {
@@ -519,6 +548,50 @@ mod tests {
     fn stopping_without_a_result_is_an_error() {
         let (transcript, _) = heard(&[json!({ "type": "system", "subtype": "init", "session_id": "session-1" })]);
 
-        assert!(matches!(transcript.closing_words(), Err(ModelError::Unreachable(_))));
+        assert!(matches!(transcript.closing_words(), Err(ModelError::Unreachable(why)) if why == STOPPED_WITHOUT_FINISHING));
+    }
+
+    fn stopped_early_saying(complaints: &str) -> String {
+        let transcript = Transcript { complaints: complaints.to_string(), ..Transcript::default() };
+        match transcript.closing_words() {
+            Err(ModelError::Unreachable(why)) => why,
+            other => panic!("expected it to be unreachable, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn stopping_early_is_reported_with_the_last_of_what_claude_code_said() {
+        let why = stopped_early_saying("starting up\n\nfirst\nsecond\n  third  \nError: the tool server could not be started\n");
+
+        assert_eq!(why, "Claude Code stopped without finishing. It said: second third Error: the tool server could not be started");
+    }
+
+    #[test]
+    fn a_claude_code_too_old_for_its_switches_is_reported_with_how_to_update_it() {
+        let why = stopped_early_saying("error: unknown option '--restricted'\n");
+
+        assert!(why.contains("claude update") && why.ends_with("It said: error: unknown option '--restricted'"), "{why}");
+    }
+
+    #[test]
+    fn only_so_much_of_what_claude_code_said_is_passed_on() {
+        let why = stopped_early_saying(&"x".repeat(5_000));
+
+        assert_eq!(why.chars().filter(|letter| *letter == 'x').count(), LONGEST_PASSED_ON);
+    }
+
+    /// A stand-in for Claude Code that complains and gives up before it reports anything.
+    #[cfg(unix)]
+    #[test]
+    fn what_a_program_says_as_it_gives_up_is_heard() {
+        let mut command = Command::new("sh");
+        command.args(["-c", "echo 'error: no such thing' >&2; exit 1"]).stdin(Stdio::piped()).stdout(Stdio::piped());
+        let complaints = ErrorOutput::of(&mut command).unwrap();
+        let ready = MadeReady { command, message: String::new(), complaints, _instructions: InstructionsFile::holding("").unwrap() };
+        let overseen = Overseen { limit: Duration::from_secs(5), stop: &StopSignal::default() };
+
+        let transcript = heard_from(ready, &overseen, &mut |_| {}).unwrap();
+
+        assert_eq!(transcript.closing_words().unwrap_err().to_string(), "The AI service could not be reached: Claude Code stopped without finishing. It said: error: no such thing");
     }
 }

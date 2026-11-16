@@ -251,6 +251,28 @@ impl OutputCapture {
     }
 }
 
+/// What a program says on its error output, kept in a temporary file for as long as this is held. A pipe nobody
+/// reads would fill up and stall the program, and a program with no window has nowhere else to say it.
+pub(crate) struct ErrorOutput(PathBuf);
+
+impl ErrorOutput {
+    pub(crate) fn of(command: &mut Command) -> io::Result<Self> {
+        let kept_in = temporary_file_of_its_own("log");
+        command.stderr(File::create(&kept_in)?);
+        Ok(Self(kept_in))
+    }
+
+    pub(crate) fn said_so_far(&self) -> String {
+        String::from_utf8_lossy(&fs::read(&self.0).unwrap_or_default()).into_owned()
+    }
+}
+
+impl Drop for ErrorOutput {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.0);
+    }
+}
+
 /// A place among the computer's temporary files that nothing else uses, for a file with this ending.
 pub(crate) fn temporary_file_of_its_own(ending: &str) -> PathBuf {
     static NEXT_FILE: AtomicU64 = AtomicU64::new(0);

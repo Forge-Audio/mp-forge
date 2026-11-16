@@ -70,12 +70,21 @@ const CLIPBOARD_READERS: &[ClipboardReader] = if cfg!(target_os = "macos") {
 const CLIPBOARD_NOT_READ: &str = "The clipboard could not be read on this computer.";
 const CHOOSE_A_PLUGINS_FOLDER: &str = "Choose the folder to keep your plugins in";
 const CHOOSE_A_TEST_SOUND: &str = "Choose a sound to play through the effect";
+/// The program that shows a folder in the computer's own file manager.
 #[cfg(target_os = "macos")]
-pub const OPENS_FILES_AND_PAGES: &str = "open";
+const OPENS_FOLDERS: &str = "open";
 #[cfg(target_os = "windows")]
-pub const OPENS_FILES_AND_PAGES: &str = "explorer";
+const OPENS_FOLDERS: &str = "explorer";
 #[cfg(all(unix, not(target_os = "macos")))]
-pub const OPENS_FILES_AND_PAGES: &str = "xdg-open";
+const OPENS_FOLDERS: &str = "xdg-open";
+/// The program that opens a web page in the musician's browser, and what it is told before the page's address.
+/// On Windows the file manager will not do: given an address with a question in it, it shows a folder instead.
+#[cfg(target_os = "macos")]
+pub const OPENS_PAGES: (&str, &[&str]) = ("open", &[]);
+#[cfg(target_os = "windows")]
+pub const OPENS_PAGES: (&str, &[&str]) = ("rundll32", &["url.dll,FileProtocolHandler"]);
+#[cfg(all(unix, not(target_os = "macos")))]
+pub const OPENS_PAGES: (&str, &[&str]) = ("xdg-open", &[]);
 
 #[tauri::command]
 pub fn library(workbench: State<Workbench>) -> Value {
@@ -371,7 +380,7 @@ pub fn show_plugins_folder(workbench: State<Workbench>) -> Result<(), String> {
     if !folder.is_dir() {
         return Err(format!("{} cannot be found just now.", folder.display()));
     }
-    command_for(OPENS_FILES_AND_PAGES).arg(&folder).spawn().map(drop).map_err(|problem| format!("The folder could not be opened: {problem}."))
+    command_for(OPENS_FOLDERS).arg(&folder).spawn().map(drop).map_err(|problem| format!("The folder could not be opened: {problem}."))
 }
 
 /// Lets the musician pick a folder with the computer's own folder chooser. Nothing changes until they say
