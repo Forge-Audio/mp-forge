@@ -30,7 +30,7 @@ MP Forge runs twelve safety checks on it, then sends it to your MPC. There is no
 tools to install.
 
 <p align="center">
-  <img src="docs/src/assets/screenshots/the-mpc-screen.png" alt="MP Forge with a finished plugin open: the conversation on the left, and on the right the plugin's MPC screen with its knobs and faders, the play, send and edit buttons above it, and the sixteen hardware knobs beside it. The status reads SAFE TO SEND." width="880">
+  <img src="docs/src/assets/bille-tumbler-finished.png" alt="MP Forge with a finished plugin open, an effect called Bille Tumbler. On the left is the conversation: the plugin was built, its knobs were made to glow violet on request, and it was sent to an MPC. On the right is the plugin's MPC screen, a pyramid tumbling over a floor above violet knobs, with the play, send and edit buttons above it and the sixteen hardware knobs beside it. The status reads SAFE TO SEND." width="880">
 </p>
 
 <p align="center"><img src="docs/public/images/step-row.svg" alt="" width="250"></p>
