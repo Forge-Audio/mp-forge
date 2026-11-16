@@ -5,8 +5,8 @@
 <h1 align="center">MP Forge</h1>
 
 <p align="center">
-  <b>Describe a plugin. Hear it. Send it to your MPC.</b><br>
-  A free, open-source app that makes plugins for Akai MPC hardware from a description.
+  <b>Make plugins for your MPC creatively.</b><br>
+  A free, open-source desktop app for Akai MPC hardware. There is no code to write.
 </p>
 
 <div align="center">
@@ -21,9 +21,13 @@
 
 ## What it is
 
-MP Forge is a desktop app for musicians who do not program. You describe an instrument or an effect in plain
-words, in a chat. An AI of your choice builds it with Akai's own MPC Plugin SDK. MP Forge checks that the
-plugin is safe, shows you its MPC screen, lets you play it on your computer, and sends it to your MPC.
+MP Forge is a desktop app for making your own instruments and effects for the Akai MPC. Start from your own
+idea, remix an open plugin, or press I'M FEELING LUCKY, and an AI of your choice builds it with Akai's own MPC
+Plugin SDK.
+
+You play the real plugin on your computer straight away, and shape its sound and its screen until it is yours.
+MP Forge runs twelve safety checks on it, then sends it to your MPC. There is no code to write and no build
+tools to install.
 
 <p align="center">
   <img src="docs/src/assets/screenshots/the-mpc-screen.png" alt="MP Forge with a finished plugin open: the conversation on the left, and on the right the plugin's MPC screen with its knobs and faders, the play, send and edit buttons above it, and the sixteen hardware knobs beside it. The status reads SAFE TO SEND." width="880">
