@@ -3,6 +3,7 @@
 //! Nothing reaches an MPC unless [`gate::Gate`] lets it through.
 
 pub mod agent;
+pub(crate) mod archive;
 pub mod architect;
 pub mod ai_settings;
 pub mod arranged_screen;
@@ -12,6 +13,7 @@ pub mod attachments;
 pub mod beat_loop;
 pub mod browser_sign_in;
 pub mod built_screen;
+pub mod carried_sdk;
 pub mod chat_model;
 pub mod chatgpt_plan;
 pub mod claude;

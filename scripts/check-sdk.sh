@@ -20,20 +20,6 @@ stop_with() {
   exit 1
 }
 
-fetch_sdk_if_missing() {
-  [[ -d "$SDK_DIR/.git" ]] && return
-  echo "Fetching Akai's SDK into vendor/ ..."
-  git clone --quiet "$SDK_REPOSITORY" "$SDK_DIR"
-  git -C "$SDK_DIR" checkout --quiet "$SDK_COMMIT"
-}
-
-require_pinned_sdk() {
-  local checked_out
-  checked_out="$(git -C "$SDK_DIR" rev-parse HEAD)"
-  [[ "$checked_out" == "$SDK_COMMIT" ]] ||
-    stop_with "SDK is at $checked_out but sdk.pin expects $SDK_COMMIT"
-}
-
 build_example() {
   python3 "$SDK_DIR/tools/build.py" "$SDK_DIR/examples/$1" >"$REPORT_DIR/$1.build.log" 2>&1
 }
@@ -73,8 +59,7 @@ check_every_example() {
 }
 
 main() {
-  fetch_sdk_if_missing
-  require_pinned_sdk
+  "$PROJECT_ROOT/scripts/fetch-sdk.sh"
   mkdir -p "$REPORT_DIR"
   echo "Checking Akai SDK ${SDK_COMMIT:0:7} ..."
   if check_every_example; then

@@ -6,7 +6,7 @@
 
 use std::cell::UnsafeCell;
 use std::ffi::{CStr, c_char, c_void};
-use std::path::Path;
+use std::path::{self, Path, PathBuf};
 use std::ptr;
 use std::sync::atomic::{AtomicI32, AtomicU32, AtomicU64, Ordering};
 
@@ -75,12 +75,18 @@ pub struct HostedPlugin {
 /// The plugin is handed between threads but only one of them calls into it at a time.
 unsafe impl Send for HostedPlugin {}
 
+/// A signed app on macOS may only load code it names by its whole path, never by the way to it from where the
+/// app was started.
+fn by_its_whole_path(library_file: &Path) -> PathBuf {
+    path::absolute(library_file).unwrap_or_else(|_| library_file.to_path_buf())
+}
+
 impl HostedPlugin {
     /// Loads the plugin and takes it through the MPC's start-up steps, ready to play at this sample rate.
     pub fn load(library_file: &Path, sample_rate: u32) -> Result<Self, String> {
         SAMPLE_RATE.store(sample_rate, Ordering::Relaxed);
         FRAMES_PLAYED.store(0, Ordering::Relaxed);
-        let library = unsafe { Library::new(library_file) }.map_err(|error| format!("The plugin could not be loaded: {error}"))?;
+        let library = unsafe { Library::new(by_its_whole_path(library_file)) }.map_err(|error| format!("The plugin could not be loaded: {error}"))?;
         let effect = created_by(&library)?;
         let channels = |count: i32| vec![vec![0.0; LARGEST_BLOCK]; usize::try_from(count).unwrap_or(0)];
         let (inputs, outputs) = unsafe { (channels((*effect).num_inputs), channels((*effect).num_outputs)) };

@@ -1,0 +1,31 @@
+{
+  "mainBinaryName": "mp-forge",
+  "bundle": {
+    "active": true,
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
+    "resources": {
+      "carried/akai-sdk.tar.gz": "akai-sdk.tar.gz"
+    },
+    "category": "Music",
+    "shortDescription": "Make plugins for your Akai MPC by describing them.",
+    "longDescription": "MP Forge builds a plugin for your Akai MPC from your own words, checks that it is safe, lets you try it, and sends it to your MPC.",
+    "publisher": "Forge Audio",
+    "copyright": "Forge Audio. Free software under the GNU General Public License, version 3 or later.",
+    "license": "GPL-3.0-or-later",
+    "homepage": "https://github.com/Forge-Audio/mp-forge",
+    "macOS": {
+      "signingIdentity": "-",
+      "entitlements": "entitlements.plist"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    },
+    "linux": {
+      "deb": {
+        "depends": ["libasound2"]
+      }
+    }
+  }
+}

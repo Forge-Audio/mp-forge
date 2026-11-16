@@ -118,7 +118,8 @@ The three dots above the plugin's screen rename or delete the plugin.
 ## Where your plugins are kept
 
 Each plugin is a folder of its own on your computer, holding its code, its screen, its versions and your
-conversation about it. **Settings → Where your plugins are kept** shows the folder and lets you choose
-another, for instance one that gets backed up.
+conversation about it. MP Forge starts with a folder called `MP Forge` in your Music folder.
+**Settings → Where your plugins are kept** shows the folder and lets you choose another, for instance one
+that gets backed up.
 
 Next: [the safety checks](./safety-checks.md), then [sending it to your MPC](./send-to-your-mpc.md).

@@ -17,10 +17,13 @@ mod upload;
 mod workbench;
 
 use std::env;
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use tauri::Manager;
+use tauri::path::PathResolver;
+use workbench_engine::carried_sdk::CarriedSdk;
 use workbench_engine::live_player::{self, PLAY_COMMAND};
 use workbench_engine::maker::SERVE_TOOLS_COMMAND;
 use workbench_engine::picture_clock::{self, READ_CLOCK_COMMAND};
@@ -29,6 +32,8 @@ use workbench_engine::sdk::Sdk;
 
 use player::LivePlayer;
 use workbench::Workbench;
+
+const PLUGINS_FOLDER_OF_AN_INSTALLED_COPY: &str = "MP Forge";
 
 fn main() -> ExitCode {
     let arguments: Vec<String> = env::args().skip(1).collect();
@@ -73,12 +78,36 @@ fn serve_tools(plugin_dir: &str, sdk_dir: &str) -> ExitCode {
     }
 }
 
+/// The workbench of this copy of MP Forge. An installed copy carries Akai's SDK with it. A copy run from its
+/// source folder uses the SDK fetched there.
+fn workbench_of<R: tauri::Runtime>(paths: &PathResolver<R>) -> tauri::Result<Workbench> {
+    let carried = paths.resource_dir().ok().and_then(|installed_files| CarriedSdk::among(&installed_files));
+    let workbench = match carried {
+        Some(sdk) => Workbench::installed(sdk.unpacked_in(&paths.app_local_data_dir()?), plugins_folder_of_an_installed_copy(paths)?),
+        None => Workbench::at_home(),
+    };
+    Ok(workbench.remembering_places_in(&paths.app_config_dir()?))
+}
+
+/// Among the musician's music, where they would look for it. A computer with no such folder keeps the plugins
+/// with MP Forge's own things.
+fn plugins_folder_of_an_installed_copy<R: tauri::Runtime>(paths: &PathResolver<R>) -> tauri::Result<PathBuf> {
+    let music = paths.audio_dir().or_else(|_no_music_folder| paths.app_local_data_dir())?;
+    Ok(music.join(PLUGINS_FOLDER_OF_AN_INSTALLED_COPY))
+}
+
+/// A folder that cannot be made, such as one on a drive that is not plugged in, is shown as missing in Settings.
+fn make_sure_the_plugins_have_a_folder(workbench: &Workbench) {
+    let _ = fs::create_dir_all(workbench.plugins_dir());
+}
+
 fn open_window() -> ExitCode {
     let started = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            let settings_dir = app.path().app_config_dir()?;
-            app.manage(Workbench::at_home().remembering_places_in(&settings_dir));
+            let workbench = workbench_of(app.path())?;
+            make_sure_the_plugins_have_a_folder(&workbench);
+            app.manage(workbench);
             Ok(())
         })
         .manage(LivePlayer::default())

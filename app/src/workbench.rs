@@ -61,7 +61,8 @@ impl Work {
 }
 
 pub struct Workbench {
-    home: PathBuf,
+    /// Where Akai's SDK is, or why it is not on this computer.
+    sdk_folder: Result<PathBuf, String>,
     /// Where the plugins are kept. The musician can choose another folder.
     plugins: Mutex<PathBuf>,
     /// Where the chosen folder is written down, so it is still the one when the app is next opened.
@@ -72,10 +73,19 @@ pub struct Workbench {
 }
 
 impl Workbench {
+    /// MP Forge run from its source folder, with Akai's SDK and the plugins in the project folder.
     pub fn at_home() -> Self {
         let home = env::var_os(HOME_VARIABLE).map(PathBuf::from).unwrap_or_else(|| PathBuf::from(HOME_DURING_DEVELOPMENT));
-        let plugins = Mutex::new(home.join(PLUGINS_FOLDER));
-        Self { home, plugins, places_note: None, work: Arc::default(), stop: Mutex::new(StopSignal::default()) }
+        Self::keeping(Ok(home.join(SDK_FOLDER)), home.join(PLUGINS_FOLDER))
+    }
+
+    /// An installed MP Forge, with Akai's SDK where it was unpacked and the plugins in a folder of the musician's.
+    pub fn installed(sdk_folder: Result<PathBuf, String>, plugins: PathBuf) -> Self {
+        Self::keeping(sdk_folder, plugins)
+    }
+
+    fn keeping(sdk_folder: Result<PathBuf, String>, plugins: PathBuf) -> Self {
+        Self { sdk_folder, plugins: Mutex::new(plugins), places_note: None, work: Arc::default(), stop: Mutex::new(StopSignal::default()) }
     }
 
     /// The same workbench, keeping its plugins in the folder noted among the app's settings, if one was chosen,
@@ -125,7 +135,7 @@ impl Workbench {
 
     /// Akai's SDK, which comes with MP Forge.
     pub fn sdk(&self) -> Result<Sdk, String> {
-        Sdk::at(self.home.join(SDK_FOLDER)).map_err(|not_found| not_found.to_string())
+        Sdk::at(self.sdk_folder.clone()?).map_err(|not_found| not_found.to_string())
     }
 
     pub fn maker(&self) -> Result<Maker, String> {
@@ -331,6 +341,14 @@ mod tests {
         drop(another_change);
 
         assert!(workbench.claim_to_check("Glass Pad").is_ok());
+    }
+
+    #[test]
+    fn an_installed_copy_says_why_akais_sdk_is_not_there() {
+        let workbench = Workbench::installed(Err("The disk is full.".to_string()), PathBuf::from("plugins"));
+
+        assert_eq!(workbench.sdk().err(), Some("The disk is full.".to_string()));
+        assert_eq!(workbench.plugins_dir(), PathBuf::from("plugins"));
     }
 
     fn scratch_folder(label: &str) -> PathBuf {

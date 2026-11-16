@@ -13,6 +13,9 @@ engine/target/
 app/target/
 app/gen/
 
+# Akai's SDK packed for an installer to carry, made by scripts/pack-sdk-for-installers.sh
+app/carried/
+
 # The plugins made on this computer are the musician's own work, with their conversations and the pictures they
 # showed the AI. They are never part of MP Forge itself.
 plugins/

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  What the signed macOS app is allowed that a signed app is not allowed by default.
+
+  MP Forge loads the plugins it builds, to check them and to play them. macOS otherwise lets a signed app load
+  only code signed by its own maker, and a plugin built on the musician's computer is signed by nobody.
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+</dict>
+</plist>

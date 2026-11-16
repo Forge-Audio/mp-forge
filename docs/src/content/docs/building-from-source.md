@@ -44,13 +44,11 @@ It fetches the SDK, then builds Akai's three example plugins and plays each thro
 prove that Akai's tools work on your computer. The first run also downloads Akai's compiler, about 50 MB,
 so it takes a few minutes. It ends with `All 3 examples built and passed the host simulator.`
 
-On Windows that script has not been confirmed yet. Fetch the SDK with these three commands in Git Bash
-instead. They are what MP Forge's own automatic Windows build runs, and they work on macOS and Linux too:
+On Windows that script has not been confirmed yet. Fetch the SDK with this one in Git Bash instead. It is
+what MP Forge's own automatic Windows build runs, and it works on macOS and Linux too:
 
 ```sh
-source sdk.pin
-git clone "$SDK_REPOSITORY" vendor/mpc-plugin-builder-sdk
-git -C vendor/mpc-plugin-builder-sdk checkout "$SDK_COMMIT"
+./scripts/fetch-sdk.sh
 ```
 
 ## Build and start MP Forge
@@ -67,6 +65,24 @@ where it is. To have it look in another folder, set `WORKBENCH_HOME` to that fol
 
 If Akai's build tools were not set up by `check-sdk.sh`, MP Forge fetches them the first time it opens, as in
 [Getting started](./getting-started.md#2-let-mp-forge-check-your-computer).
+
+## Build an installer
+
+An installer carries Akai's SDK with it, packed as one archive. From the `mp-forge` folder, pack the SDK and
+then build the installer for the system you are on. This needs Node.js, for Tauri's bundling tool:
+
+```sh
+./scripts/pack-sdk-for-installers.sh
+cd app
+npx @tauri-apps/cli@2.12.5 build --config tauri.installer.conf.json
+```
+
+The installer is written under `app/target/release/bundle/`. MP Forge installed from it does not use the
+`mp-forge` folder. The first time it is opened it unpacks the SDK among its own files on that computer, and
+it keeps plugins in a folder called `MP Forge` in the Music folder.
+
+The installers on the download page are built the same way by `.github/workflows/installers.yml`, when a
+version is tagged.
 
 ## Run the tests
 
@@ -109,7 +125,7 @@ be run at all.
 | `engine/` | The Rust engine: the safety checks, the AI's work, building, playing and sending. |
 | `directives/` | The instructions the AI is given. |
 | `screen-tests/` | Test plugins for trying out what an MPC's screen supports. |
-| `scripts/` | `check-sdk.sh`, which fetches Akai's SDK and checks it. |
+| `scripts/` | Fetching Akai's SDK, checking it, and packing it for an installer. |
 | `docs/` | This site. `npm install` and `npm run dev` in that folder show it on your computer. |
 
 The code calls the app "workbench" in places. The product's name is always MP Forge.

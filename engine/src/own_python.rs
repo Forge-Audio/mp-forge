@@ -8,16 +8,14 @@
 //! that fingerprint is thrown away unopened.
 
 use std::fs::{self, File};
-use std::io::{self, Read};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use flate2::read::GzDecoder;
-use ring::digest::{Context, SHA256};
+use crate::archive::Archive;
 
 const PUBLISHED_AT: &str = "https://github.com/astral-sh/python-build-standalone/releases/download/20261110";
 const KEPT_AS: &str = "mp-forge-python";
-const ARRIVING_AS: &str = "mp-forge-python.arriving";
 const FOLDER_IN_THE_ARCHIVE: &str = "python";
 const PROGRAM: &str = if cfg!(windows) { "python.exe" } else { "bin/python3" };
 const LARGEST_ARCHIVE: u64 = 200 * 1024 * 1024;
@@ -84,32 +82,28 @@ impl OwnPython {
         let build = Build::for_this_computer().ok_or("MP Forge has no Python of its own for this kind of computer.")?;
         fs::create_dir_all(&self.kept_in).map_err(|problem| could_not_keep(&problem))?;
         let archive = self.kept_in.join(build.file_name);
-        let fetched = download(&build.address(), &archive).and_then(|()| self.unpack_if_genuine(&archive, build.fingerprint));
+        let fetched = download(&build.address(), &archive).and_then(|()| self.unpack_if_genuine(&archived(&archive), build.fingerprint));
         let _ = fs::remove_file(&archive);
         fetched
     }
 
     /// Unpacks the archive in place of whatever Python was kept before, once its fingerprint is the one expected.
-    fn unpack_if_genuine(&self, archive: &Path, fingerprint: &str) -> Result<(), String> {
-        let found = fingerprint_of(archive).map_err(|problem| could_not_keep(&problem))?;
+    fn unpack_if_genuine(&self, archive: &Archive, fingerprint: &str) -> Result<(), String> {
+        let found = archive.fingerprint().map_err(|problem| could_not_keep(&problem))?;
         if found != fingerprint {
             return Err("The Python that arrived is not the one MP Forge asked for, so it was thrown away. Try again.".to_string());
         }
-        self.unpack(archive).map_err(|problem| could_not_keep(&problem))
-    }
-
-    fn unpack(&self, archive: &Path) -> io::Result<()> {
-        let arriving = self.kept_in.join(ARRIVING_AS);
-        remove_if_there(&arriving)?;
-        tar::Archive::new(GzDecoder::new(File::open(archive)?)).unpack(&arriving)?;
-        remove_if_there(&self.folder())?;
-        fs::rename(arriving.join(FOLDER_IN_THE_ARCHIVE), self.folder())?;
-        remove_if_there(&arriving)
+        archive.unpack_as(&self.folder()).map_err(|problem| could_not_keep(&problem))
     }
 
     fn folder(&self) -> PathBuf {
         self.kept_in.join(KEPT_AS)
     }
+}
+
+/// A downloaded file, as the archive of Python it should be.
+fn archived(file: &Path) -> Archive<'_> {
+    Archive { file, holds: FOLDER_IN_THE_ARCHIVE }
 }
 
 fn download(address: &str, into: &Path) -> Result<(), String> {
@@ -123,24 +117,6 @@ fn download(address: &str, into: &Path) -> Result<(), String> {
     io::copy(&mut arriving, &mut kept).map(|_bytes| ()).map_err(|problem| could_not_reach(&problem))
 }
 
-/// The SHA-256 of the file, written the way such fingerprints are published.
-fn fingerprint_of(file: &Path) -> io::Result<String> {
-    let mut reading = File::open(file)?;
-    let mut fingerprint = Context::new(&SHA256);
-    let mut piece = [0u8; 64 * 1024];
-    loop {
-        let read = reading.read(&mut piece)?;
-        if read == 0 {
-            return Ok(fingerprint.finish().as_ref().iter().map(|byte| format!("{byte:02x}")).collect());
-        }
-        fingerprint.update(&piece[..read]);
-    }
-}
-
-fn remove_if_there(folder: &Path) -> io::Result<()> {
-    if folder.exists() { fs::remove_dir_all(folder) } else { Ok(()) }
-}
-
 fn could_not_reach(problem: &dyn std::fmt::Display) -> String {
     format!("Python could not be downloaded ({problem}). Check the network and try again.")
 }
@@ -151,10 +127,8 @@ fn could_not_keep(problem: &dyn std::fmt::Display) -> String {
 
 #[cfg(test)]
 mod tests {
-    use flate2::Compression;
-    use flate2::write::GzEncoder;
-
     use super::*;
+    use crate::archive::{test_support, while_arriving};
     use crate::process::{command_for, run_with_time_limit};
     use crate::workspace::test_support::TemporaryFolder;
 
@@ -163,12 +137,7 @@ mod tests {
     /// An archive laid out as Astral's are: a `python` folder holding the program.
     fn archive_in(folder: &Path) -> PathBuf {
         let archive = folder.join("python.tar.gz");
-        let mut packed = tar::Builder::new(GzEncoder::new(File::create(&archive).unwrap(), Compression::fast()));
-        let mut heading = tar::Header::new_gnu();
-        heading.set_size(SAID_BY_THE_STAND_IN.len() as u64);
-        heading.set_mode(0o755);
-        packed.append_data(&mut heading, Path::new(FOLDER_IN_THE_ARCHIVE).join(PROGRAM), SAID_BY_THE_STAND_IN).unwrap();
-        packed.into_inner().unwrap().finish().unwrap();
+        test_support::pack(&archive, &[(&Path::new(FOLDER_IN_THE_ARCHIVE).join(PROGRAM), SAID_BY_THE_STAND_IN)]);
         archive
     }
 
@@ -195,11 +164,11 @@ mod tests {
         let python = OwnPython::kept_in(&folder.0);
         assert!(!python.is_there());
 
-        python.unpack_if_genuine(&archive, &fingerprint_of(&archive).unwrap()).unwrap();
+        python.unpack_if_genuine(&archived(&archive), &archived(&archive).fingerprint().unwrap()).unwrap();
 
         assert!(python.is_there());
         assert_eq!(fs::read(python.program()).unwrap(), SAID_BY_THE_STAND_IN);
-        assert!(!folder.0.join(ARRIVING_AS).exists());
+        assert!(!while_arriving(&python.folder()).exists());
     }
 
     #[test]
@@ -208,7 +177,7 @@ mod tests {
         let archive = archive_in(&folder.0);
         let python = OwnPython::kept_in(&folder.0);
 
-        let refused = python.unpack_if_genuine(&archive, &"0".repeat(64)).unwrap_err();
+        let refused = python.unpack_if_genuine(&archived(&archive), &"0".repeat(64)).unwrap_err();
 
         assert!(refused.contains("not the one MP Forge asked for"), "{refused}");
         assert!(!python.is_there());
@@ -222,19 +191,10 @@ mod tests {
         let left_from_before = python.folder().join("left-from-before");
         fs::create_dir_all(&left_from_before).unwrap();
 
-        python.unpack_if_genuine(&archive, &fingerprint_of(&archive).unwrap()).unwrap();
+        python.unpack_if_genuine(&archived(&archive), &archived(&archive).fingerprint().unwrap()).unwrap();
 
         assert!(python.is_there());
         assert!(!left_from_before.exists());
-    }
-
-    #[test]
-    fn the_fingerprint_is_the_one_the_standard_gives_for_its_own_example() {
-        let folder = TemporaryFolder::create("own-python-fingerprint");
-        let file = folder.0.join("abc");
-        fs::write(&file, "abc").unwrap();
-
-        assert_eq!(fingerprint_of(&file).unwrap(), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
     }
 
     /// Downloads about 25 MB from GitHub, so it is run by hand: `cargo test -- --ignored the_real_python`.

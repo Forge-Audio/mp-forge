@@ -1,0 +1,125 @@
+# Builds the installers of MP Forge: a .dmg for macOS, a setup .exe for Windows, and an .AppImage and a .deb for
+# Linux. Each carries Akai's SDK at the version in sdk.pin.
+#
+# Pushing a version's tag, such as v0.1.0, builds all of them and puts them on a draft release under that tag. A
+# draft is seen by nobody until a person has looked it over and published it.
+#
+# Started by hand, it only builds them and keeps them with the run for a week, to try. The Mac is then left out
+# unless it is asked for: a minute on GitHub's Macs costs about ten times a minute on Linux.
+#
+# The installers are not signed yet, so macOS and Windows each warn the first time one is opened.
+name: Installers
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      for_macos_too:
+        description: Also build the installer for macOS
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  # Tauri's bundling tool, at the version of Tauri the app is built with.
+  BUNDLING_TOOL: "@tauri-apps/cli@2.12.5"
+
+jobs:
+  build:
+    name: ${{ matrix.system }}
+    runs-on: ${{ matrix.system }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # The Linux installers are built on the oldest Ubuntu still kept up, so that they also run on older systems.
+        system: ${{ fromJSON((github.event_name == 'push' || inputs.for_macos_too) && '["ubuntu-22.04", "windows-latest", "macos-latest"]' || '["ubuntu-22.04", "windows-latest"]') }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check that the tag names the version the app says it is
+        if: github.event_name == 'push'
+        run: |
+          version="$(node -p "require('./app/tauri.conf.json').version")"
+          if [[ "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "The tag is $GITHUB_REF_NAME but app/tauri.conf.json says the version is $version." >&2
+            exit 1
+          fi
+
+      - name: Install what the app's window, its sound and its installers need on Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev libasound2-dev patchelf file
+
+      - name: Use the current Rust
+        run: rustup update stable && rustup default stable
+
+      # One installer for macOS runs on both of Apple's chips, so the app is built for both.
+      - name: Add the other Apple chip to Rust
+        if: runner.os == 'macOS'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: installers
+          workspaces: |
+            app
+
+      - name: Pack Akai's SDK for the installer to carry
+        run: scripts/pack-sdk-for-installers.sh
+
+      - name: Choose the installers this system makes
+        id: wanted
+        run: |
+          case "$RUNNER_OS" in
+            Linux) echo "installers=--bundles appimage,deb" ;;
+            Windows) echo "installers=--bundles nsis" ;;
+            macOS) echo "installers=--bundles dmg --target universal-apple-darwin" ;;
+          esac >> "$GITHUB_OUTPUT"
+
+      - name: Build the installers
+        working-directory: app
+        run: npx --yes "$BUNDLING_TOOL" build --config tauri.installer.conf.json ${{ steps.wanted.outputs.installers }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ runner.os }}
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            app/target/**/bundle/dmg/*.dmg
+            app/target/**/bundle/nsis/*.exe
+            app/target/**/bundle/appimage/*.AppImage
+            app/target/**/bundle/deb/*.deb
+
+  draft-release:
+    name: Put the installers on a draft release
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Making a release is the one thing here that writes to the repository.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: installers
+          pattern: installers-*
+          merge-multiple: true
+
+      - name: Make the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          find installers -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' \) -print0 |
+            xargs -0 gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "MP Forge ${GITHUB_REF_NAME#v}" --generate-notes

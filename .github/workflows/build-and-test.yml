@@ -63,10 +63,7 @@ jobs:
           python-version: "3.12"
 
       - name: Fetch Akai's SDK at the version in sdk.pin
-        run: |
-          source sdk.pin
-          git clone --quiet "$SDK_REPOSITORY" vendor/mpc-plugin-builder-sdk
-          git -C vendor/mpc-plugin-builder-sdk checkout --quiet "$SDK_COMMIT"
+        run: scripts/fetch-sdk.sh
 
       # Akai's build script fetches its compiler and builds its tryout program the first time it builds. Both are
       # tied to the Python that set them up, and kept between runs so that this happens once.
