@@ -189,7 +189,7 @@ p {
 }
 
 .wordmark img,
-.opening .logo {
+.logo {
 	border: 2px solid var(--line);
 	image-rendering: pixelated;
 }
@@ -236,7 +236,7 @@ main > section {
 	text-align: center;
 }
 
-.opening .logo {
+.first-words .logo {
 	box-shadow: var(--hard-shadow);
 }
 
@@ -255,16 +255,94 @@ main > section {
 	line-height: 1.55;
 }
 
+/* --- The home page's first screen: the words and the download beside the video, over the five facts --- */
+
+.first-screen {
+	display: grid;
+	grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+	align-items: center;
+	gap: clamp(2rem, 4vw, 3.5rem);
+	max-width: 80rem;
+	padding-top: clamp(2rem, 5vw, 3.5rem);
+}
+
+.first-screen h1 {
+	font-size: clamp(2.25rem, 4vw, 3.25rem);
+}
+
+.first-words {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 1.25rem;
+}
+
+/* The video's frame keeps the video's own shape, so the page does not jump when the video takes the picture's place. */
+.video {
+	position: relative;
+	aspect-ratio: 16 / 9;
+}
+
+.video .picture,
+.video iframe {
+	display: block;
+	width: 100%;
+	height: 100%;
+	border: 2px solid var(--line);
+	box-shadow: 6px 6px 0 var(--line);
+}
+
+.video .picture {
+	object-fit: cover;
+	object-position: top;
+}
+
+.video .play {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, -50%);
+}
+
+.facts {
+	grid-column: 1 / -1;
+	display: grid;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	background: var(--panel);
+	border: 2px solid var(--line);
+	box-shadow: var(--hard-shadow);
+}
+
+.fact {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.375rem;
+	padding: 0.875rem 1rem 1rem;
+	color: var(--soft);
+	font-size: 0.875rem;
+	line-height: 1.45;
+}
+
+.fact + .fact {
+	border-left: 2px solid var(--line);
+}
+
+.fact-name {
+	font-family: var(--font-labels);
+	font-size: 0.75rem;
+	text-transform: uppercase;
+}
+
 /* A picture of the app stands in the app's own hard frame. */
 .picture {
 	display: block;
 	width: 100%;
 	border: 2px solid var(--line);
 	box-shadow: 6px 6px 0 var(--line);
-}
-
-.shown {
-	padding-top: 0;
 }
 
 .steps {
@@ -457,9 +535,16 @@ main > section {
 /* --- A narrow screen ------------------------------------------------------------------------------ */
 
 @media (max-width: 56rem) {
+	.first-screen,
+	.facts,
 	.step,
 	.step:nth-child(even) {
 		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.fact + .fact {
+		border-left: 0;
+		border-top: 2px solid var(--line);
 	}
 
 	.step:nth-child(even) .step-words {

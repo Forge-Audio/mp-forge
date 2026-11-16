@@ -1,0 +1,45 @@
+---
+// The launch video, on the home page's first screen.
+//
+// As it is written here it is a link to the video on YouTube, over a picture of the app, and needs no script.
+// The script makes the link play the video in its place instead. Nothing is asked of YouTube before the
+// visitor presses play, and the player that is then fetched is the one YouTube offers without its cookies.
+
+import { Image } from 'astro:assets';
+
+interface Props {
+	video: string;
+	poster: ImageMetadata;
+	posterShows: string;
+}
+
+const { video, poster, posterShows } = Astro.props;
+
+const WIDTHS_OFFERED = [640, 960, 1280];
+const WIDTH_ON_THE_PAGE = '(min-width: 56rem) 44rem, 94vw';
+const onYouTube = `https://www.youtube.com/watch?v=${video}`;
+const playingInPlace = `https://www.youtube-nocookie.com/embed/${video}?autoplay=1`;
+---
+
+<div class="video">
+	<Image class="picture" src={poster} alt={posterShows} widths={WIDTHS_OFFERED} sizes={WIDTH_ON_THE_PAGE} loading="eager" />
+	<a class="button large play" href={onYouTube} data-plays-in-place={playingInPlace}>Play the video</a>
+</div>
+
+<script>
+	const frame = document.querySelector<HTMLElement>('.video')!;
+	const play = frame.querySelector<HTMLAnchorElement>('.play')!;
+
+	function playerOf(address: string) {
+		const player = document.createElement('iframe');
+		player.src = address;
+		player.title = 'The MP Forge launch video';
+		player.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+		return player;
+	}
+
+	play.addEventListener('click', (pressed) => {
+		pressed.preventDefault();
+		frame.replaceChildren(playerOf(play.dataset.playsInPlace!));
+	});
+</script>

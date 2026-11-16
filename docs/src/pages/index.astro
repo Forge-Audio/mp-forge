@@ -3,7 +3,9 @@
 
 import { Image } from 'astro:assets';
 
+import LaunchVideo from '../components/LaunchVideo.astro';
 import Website from '../layouts/Website.astro';
+import { LAUNCH_VIDEO } from '../launch-video.js';
 import { places } from '../website-places.js';
 
 import logo from '../assets/logo.png';
@@ -14,8 +16,19 @@ import checking from '../assets/screenshots/run-the-safety-check.png';
 import sending from '../assets/screenshots/send-to-your-mpc.png';
 
 const WIDTHS_OFFERED = [640, 960, 1280, 1920];
-const WIDTH_ON_THE_PAGE = '(min-width: 72rem) 68rem, 94vw';
+const WIDTH_ON_THE_FIRST_SCREEN = '(min-width: 56rem) 44rem, 94vw';
 const WIDTH_BESIDE_WORDS = '(min-width: 56rem) 38rem, 94vw';
+const WHOLE_APP_SHOWS =
+	'MP Forge with a finished plugin open: the conversation on the left, and on the right the plugin’s MPC screen with its knobs and faders, the play, send and edit buttons above it, and the sixteen hardware knobs beside it. The status reads SAFE TO SEND.';
+
+// What a visitor should know before downloading. Every post about MP Forge says the same five things.
+const facts = [
+	{ what: 'Free', words: 'Free and open source. There is nothing to buy.', more: places.licence },
+	{ what: 'Independent', words: 'Not affiliated with Akai or inMusic.', more: places.status },
+	{ what: 'Your own AI', words: 'An account you already have, or a free model on your own computer.', more: places.choosingAnAi },
+	{ what: 'MPC OS 3.10.1', words: 'Your MPC needs MPC OS 3.10.1 or later.', more: places.whatYouNeed },
+	{ what: 'Early build', words: 'What is not finished is written down.', more: places.status },
+];
 
 const steps = [
 	{
@@ -56,29 +69,39 @@ const needs = [
 ---
 
 <Website title="MP Forge: make plugins for your MPC by describing them" description="MP Forge is a free, open-source app that makes instruments and effects for Akai MPC hardware from a description.">
-	<section class="opening">
-		<Image class="logo" src={logo} alt="" width={128} height={128} />
-		<h1>Make plugins for your MPC by describing them.</h1>
-		<p class="lead">
-			MP Forge is a desktop app for musicians who do not program. You say what you want in plain words, an AI builds
-			the instrument or effect, and MP Forge checks that it is safe before it goes anywhere near your MPC.
-		</p>
-		<p class="choices">
-			<a class="button large" href={places.download}>Download</a>
-			<a class="button quiet" href={places.docs}>Read the docs</a>
-		</p>
-		<p class="note">Free and open source. For macOS, Windows and Linux.</p>
-	</section>
+	<section class="first-screen">
+		<div class="first-words">
+			<Image class="logo" src={logo} alt="" width={72} height={72} />
+			<h1>Make plugins for your MPC by describing them.</h1>
+			<p class="lead">
+				MP Forge is a desktop app for musicians who do not program. You say what you want in plain words, an AI builds
+				the instrument or effect, and MP Forge checks that it is safe before it goes anywhere near your MPC.
+			</p>
+			<p class="choices">
+				<a class="button large" href={places.download}>Download</a>
+				<a class="button quiet" href={places.docs}>Read the docs</a>
+			</p>
+			<p class="note">For macOS, Windows and Linux.</p>
+		</div>
 
-	<section class="shown">
-		<Image
-			class="picture"
-			src={wholeApp}
-			alt="MP Forge with a finished plugin open: the conversation on the left, and on the right the plugin's MPC screen with its knobs and faders, the play, send and edit buttons above it, and the sixteen hardware knobs beside it. The status reads SAFE TO SEND."
-			widths={WIDTHS_OFFERED}
-			sizes={WIDTH_ON_THE_PAGE}
-			loading="eager"
-		/>
+		{
+			LAUNCH_VIDEO ? (
+				<LaunchVideo video={LAUNCH_VIDEO} poster={wholeApp} posterShows={WHOLE_APP_SHOWS} />
+			) : (
+				<Image class="picture" src={wholeApp} alt={WHOLE_APP_SHOWS} widths={WIDTHS_OFFERED} sizes={WIDTH_ON_THE_FIRST_SCREEN} loading="eager" />
+			)
+		}
+
+		<ul class="facts" aria-label="Before you download">
+			{
+				facts.map((fact) => (
+					<li class="fact">
+						<a class="fact-name" href={fact.more}>{fact.what}</a>
+						<span>{fact.words}</span>
+					</li>
+				))
+			}
+		</ul>
 	</section>
 
 	<section class="steps" aria-label="How it works">

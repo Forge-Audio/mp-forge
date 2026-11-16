@@ -9,6 +9,9 @@ One Astro project holds two things, published together:
 
 Both draw with the app's colours, which are written down once, in `src/styles/app-colours.css`.
 
+The home page's first screen has a place for the launch video. Once the video is on YouTube, write its name
+in `src/launch-video.js`. Until then a picture of the app stands there.
+
 ```sh
 npm install        # once
 npm run dev        # the site at http://localhost:4321/mp-forge/, redrawn as you edit
