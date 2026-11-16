@@ -17,6 +17,31 @@ whole first run.
 If the page has no download for your system yet, [what is and is not finished](./status.md) says where
 things stand.
 
+### The first time you open it
+
+MP Forge's installers are not signed yet, so macOS and Windows cannot tell who made it. Each stops it once,
+the first time, and you tell it to go ahead. After that it opens like any other app.
+
+**On macOS**
+
+1. Open the `.dmg` and drag MP Forge into Applications.
+2. Open MP Forge. macOS says it could not check it and does not open it. Close that message. Do not move
+   MP Forge to the Trash.
+3. Open **System Settings → Privacy & Security** and scroll down to **Security**.
+4. Beside the line about MP Forge, press **Open Anyway**, then type your Mac's password when it asks. The
+   button is there for about an hour after step 2.
+
+**On Windows**
+
+1. Run the setup file. Windows may say **Windows protected your PC**.
+2. Press **More info**, then **Run anyway**.
+
+**On Linux**
+
+Linux gives no warning. The `.deb` installs like any other package on Debian, Ubuntu and their relatives.
+The `.AppImage` runs without being installed, once it is marked as a program: tick that in the file's
+Properties, or run `chmod a+x` on it in a terminal.
+
 ## 2. Let MP Forge check your computer
 
 The first time it opens, MP Forge offers to show you round. Press **SHOW ME ROUND** for a one-minute tour,

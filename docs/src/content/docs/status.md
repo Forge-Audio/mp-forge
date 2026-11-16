@@ -20,8 +20,10 @@ All of this is written and tested by hand on a Mac.
 
 ## Still being tested
 
-- **The installers.** The installers for macOS, Windows and Linux are being built now, and the
-  [download page](/mp-forge/download/) fills when they are ready.
+- **The installers.** There are installers for macOS, Windows and Linux, and the
+  [download page](/mp-forge/download/) fills when the first release is out. They are not signed yet, so
+  macOS and Windows each warn the first time MP Forge is opened.
+  [Getting started](./getting-started.md#the-first-time-you-open-it) says what to do.
 - **Windows and Linux.** MP Forge is made to work on both. So far they are tested by automated tests, which
   build the app and run on both every time the code changes. They have not yet been tested by hand, so
   expect rough edges there.

@@ -5,6 +5,12 @@ description: The messages MP Forge shows when something is in the way, and what 
 
 ## Starting MP Forge
 
+### macOS will not open MP Forge, or Windows says it protected your PC
+
+MP Forge's installers are not signed yet, so each system stops it the first time it is opened. This
+happens once. [The first time you open it](./getting-started.md#the-first-time-you-open-it) has the steps
+for each system.
+
 ### "This computer cannot build a plugin yet."
 
 Something MP Forge cannot work without is missing: Python 3, Akai's build tools, or both. MP Forge fetches

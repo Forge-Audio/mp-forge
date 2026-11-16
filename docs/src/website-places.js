@@ -10,6 +10,7 @@ export const places = {
 	home: onTheSite('/'),
 	download: onTheSite('/download/'),
 	docs: onTheSite('/getting-started/'),
+	firstOpening: onTheSite('/getting-started/#the-first-time-you-open-it'),
 	whatYouNeed: onTheSite('/what-you-need/'),
 	choosingAnAi: onTheSite('/choosing-an-ai/'),
 	firstPlugin: onTheSite('/first-plugin/'),

@@ -101,7 +101,9 @@ What you need besides MP Forge itself:
 
 MP Forge is an early build.
 
-- **The installers are being built now.** The [download page][download] fills when they are ready.
+- **The first release is not out yet.** There are installers for macOS, Windows and Linux, and the
+  [download page][download] fills when it is. They are not signed yet, so macOS and Windows each warn the
+  first time MP Forge is opened.
 - **Written and tested by hand on a Mac.** Windows and Linux are tested by automated tests so far, not yet
   by hand.
 - **Private for now.** This repository will be made public later.
