@@ -1,8 +1,8 @@
 // Whether the app moves: the conversation sliding aside, the blacksmith's swing, new words gliding into view.
 //
-// A computer can say that its user wants less motion, and the app then keeps still. Many a Windows computer says
-// so only because its own window animations were switched off to make it quicker. So the musician may have the
-// app move whatever the computer says.
+// A computer can say that its user wants less motion. Many a Windows computer says so only because its own
+// window animations were switched off to make it quicker, so the app moves unless the musician asks it to go
+// by what the computer says. Then it keeps still whenever the computer asks for less motion.
 
 (function () {
   "use strict";
@@ -16,7 +16,7 @@
   const computerWantsLess = window.matchMedia("(prefers-reduced-motion: reduce)");
 
   function keepsStill() {
-    return recall(KEPT_AS) !== ALWAYS && computerWantsLess.matches;
+    return recall(KEPT_AS) === AS_THE_COMPUTER_SAYS && computerWantsLess.matches;
   }
 
   // The styles keep still wherever the page carries this mark.
@@ -27,7 +27,7 @@
   // The setting as the settings page draws it. The first choice is the one in force until another is picked.
   const SETTING = {
     key: KEPT_AS,
-    choices: [[AS_THE_COMPUTER_SAYS, "AS MY COMPUTER SAYS"], [ALWAYS, "ALWAYS"]],
+    choices: [[ALWAYS, "ALWAYS"], [AS_THE_COMPUTER_SAYS, "AS MY COMPUTER SAYS"]],
     whenPicked: markThePage,
   };
 

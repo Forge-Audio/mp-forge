@@ -19,14 +19,17 @@
     try { return localStorage.getItem(key); } catch (unavailable) { return null; }
   }
 
-  // What differs between a Mac, Windows and Linux in what the screen says: which key does what Cmd does on a
-  // Mac, and what the computer calls the place it keeps secrets in.
+  // What differs between a Mac, Windows and Linux in what the screen says and shows: which key does what Cmd
+  // does on a Mac, what the computer calls the place it keeps secrets in, and its scroll bars. A Mac shows a
+  // thin dark one only while something is scrolled. The others always show theirs, wide and white, so there
+  // the app draws its own.
   const SYSTEMS = [
-    { runsOn: /Mac|iPhone|iPad/, commandKey: "Cmd", secretStore: "keychain" },
-    { runsOn: /Win/, commandKey: "Ctrl", secretStore: "Credential Manager" },
-    { runsOn: /./, commandKey: "Ctrl", secretStore: "keyring" },
+    { runsOn: /Mac|iPhone|iPad/, commandKey: "Cmd", secretStore: "keychain", scrollBarsNeedDrawing: false },
+    { runsOn: /Win/, commandKey: "Ctrl", secretStore: "Credential Manager", scrollBarsNeedDrawing: true },
+    { runsOn: /./, commandKey: "Ctrl", secretStore: "keyring", scrollBarsNeedDrawing: true },
   ];
   const thisComputer = SYSTEMS.find((system) => system.runsOn.test(navigator.platform || "")) || SYSTEMS[0];
+  document.body.classList.toggle("draws-scroll-bars", thisComputer.scrollBarsNeedDrawing);
 
   window.helpers = { element, remember, recall, thisComputer };
 })();

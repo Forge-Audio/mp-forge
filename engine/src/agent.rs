@@ -12,7 +12,10 @@ use serde_json::{Value, json};
 
 use crate::stop_signal::StopSignal;
 
-const DEFAULT_TURN_LIMIT: usize = 60;
+/// How many times a model may answer one request before it is stopped. A new plugin takes a good many: Akai's
+/// documents are read, the screen and the code are written, and the plugin is built, checked and mended. A model
+/// that goes in circles spends the musician's money for as long as it is let.
+const DEFAULT_TURN_LIMIT: usize = 250;
 const CUT_OFF_BEFORE_COMPLETE: &str =
     "This request was cut off before it was complete, so nothing was done. Send it again in smaller pieces.";
 const CONTINUE_AFTER_CUT_OFF: &str = "Your last message was cut off. Continue from where you stopped.";
@@ -191,7 +194,10 @@ impl fmt::Display for AgentError {
         match self {
             AgentError::Model(error) => error.fmt(formatter),
             AgentError::Refused => write!(formatter, "The AI declined this request."),
-            AgentError::TooManyTurns(limit) => write!(formatter, "The AI had not finished after {limit} steps."),
+            AgentError::TooManyTurns(limit) => write!(
+                formatter,
+                "The AI had not finished after {limit} rounds of work, which is where MP Forge stops it so that a model going in circles cannot run up your bill. What it has done so far is kept: say \"continue\" to let it carry on."
+            ),
             AgentError::Stopped => write!(formatter, "Stopped."),
         }
     }
@@ -569,6 +575,14 @@ mod tests {
 
         assert!(matches!(result, Err(AgentError::TooManyTurns(3))));
         assert_eq!(toolbox.runs.len(), 3);
+    }
+
+    #[test]
+    fn a_model_stopped_at_the_limit_is_told_how_many_rounds_it_had_and_how_to_carry_on() {
+        let said = AgentError::TooManyTurns(DEFAULT_TURN_LIMIT).to_string();
+
+        assert!(said.starts_with("The AI had not finished after 250 rounds of work"), "{said}");
+        assert!(said.ends_with("say \"continue\" to let it carry on."), "{said}");
     }
 
     #[test]

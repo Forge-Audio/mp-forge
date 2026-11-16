@@ -86,6 +86,14 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 
 /* The bar stays on one line however many plugins there are. Only the strip of tabs gives way, and it scrolls. */
 .bar > * { flex: none; }
+/* Scroll bars the app draws itself, where the computer's own are wide and white: thin, with no track, in a
+   quiet shade of the theme. The first two lines are for Windows, the rest for a Linux that does not know them. */
+body.draws-scroll-bars { --scroll-thumb: color-mix(in srgb, var(--soft) 45%, transparent); }
+body.draws-scroll-bars * { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; }
+body.draws-scroll-bars ::-webkit-scrollbar { width: 8px; height: 8px; }
+body.draws-scroll-bars ::-webkit-scrollbar-track, body.draws-scroll-bars ::-webkit-scrollbar-corner { background: transparent; }
+body.draws-scroll-bars ::-webkit-scrollbar-thumb { background: var(--scroll-thumb); }
+
 .bar > .tabs { display: flex; flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
 .tabs .tab { flex: none; touch-action: pan-y; }

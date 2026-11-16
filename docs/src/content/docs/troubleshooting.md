@@ -152,9 +152,9 @@ building, start MP Forge again with `cargo run` from its `app` folder.
 
 ### Nothing in MP Forge moves
 
-The conversation does not slide aside and the blacksmith stands still. Your computer has told MP Forge that
-you want less motion. On Windows it says so whenever **Animation effects** is off under Settings,
-Accessibility, Visual effects. Either switch that on, or open MP Forge's Settings and set **Animations** to
-**ALWAYS**.
+The conversation does not slide aside and the blacksmith stands still. MP Forge's Settings has **Animations**
+set to **AS MY COMPUTER SAYS**, and your computer is set to show less motion: on Windows, **Animation
+effects** is off under Settings, Accessibility, Visual effects. Set **Animations** back to **ALWAYS**, which
+is what MP Forge starts with.
 
 [Where MP Forge stands](./status.md) says what works and where it has been tested.
