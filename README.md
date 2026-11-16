@@ -13,9 +13,9 @@
 
 [![GET STARTED][get-started-button]][get-started]
 
-[**Get started**][get-started] · [Download][download] · [What you need][what-you-need] · [The safety checks][safety-checks] · [Where it stands][status]
+[**Get started**][get-started] · [Download][download] · [Watch the trailer][trailer] · [What you need][what-you-need] · [The safety checks][safety-checks] · [Where it stands][status]
 
-<img src="docs/public/images/top-bar.svg" alt="MP Forge: free and open source, plugins for Akai MPC. Status: early build." width="816">
+<img src="docs/public/images/top-bar.svg" alt="MP Forge: free and open source, plugins for Akai MPC. Status: safe to send." width="816">
 
 </div>
 
@@ -99,16 +99,24 @@ What you need besides MP Forge itself:
 
 ## Where it stands
 
-MP Forge is an early build.
-
-- **The first release is not out yet.** There are installers for macOS, Windows and Linux, and the
-  [download page][download] fills when it is. They are not signed yet, so macOS and Windows each warn the
-  first time MP Forge is opened.
+- **Version 0.1.0 is out**, with installers for macOS, Windows and Linux on the [download page][download].
+  They are not signed yet, so macOS and Windows each warn the first time MP Forge is opened.
+  [Getting started][get-started] says what to do.
 - **Written and tested by hand on a Mac.** Windows and Linux are tested by automated tests so far, not yet
   by hand.
-- **Private for now.** This repository will be made public later.
 
-[What is and is not finished][status] has the full list.
+[Where MP Forge stands][status] has more.
+
+## Join in
+
+- **Talk to us** on the [Forge Audio Discord][discord]: get help, show the plugins you have made, and ask for
+  what MP Forge is missing.
+- **Keep it going.** MP Forge is free and stays free. If it is useful to you, a donation on
+  [Ko-fi][donations] helps.
+
+<p align="center">
+  <a href="https://ko-fi.com/forgeaudio"><img src="docs/public/images/donate-on-ko-fi.svg" alt="Donate on Ko-fi" width="314"></a>
+</p>
 
 ## Build from source
 
@@ -152,4 +160,7 @@ Akai Professional or inMusic Brands. MPC and Akai are trademarks of their owners
 [status]: docs/src/content/docs/status.md
 [building-from-source]: docs/src/content/docs/building-from-source.md
 [download]: https://github.com/Forge-Audio/mp-forge/releases/latest
+[trailer]: https://youtu.be/mRqsBG5l61k
+[discord]: https://discord.gg/EWkFTAEgJr
+[donations]: https://ko-fi.com/forgeaudio
 [get-started-button]: docs/public/images/get-started.svg

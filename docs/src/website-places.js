@@ -21,6 +21,7 @@ export const places = {
 	status: onTheSite('/status/'),
 	buildingFromSource: onTheSite('/building-from-source/'),
 	favicon: onTheSite('/favicon.png'),
+	koFiCup: onTheSite('/images/ko-fi-cup.svg'),
 	sitemap: onTheSite('/sitemap-index.xml'),
 	source: SOURCE,
 	discord: DISCORD,

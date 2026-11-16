@@ -4,7 +4,6 @@
 import { Image } from 'astro:assets';
 
 import LaunchVideo from '../components/LaunchVideo.astro';
-import PixelCup from '../components/PixelCup.astro';
 import Website from '../layouts/Website.astro';
 import { LAUNCH_VIDEO } from '../launch-video.js';
 import { places } from '../website-places.js';
@@ -166,7 +165,7 @@ const needs = [
 						<p>{way.words}</p>
 						<p class="choices">
 							<a class="button quiet" href={way.place}>
-								{way.withACup && <PixelCup />}
+								{way.withACup && <img src={places.koFiCup} alt="" width="32" height="22" />}
 								{way.button}
 							</a>
 						</p>
