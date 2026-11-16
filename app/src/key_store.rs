@@ -4,6 +4,8 @@
 //! A key is never written to a file, never shown again once it has been given, and never handed to the AI.
 //! Each is kept under the name of what it opens: an AI service's word, or the MPC.
 
+/// The name this computer's store files MP Forge's secrets under: the app's own identifier.
+const SERVICE: &str = "io.github.forge-audio.mp-forge";
 const LONGEST_SECRET: usize = 1024;
 const LONGEST_RECORD: usize = 64 * 1024;
 const NOT_A_KEY: &str = "That does not look like a key. A key is one unbroken run of letters, digits and marks, with no spaces.";
@@ -49,8 +51,7 @@ mod macos_keychain {
     use security_framework::item::{ItemClass, ItemSearchOptions};
     use security_framework::passwords::{delete_generic_password, get_generic_password, set_generic_password};
 
-    /// The name the keychain files the workbench's secrets under.
-    const SERVICE: &str = "com.workbench.pluginmaker";
+    use super::SERVICE;
 
     pub fn set(account: &str, secret: &str) -> Result<(), String> {
         set_generic_password(SERVICE, account, secret.as_bytes()).map_err(|refused| format!("The keychain would not keep it: {refused}"))
@@ -82,8 +83,8 @@ mod macos_keychain {
 mod system_store {
     use keyring::Entry;
 
-    /// The name the store files the workbench's secrets under.
-    const SERVICE: &str = "com.workbench.pluginmaker";
+    use super::SERVICE;
+
     /// Windows keeps at most 2,560 bytes under one name, and a character can take four of them. A longer secret
     /// is kept in pieces of this many characters.
     const LONGEST_PIECE: usize = 600;
@@ -146,6 +147,13 @@ use system_store as keychain;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn secrets_are_filed_under_the_identifier_the_app_is_installed_as() {
+        let app: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+
+        assert_eq!(app["identifier"], SERVICE);
+    }
 
     #[test]
     fn only_one_unbroken_run_of_characters_can_be_a_key() {
