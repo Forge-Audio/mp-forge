@@ -56,6 +56,7 @@ jobs:
             app
 
       - uses: actions/setup-python@v5
+        id: python
         with:
           python-version: "3.12"
 
@@ -65,11 +66,18 @@ jobs:
           git clone --quiet "$SDK_REPOSITORY" vendor/mpc-plugin-builder-sdk
           git -C vendor/mpc-plugin-builder-sdk checkout --quiet "$SDK_COMMIT"
 
-      # Akai's build script fetches its compiler the first time it builds. Kept between runs, that happens once.
+      # Akai's build script fetches its compiler and builds its tryout program the first time it builds. Both are
+      # tied to the Python that set them up, and kept between runs so that this happens once.
       - uses: actions/cache@v4
         with:
           path: vendor/mpc-plugin-builder-sdk/.sdk-tools
-          key: akais-build-tools-${{ runner.os }}-${{ hashFiles('sdk.pin') }}
+          key: akais-build-tools-${{ runner.os }}-python-${{ steps.python.outputs.python-version }}-${{ hashFiles('sdk.pin') }}
+
+      # The tests build many plugins at once, and each would otherwise try to set those tools up for itself at the
+      # same moment. Building one of Akai's own plugins first also shows whether Akai's tools work here at all.
+      - name: Build one of Akai's examples, which sets up Akai's build tools
+        working-directory: vendor/mpc-plugin-builder-sdk
+        run: python tools/build.py examples/StereoDelay
 
       - name: Test the engine
         working-directory: engine

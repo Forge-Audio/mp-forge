@@ -22,6 +22,9 @@ const BUILT_PARAMETERS: &str = "build/params.json";
 const SCREEN_LAYOUT: &str = "ui.json";
 /// Where resized kit images are kept between builds, because drawing one takes seconds.
 const SIZED_ART_CACHE: &str = "build/look-art";
+/// Akai's tools name folders by the way to them from where they were started, and on Windows there is no such
+/// way between two drives. Run through this script, a tool names a folder on another drive in full instead.
+const RUNS_A_TOOL_ACROSS_DRIVES: &str = include_str!("akai_tool_across_drives.py");
 /// The workbench's own script that draws kit images at other sizes with Akai's drawing code.
 const SIZED_ART_SCRIPT: &str = include_str!("sized_kit_art.py");
 const SCREEN_FILE_IN_BUILT_PLUGIN: &str = "Plugin Skins/TUI.json";
@@ -98,8 +101,8 @@ impl Sdk {
 
     /// Creates a working starter plugin from Akai's template, in its own folder under `plugins_dir`.
     pub fn create_plugin(&self, identity: &PluginIdentity, plugins_dir: &Path, limit: Duration) -> Result<Finished, RunError> {
-        let mut command = command_for(PYTHON);
-        command.arg(self.root.join(NEW_PLUGIN_SCRIPT)).arg(&identity.name);
+        let mut command = self.tool_that_names_folders(NEW_PLUGIN_SCRIPT);
+        command.arg(&identity.name);
         command.arg("--vendor").arg(&identity.maker);
         command.arg("--kind").arg(identity.kind.as_word());
         command.arg("--dir").arg(plugins_dir);
@@ -108,9 +111,17 @@ impl Sdk {
 
     /// Builds the plugin for both MPC chip types and for this computer, then validates the result.
     pub fn build(&self, plugin: &Path, limit: Duration) -> Result<Finished, RunError> {
-        let mut command = command_for(PYTHON);
-        command.arg(self.root.join(BUILD_SCRIPT)).arg(plugin);
+        let mut command = self.tool_that_names_folders(BUILD_SCRIPT);
+        command.arg(plugin);
         run_with_time_limit(&mut command, limit)
+    }
+
+    /// One of Akai's tools that names folders in what it says, started so that the plugins may be kept on
+    /// another drive than the SDK.
+    fn tool_that_names_folders(&self, script: &str) -> Command {
+        let mut command = command_for(PYTHON);
+        command.arg("-c").arg(RUNS_A_TOOL_ACROSS_DRIVES).arg(self.root.join(script));
+        command
     }
 
     /// Checks the finished plugin folder the build left behind, as Akai's own validator sees it.
