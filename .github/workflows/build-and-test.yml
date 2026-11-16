@@ -49,8 +49,10 @@ jobs:
       - name: Use the current Rust
         run: rustup update stable && rustup default stable
 
+      # Kept after a failed run as well, so that the run with the fix does not compile everything again.
       - uses: Swatinem/rust-cache@v2
         with:
+          cache-on-failure: true
           workspaces: |
             engine
             app

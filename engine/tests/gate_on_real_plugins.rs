@@ -126,6 +126,11 @@ fn clock_in_the_guide() -> (String, String) {
     (code.next().expect("how the clock is declared"), code.next().expect("how the clock is turned"))
 }
 
+/// On Windows, Git may hand Akai's files out with Windows line ends, and the passages looked for here have none.
+fn with_line_ends_as_akai_wrote_them(source: &str) -> String {
+    source.replace("\r\n", "\n")
+}
+
 /// A copy of Akai's delay example in a folder of its own, removed when the test ends.
 struct CopiedExample(PathBuf);
 
@@ -185,7 +190,7 @@ impl CopiedExample {
 
     fn with_the_delay_changed(self, changes: &[(&str, String)]) -> Self {
         let source_file = self.0.join("src/StereoDelay.cpp");
-        let mut source = fs::read_to_string(&source_file).unwrap();
+        let mut source = with_line_ends_as_akai_wrote_them(&fs::read_to_string(&source_file).unwrap());
         for (passage, replacement) in changes {
             assert_eq!(source.matches(passage).count(), 1, "Akai's delay no longer has exactly one `{passage}`");
             source = source.replacen(passage, replacement, 1);
