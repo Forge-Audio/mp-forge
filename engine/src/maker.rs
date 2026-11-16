@@ -33,6 +33,7 @@ use crate::samples::{Sample, SampleError, SampleShelf};
 use crate::sdk::{PluginIdentity, Sdk, native_library_of};
 use crate::stop_signal::StopSignal;
 use crate::simulation::Session;
+use crate::workspace::true_path_of;
 
 const DEFAULT_REPAIR_ROUNDS: usize = 2;
 const LONGEST_NAME: usize = 32;
@@ -418,7 +419,7 @@ impl Maker {
 
     /// An agent program starts the tool server from the plugin's folder, so every path it is given is absolute.
     fn tool_server_for(&self, tool_server_program: &Path, plugin_dir: &Path) -> io::Result<ToolServer> {
-        let absolute = |path: &Path| path.canonicalize().map(|path| path.to_string_lossy().into_owned());
+        let absolute = |path: &Path| true_path_of(path).map(|path| path.to_string_lossy().into_owned());
         let arguments = vec![SERVE_TOOLS_COMMAND.to_string(), absolute(plugin_dir)?, "--sdk".to_string(), absolute(self.sdk.root())?];
         Ok(ToolServer { program: tool_server_program.to_path_buf(), arguments })
     }

@@ -58,6 +58,28 @@ impl From<io::Error> for FileError {
     }
 }
 
+const WINDOWS_MARK_OF_A_WHOLE_PATH: &str = r"\\?\";
+const WINDOWS_MARK_OF_A_SHARED_FOLDER: &str = r"UNC\";
+
+/// The one true path of a file or folder, written the way any program can read it.
+///
+/// Windows hands such a path back marked `\\?\`, and under that mark a forward slash is no longer a step
+/// between folders. Akai's tools join their paths with forward slashes, so given a marked path they look for
+/// `pictures/lamp.png` as one oddly named file and say it is missing. The mark is taken off again here.
+pub(crate) fn true_path_of(path: &Path) -> io::Result<PathBuf> {
+    path.canonicalize().map(|marked| if cfg!(windows) { without_the_windows_mark(&marked) } else { marked })
+}
+
+fn without_the_windows_mark(path: &Path) -> PathBuf {
+    let Some(marked) = path.to_str().and_then(|written| written.strip_prefix(WINDOWS_MARK_OF_A_WHOLE_PATH)) else {
+        return path.to_path_buf();
+    };
+    match marked.strip_prefix(WINDOWS_MARK_OF_A_SHARED_FOLDER) {
+        Some(shared_folder) => PathBuf::from(format!(r"\\{shared_folder}")),
+        None => PathBuf::from(marked),
+    }
+}
+
 /// The plugin the AI is working on.
 pub struct PluginWorkspace {
     root: PathBuf,
@@ -65,7 +87,7 @@ pub struct PluginWorkspace {
 
 impl PluginWorkspace {
     pub fn open(root: &Path) -> io::Result<Self> {
-        Ok(Self { root: root.canonicalize()? })
+        Ok(Self { root: true_path_of(root)? })
     }
 
     pub fn root(&self) -> &Path {
@@ -118,7 +140,7 @@ pub struct ReferenceLibrary {
 
 impl ReferenceLibrary {
     pub fn open(sdk_root: &Path) -> io::Result<Self> {
-        Ok(Self { root: sdk_root.canonicalize()? })
+        Ok(Self { root: true_path_of(sdk_root)? })
     }
 
     pub fn list(&self) -> io::Result<Vec<String>> {
@@ -193,7 +215,7 @@ fn contained_path(root: &Path, relative: &str) -> Result<PathBuf, FileError> {
         return Err(outside());
     }
     let path = root.join(relative);
-    if nearest_existing_ancestor(&path).canonicalize()?.starts_with(root) { Ok(path) } else { Err(outside()) }
+    if true_path_of(nearest_existing_ancestor(&path))?.starts_with(root) { Ok(path) } else { Err(outside()) }
 }
 
 /// A link inside the plugin could point anywhere, so the AI never writes through one.
@@ -261,6 +283,28 @@ pub mod test_support {
 mod tests {
     use super::test_support::TemporaryFolder;
     use super::*;
+
+    #[test]
+    fn the_mark_windows_puts_on_a_whole_path_is_taken_off() {
+        assert_eq!(without_the_windows_mark(Path::new(r"\\?\C:\Users\me\plugins\Dusty Tape")), PathBuf::from(r"C:\Users\me\plugins\Dusty Tape"));
+        assert_eq!(without_the_windows_mark(Path::new(r"\\?\UNC\studio\shared\plugins")), PathBuf::from(r"\\studio\shared\plugins"));
+    }
+
+    #[test]
+    fn a_path_without_the_mark_is_left_as_it_is() {
+        assert_eq!(without_the_windows_mark(Path::new(r"D:\plugins")), PathBuf::from(r"D:\plugins"));
+        assert_eq!(without_the_windows_mark(Path::new("/home/me/plugins")), PathBuf::from("/home/me/plugins"));
+    }
+
+    #[test]
+    fn the_true_path_of_a_folder_is_one_any_program_can_read() {
+        let folder = TemporaryFolder::create("true-path");
+
+        let true_path = true_path_of(&folder.0).unwrap();
+
+        assert!(!true_path.to_string_lossy().starts_with(WINDOWS_MARK_OF_A_WHOLE_PATH), "{}", true_path.display());
+        assert!(true_path.is_dir());
+    }
 
     fn plugin_with_manifest() -> (TemporaryFolder, PluginWorkspace) {
         let folder = TemporaryFolder::create("plugin");
