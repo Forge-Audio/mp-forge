@@ -13,7 +13,7 @@
 
 [![GET STARTED][get-started-button]][get-started]
 
-[**Get started**][get-started] · [Download][download] · [Watch the trailer][trailer] · [What you need][what-you-need] · [The safety checks][safety-checks] · [Where it stands][status]
+[**Get started**][get-started] · [Website][website] · [Download][download] · [Watch the trailer][trailer] · [What you need][what-you-need] · [The safety checks][safety-checks] · [Where it stands][status]
 
 <img src="docs/public/images/top-bar.svg" alt="MP Forge: free and open source, plugins for Akai MPC. Status: safe to send." width="816">
 
@@ -103,11 +103,11 @@ What you need besides MP Forge itself:
 
 ## Where it stands
 
-- **Version 0.1.0 is out**, with installers for macOS, Windows and Linux on the [download page][download].
+- **Version 0.1.1 is out**, with installers for macOS, Windows and Linux on the [download page][download].
   They are not signed yet, so macOS and Windows each warn the first time MP Forge is opened.
   [Getting started][get-started] says what to do.
-- **Written and tested by hand on a Mac.** Windows and Linux are tested by automated tests so far, not yet
-  by hand.
+- **Written on a Mac, and tested by hand on a Mac and on Windows.** Linux is tested by automated tests so
+  far, not yet by hand.
 
 [Where MP Forge stands][status] has more.
 
@@ -154,16 +154,13 @@ MP Forge is free and open source, under the [GNU General Public License, version
 MP Forge is an independent tool made by Forge Audio. It is not affiliated with, sponsored by or endorsed by
 Akai Professional or inMusic Brands. MPC and Akai are trademarks of their owners.
 
-<!-- When the site is public:
-     - point the first line below at https://forge-audio.github.io/mp-forge/getting-started/
-     - point [download] at the website's own download page, https://forge-audio.github.io/mp-forge/download/
-     - the website's home is https://forge-audio.github.io/mp-forge/ : say so near the top of this page -->
 [get-started]: https://forge-audio.github.io/mp-forge/getting-started/
 [what-you-need]: https://forge-audio.github.io/mp-forge/what-you-need/
 [safety-checks]: https://forge-audio.github.io/mp-forge/safety-checks/
 [status]: https://forge-audio.github.io/mp-forge/status/
 [building-from-source]: https://forge-audio.github.io/mp-forge/building-from-source/
-[download]: https://github.com/Forge-Audio/mp-forge/releases/latest
+[website]: https://forge-audio.github.io/mp-forge/
+[download]: https://forge-audio.github.io/mp-forge/download/
 [trailer]: https://youtu.be/mRqsBG5l61k
 [discord]: https://discord.gg/EWkFTAEgJr
 [donations]: https://ko-fi.com/forgeaudio

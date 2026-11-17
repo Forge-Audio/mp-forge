@@ -21,8 +21,9 @@ It is free and open source, under the GNU General Public License, version 3 or l
 ## Where it has been tested
 
 - **On a Mac**, MP Forge is written, installed and used by hand.
-- **On Windows and Linux**, it is built and tested by automated tests every time the code changes. It has
-  not yet been tested by hand there.
+- **On Windows**, it is installed and used by hand as well.
+- **On Linux**, it is built and tested by automated tests every time the code changes. It has not yet been
+  tested by hand there.
 
 ## Who makes it
 

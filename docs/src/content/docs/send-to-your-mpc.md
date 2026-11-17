@@ -7,7 +7,7 @@ MP Forge sends a plugin over your network with Akai's own install tool, which is
 plugin goes into the `VST2 Plugins` folder of a USB drive or SD card in the MPC. It never goes onto the
 MPC's built-in storage, so pulling that drive out always takes the plugin away again.
 
-> **Not tried everywhere yet.** MP Forge is written and tested by hand on a Mac. Sending from Windows and
+> **Not tried everywhere yet.** Sending has been tried by hand from a Mac and from Windows. Sending from
 > Linux has not yet been tried by hand.
 
 ## Set your MPC up once
