@@ -67,7 +67,10 @@ When the plugin is built, its screen shows under **HOW IT LOOKS ON YOUR MPC**, a
 
 - Drag a control to turn it. Double-click puts it back.
 - Press a page name along the bottom of the screen to change page.
-- **The 16 hardware knobs on this page** says which of the MPC's knobs turns what.
+- **The 16 hardware knobs on this page** says which of the MPC's knobs turns what. To give a knob another
+  control, press the pencil beside it, pick the knob, then press the control on the plugin's screen that it
+  should turn. Dashes march round the knob you picked. Whatever that knob turned before takes the knob the
+  control gave up. Press the pencil again when you are done, and run the safety check before sending.
 
 The round **play** button runs the real plugin through your computer's speakers.
 
