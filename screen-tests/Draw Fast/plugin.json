@@ -1,0 +1,17 @@
+{
+  "name": "Draw Fast",
+  "manufacturer": "Workbench Tests",
+  "version": "1.0.0",
+  "format": "vst2",
+  "kind": "effect",
+  "uid": "WFs7",
+  "numInputs": 2,
+  "numOutputs": 2,
+  "category": "Effect",
+  "file32": "VST/draw-fast-arm32.so",
+  "file64": "VST/draw-fast-arm64.so",
+  "description": "Draw Fast: a screen test card. It shows the same movement at four speeds and does nothing to the sound.",
+  "author": "Workbench Tests",
+  "url": "",
+  "license": "MIT"
+}

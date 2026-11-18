@@ -16,7 +16,7 @@ import shutil
 from collections import namedtuple
 
 import test_pictures
-from card_sources import KNOBS_THAT_HOLD_A_VALUE, PICTURES_THAT_MOVE, write_readme, write_source
+from card_sources import KNOBS_THAT_HOLD_A_VALUE, PICTURES_AT_FOUR_SPEEDS, PICTURES_THAT_MOVE, write_readme, write_source
 from skin_parts import (ACCENT, CENTRED, KNOB_OVERLAY, NAME_HEIGHT, VALUE_HEIGHT, WHITE, FilmStrip, Page, bounds_of, box,
                         colour_block, control, display, entry, fixed_words, font, kit_strip, knob_component,
                         knob_overlay_component, live_words, named_knob_component, obj, parameter, picture, picture_data,
@@ -92,8 +92,8 @@ def components(folder, card):
     parts[NAMED_KNOB] = named_knob_component(strips[KIT_STRIP_FOR[LITTLE]], NAMED_KNOB_WIDTH)
     parts[WORDED_KNOB] = named_knob_component(strips[KIT_STRIP_FOR[LITTLE]], NAMED_KNOB_WIDTH, fixed_name=NEW_NAME)
     parts[KNOB_OVERLAY] = knob_overlay_component()
-    if card.shared_plugin is PICTURES_THAT_MOVE:
-        parts.update({shows(file): strip_component(test_strip(file)) for file in LIVE_STRIPS})
+    moving_strips = STRIPS_SHOWN_BY.get(card.shared_plugin, [])
+    parts.update({shows(file): strip_component(test_strip(file)) for file in moving_strips})
     return parts
 
 
@@ -376,6 +376,28 @@ def live_page():
     ] + travelling_wave(720, 310), turned_by_knobs=[LIVE_SPEED])
 
 
+# Draw Fast's parameters, in the order shared/fast_card_plugin.h declares them.
+FAST_OWN_SPEED, FAST_FIRST_SWEEP = 1, 2
+QUICK_DOT, QUICK_SPOKE = "quick_dot_strip.png", "quick_spoke_strip.png"
+FAST_ROWS = ["1  30 a second", "2  45 a second", "3  60 a second", "4  as fast as the knob says"]
+FAST_ROW_TOP, FAST_ROW_STEP = 60, 130
+STRIPS_SHOWN_BY = {PICTURES_THAT_MOVE: LIVE_STRIPS, PICTURES_AT_FOUR_SPEEDS: [QUICK_DOT, QUICK_SPOKE]}
+
+
+def speed_row(row, caption):
+    """The same dot and spoke on every row. Only how often a second they are given a new picture differs."""
+    sweep, top = FAST_FIRST_SWEEP + row, FAST_ROW_TOP + row * FAST_ROW_STEP
+    return [Note(caption, 30, top + 20),
+            display(shows(QUICK_DOT), sweep, box(330, top + 18, 400, 28)),
+            display(shows(QUICK_SPOKE), sweep, box(790, top, 64, 64))]
+
+
+def fast_page():
+    rows = [part for row, caption in enumerate(FAST_ROWS) for part in speed_row(row, caption)]
+    own_speed = [knob(FAST_OWN_SPEED, 1010, 420), Note("turn: 1 to 240 pictures a second", 900, 530)]
+    return TestPage("FAST", rows + own_speed, turned_by_knobs=[FAST_OWN_SPEED])
+
+
 CARDS = [
     Card("Test Card", [place_page(), text_page(), fonts_page(), groups_page("GROUPS", GROUP_BOXES), groups_page("NO BOX", []),
                        more_page()], ships_font=True),
@@ -385,6 +407,7 @@ CARDS = [
     Card("Draw Guess", [guess_page()]),
     Card("Draw Extras", [halo_page(), xy_page(), meter_page()]),
     Card("Draw Live", [live_page()], shared_plugin=PICTURES_THAT_MOVE),
+    Card("Draw Fast", [fast_page()], shared_plugin=PICTURES_AT_FOUR_SPEEDS),
 ]
 
 
@@ -420,7 +443,7 @@ def write_card(card):
     write_readme(card_folder)
     folder = empty_skin_folder(card_folder)
     pages = [with_notes_baked_in(page, folder) for page in card.pages]
-    pictures_used = write_skin(folder, pages, components(folder, card))
+    pictures_used = write_skin(folder, pages, components(folder, card), card.shared_plugin.parameters)
     test_pictures.save_pictures(pictures_used, folder)
     if card.ships_font:
         ship_the_font(folder)

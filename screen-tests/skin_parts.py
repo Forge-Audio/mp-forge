@@ -224,8 +224,9 @@ def knobs_on(page, tab_number):
     return obj(("Tab", tab_number), ("SubTab", 1), ("Bank Direction", "Column"), ("Q-Links", knob_numbers(parameter_for_knob)))
 
 
-def knob_file(pages):
-    first_sixteen = {knob: knob - 1 for knob in range(1, KNOB_COUNT + 1)}
+def knob_file(pages, parameter_count):
+    """Outside its own pages, the knobs turn the plugin's first parameters, as many as it has up to sixteen."""
+    first_sixteen = {knob: knob - 1 for knob in range(1, min(KNOB_COUNT, parameter_count) + 1)}
     return obj(("version", 4),
                ("info", whole_description()),
                ("Screen Mode Q-Links", obj(("version", 4), ("map", [knobs_on(page, number) for number, page in enumerate(pages, 1)]))),
@@ -248,9 +249,9 @@ def write_json(value, path):
         file.write(gen_ui.dump_json(value) + "\n")
 
 
-def write_skin(folder, pages, components):
+def write_skin(folder, pages, components, parameter_count):
     """Writes the two files the MPC reads and returns the pictures they refer to."""
     screen = screen_file(pages, components)
     write_json(screen, os.path.join(folder, "TUI.json"))
-    write_json(knob_file(pages), os.path.join(folder, "Q-Links.json"))
+    write_json(knob_file(pages, parameter_count), os.path.join(folder, "Q-Links.json"))
     return pictures_named_in(screen)

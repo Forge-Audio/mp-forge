@@ -182,6 +182,22 @@ def turning_spoke(draw, share, size=80):
     draw.line([(middle, middle), (middle + 30 * math.sin(angle), middle - 30 * math.cos(angle))], fill=ORANGE + (255,), width=6)
 
 
+def quick_dot(draw, share, width=400, height=28):
+    """A dot on a short line, for the speed test: every one of its many frames puts it somewhere new."""
+    middle, radius = height // 2, height // 2 - 2
+    draw.line([(radius + 2, middle), (width - radius - 2, middle)], fill=(90, 90, 100, 255), width=2)
+    x = radius + 2 + share * (width - 2 * radius - 4)
+    draw.ellipse([x - radius, middle - radius, x + radius, middle + radius], fill=ORANGE + (255,))
+
+
+def quick_spoke(draw, share, size=64):
+    """A spoke that goes once round its ring over the strip, for the speed test."""
+    middle, reach = size / 2, size / 2 - 8
+    angle = 2 * math.pi * share
+    draw.ellipse([3, 3, size - 4, size - 4], outline=(150, 150, 160, 255), width=3)
+    draw.line([(middle, middle), (middle + reach * math.sin(angle), middle - reach * math.cos(angle))], fill=ORANGE + (255,), width=5)
+
+
 def number_in_own_font(draw, share, width=120, height=60):
     """One reading of a 0 to 100 value, so a strip of these shows the value in a font the MPC lacks."""
     draw.text((width / 2, height / 2), str(round(share * HIGHEST_NUMBER)), font=own_font(44), fill="white", anchor="mm")
@@ -200,6 +216,9 @@ STRIPS = {
     "column_strip.png": StripShape(33, 16, 160, wave_column),
     "spoke_strip.png": StripShape(24, 80, 80, turning_spoke),
     "number_strip.png": StripShape(HIGHEST_NUMBER + 1, 120, 60, number_in_own_font),
+    # With 121 frames, a second of movement shown 120 times a second lands on a new frame every time.
+    "quick_dot_strip.png": StripShape(121, 400, 28, quick_dot),
+    "quick_spoke_strip.png": StripShape(121, 64, 64, quick_spoke),
 }
 
 

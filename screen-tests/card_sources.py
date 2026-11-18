@@ -4,9 +4,11 @@ import json
 import os
 from collections import namedtuple
 
-SharedPlugin = namedtuple("SharedPlugin", "header shared_class")
-KNOBS_THAT_HOLD_A_VALUE = SharedPlugin("test_card_plugin.h", "TestCardPlugin")
-PICTURES_THAT_MOVE = SharedPlugin("live_card_plugin.h", "LiveCardPlugin")
+# `parameters` is how many parameters the shared plugin declares.
+SharedPlugin = namedtuple("SharedPlugin", "header shared_class parameters")
+KNOBS_THAT_HOLD_A_VALUE = SharedPlugin("test_card_plugin.h", "TestCardPlugin", 16)
+PICTURES_THAT_MOVE = SharedPlugin("live_card_plugin.h", "LiveCardPlugin", 28)
+PICTURES_AT_FOUR_SPEEDS = SharedPlugin("fast_card_plugin.h", "FastCardPlugin", 6)
 
 SOURCE = """// {name} - a screen test card for the MPC, by Workbench Tests.
 //

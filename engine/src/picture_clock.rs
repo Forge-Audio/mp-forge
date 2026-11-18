@@ -36,7 +36,8 @@ const SAMPLE_RATE: u32 = 44_100;
 const FRAMES_A_LOOK: usize = 64;
 const WATCHED_FOR_SECONDS: f64 = 13.0;
 const LONGEST_TURN_SECONDS: f64 = 6.0;
-/// Thirty steps a second were seen to run smoothly on an MPC Key 37. Faster has not been tried.
+/// An MPC Key 37 showed 30 steps a second smoothly, and steps of 45, 60 and more looked no smoother.
+/// The little room above 30 is for a clock whose steps do not divide its turn evenly.
 const MOST_STEPS_A_SECOND: f64 = 32.0;
 const FEWEST_STEPS_A_TURN: usize = 4;
 const FALLS_BACK_TO_THE_START: f32 = 0.5;
@@ -199,8 +200,8 @@ fn problems_with_the_turn(control: &str, seconds: f64, steps: usize) -> Vec<Stri
     }
     if steps_a_second > MOST_STEPS_A_SECOND {
         problems.push(format!(
-            "`{control}` moves {steps_a_second:.0} times a second. An MPC has been seen to keep up with 30 and nothing faster has been tried, \
-             so make the steps fewer."
+            "`{control}` moves {steps_a_second:.0} times a second. An MPC's screen shows 30 pictures a second at most, \
+             so anything faster only costs it work. Make the steps fewer."
         ));
     }
     problems

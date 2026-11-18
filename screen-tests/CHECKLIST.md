@@ -1,12 +1,13 @@
 # Screen test cards: what to look at on the MPC
 
-Seven small effect plugins that do nothing to the sound. Their screens try things out so we can see what an
+Eight small effect plugins that do nothing to the sound. Their screens try things out so we can see what an
 MPC plugin screen really supports before building the edit mode.
 
 - **Test Card** holds the checks the edit mode depends on.
 - **Draw Path, Draw Plot, Draw Knobs, Draw Guess, Draw Extras** each hold one kind of less tested widget.
   They are kept apart because one entry the MPC dislikes blanks a card's whole screen.
 - **Draw Live** tests whether pictures can move by themselves, driven by the plugin.
+- **Draw Fast** tests how often a second a picture can be changed before more stops looking smoother.
 
 Every item has a number and a caption drawn into the page. A photo of each page is the easiest report. For a
 Draw card, "blank" or "shows its page" is already an answer.
@@ -60,6 +61,8 @@ Draw card, "blank" or "shows its page" is already an answer.
 | Can a picture loop by itself with no help from the plugin? | Yes. The spoke kept turning | Draw Live, item 8 |
 | Can a bar follow the real sound on the track? | Yes. With something playing, the level bar showed the sound level (reported, not filmed) | Draw Live, item 5 |
 | Does 30 pictures a second cost anything you can hear or see? | No. Smooth, with no crackles (reported, by ear and eye). The MPC's Resources screen read 2% CPU across 8 cores, busiest core 8%, memory 2.3 of 3.8 GB, about 47 °C | Draw Live, item 1 |
+| Does the MPC follow hardware knobs that were given other controls? | Yes. A plugin whose knobs were reassigned in MP Forge worked on the MPC (reported) | a plugin sent from MP Forge |
+| Does the MPC show more than 30 pictures a second? | **No. 30 is the cap.** Rows changed 45, 60 and up to 240 times a second looked no smoother than the row changed 30 times a second (reported) | Draw Fast |
 | How much memory does a session of loading and restarting leave behind? | Memory read 2.3 of 3.8 GB after a morning of installs and app restarts, and 1.3 GB after a full reboot. Not a clean comparison: the cards were loaded in the first reading and may not have been in the second | MPC Resources screen |
 | Does the MPC keep running an effect when nothing is playing? | Yes, so displays keep moving while the song is stopped | Draw Live |
 
@@ -97,10 +100,10 @@ page background on the computer. Renaming a control needs no change to the plugi
 ## Putting the cards on the MPC
 
 1. Save any open project on the MPC. The MPC app has to restart to see new plugins.
-2. Install or refresh all seven (put the MPC's address in place of `ADDRESS`):
+2. Install or refresh all eight (put the MPC's address in place of `ADDRESS`):
 
    ```bash
-   python3 vendor/mpc-plugin-builder-sdk/tools/mpc_remote.py ADDRESS update "screen-tests/Test Card" "screen-tests/Draw Path" "screen-tests/Draw Plot" "screen-tests/Draw Knobs" "screen-tests/Draw Guess" "screen-tests/Draw Extras" "screen-tests/Draw Live"
+   python3 vendor/mpc-plugin-builder-sdk/tools/mpc_remote.py ADDRESS update "screen-tests/Test Card" "screen-tests/Draw Path" "screen-tests/Draw Plot" "screen-tests/Draw Knobs" "screen-tests/Draw Guess" "screen-tests/Draw Extras" "screen-tests/Draw Live" "screen-tests/Draw Fast"
    ```
 
 3. Restart the MPC app:
@@ -253,6 +256,25 @@ the point is what moves by itself. A short video is better than a photo here.
 them back and expects every value to return. Draw Live keeps changing its own display values, so 26 of them do
 not come back. Nothing a musician sets is lost, and all the sound and safety checks pass. It does mean the
 workbench's safety check would block a plugin like this today, until it knows which values are display-only.
+
+### Draw Fast
+
+Four rows show the same movement: a dot that slides across in one second and back in the next, and a spoke that
+turns once round and back with it. Every row is at the same place in the movement at every moment. The rows
+differ only in how often a second the plugin gives the MPC a new picture.
+
+The pictures have 121 frames, so a row changed 120 times a second lands on a new frame every time. Draw Live's
+dot has 61 frames and takes two seconds to cross, so it can show about 30 places a second however fast it is driven.
+
+| Item | What to look for | What it tells us |
+|---|---|---|
+| 1, 2, 3 | Rows changed 30, 45 and 60 times a second. Is 2 smoother than 1? Is 3 smoother than 2? | Whether the MPC shows more than 30 pictures a second |
+| 4 | Turn the knob (1 to 240 a second). At 120, is row 4 smoother than row 3? Above what number does it stop getting smoother? | Where the MPC's own screen stops keeping up |
+| all | Does any row stutter or fall behind the others? Does the sound crackle? What does the MPC's Resources screen read with the knob at 30, 120 and 240? | What going faster costs |
+
+A phone's slow-motion video of the whole page is the surest report: by eye, 45 and 60 are hard to tell apart.
+
+Like Draw Live, this card fails the simulator's check that saved settings come back, for the same reason.
 
 ## Changing the cards
 
