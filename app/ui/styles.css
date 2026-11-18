@@ -503,7 +503,8 @@ body.keeps-still .mpc-picture.loops { animation: none; }
 /* A plugin's own screen. It mimics the MPC, not the workbench, so it has its own fonts and colours. */
 
 .mpc-screen {
-  --kit: #d31145;
+  --mpc-red: #d31145;
+  --kit: var(--mpc-red);
   --text: #ffffff;
   --muted: #6a6a6c;
   container-type: inline-size;
@@ -564,9 +565,10 @@ body.keeps-still .mpc-picture.loops { animation: none; }
 .mpc-bar { background: #434347; pointer-events: none; }
 .mpc-bar-fill { height: 100%; background: var(--kit); }
 
-.mpc-pages { display: flex; border-top: 2px solid #000000; }
-.mpc-page { flex: 1 1 0; min-height: 44px; padding: 6px 4px 8px; border: 0; border-top: 3px solid transparent; background: transparent; color: var(--device-soft); font: inherit; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; }
-.mpc-page[aria-current="page"] { border-top-color: var(--kit); color: var(--device-ink); }
+/* The page buttons are the MPC's own. It draws them alike for every plugin, one for each of its six function keys, and a plugin only names them. */
+.mpc-pages { display: flex; border-top: 2px solid #000000; background: var(--device); }
+.mpc-page { flex: 0 1 calc(100% / 6); min-width: 0; min-height: 44px; padding: 6px 4px 8px; border: 0; border-top: 3px solid transparent; background: transparent; color: var(--device-soft); font: inherit; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mpc-page[aria-current="page"] { border-top-color: var(--mpc-red); color: var(--device-ink); }
 
 /* What something is, shown beside it once the pointer has rested on it for a second. */
 .hover-name { position: fixed; z-index: 50; max-width: 280px; padding: 4px 8px; border: 2px solid var(--line); background: var(--ink); color: var(--face); box-shadow: 3px 3px 0 var(--line); font-size: 13px; line-height: 1.3; pointer-events: none; }
