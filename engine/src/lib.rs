@@ -30,6 +30,7 @@ pub mod fonts;
 pub mod frame_expression;
 pub mod gate;
 pub mod history;
+pub mod guide;
 pub mod hardware_knobs;
 pub mod hosted_plugin;
 pub mod instructions;

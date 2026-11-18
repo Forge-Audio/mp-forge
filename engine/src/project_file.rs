@@ -28,7 +28,8 @@ use crate::plugin_name;
 pub const PROJECT_FILE_ENDING: &str = "mpforge";
 
 const MANIFEST: &str = "plugin.json";
-const OTHER_FILES_AT_THE_TOP: [&str; 5] = ["ui.json", "README.md", "DESIGN.md", "pictures.json", "look.json"];
+/// The last is the words of the plugin's guide, when it has one.
+const OTHER_FILES_AT_THE_TOP: [&str; 6] = ["ui.json", "README.md", "DESIGN.md", "pictures.json", "look.json", "guide.json"];
 const CODE_FOLDER: &str = "src";
 const CODE_FILE_ENDING: &str = "cpp";
 const ARTWORK_FOLDER: &str = "artwork";

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{NAME}}: how to use it</title>
+<style>
+  :root {
+    --page: #f6f4ef;
+    --card: #ffffff;
+    --ink: #1c1b1a;
+    --soft: #5d5a55;
+    --line: #d9d5cc;
+    --accent: #d31145;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --page: #161517; --card: #201f22; --ink: #f1efea; --soft: #a9a59d; --line: #38363a; --accent: #ff4d79; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font: 17px/1.55 "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  main { max-width: 880px; margin: 0 auto; padding: 40px 20px 56px; }
+  header { border-bottom: 4px solid var(--accent); padding-bottom: 14px; margin-bottom: 22px; }
+  h1 { margin: 0; font-size: 40px; line-height: 1.1; letter-spacing: -0.01em; }
+  .what-it-is { margin: 6px 0 0; color: var(--soft); }
+  .about { font-size: 19px; margin: 0 0 8px; }
+  h2 { margin: 34px 0 12px; font-size: 14px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--soft); }
+  img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 14px; }
+  .table-holder { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 6px; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-top: 1px solid var(--line); }
+  thead th { border-top: 0; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--soft); white-space: nowrap; }
+  tbody th { white-space: nowrap; }
+  td.knob { text-align: center; font-variant-numeric: tabular-nums; color: var(--soft); }
+  .settings { margin-top: 4px; font-size: 14px; color: var(--soft); }
+  ul.presets { list-style: none; margin: 0; padding: 0; }
+  ul.presets li { padding: 8px 0; border-top: 1px solid var(--line); }
+  ul.presets li:first-child { border-top: 0; }
+  ul.presets b { display: inline-block; min-width: 9em; }
+  ol { margin: 0; padding-left: 22px; }
+  ol li { padding: 4px 0; }
+  footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 14px; color: var(--soft); }
+  a { color: var(--accent); }
+  @media print {
+    :root { --page: #ffffff; --card: #ffffff; --ink: #000000; --soft: #444444; --line: #bbbbbb; --accent: #d31145; }
+    main { padding: 0; max-width: none; }
+    section { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>{{NAME}}</h1>
+<p class="what-it-is">{{WHAT_IT_IS}}</p>
+</header>
+{{ABOUT}}
+{{SCREEN}}
+{{PRESETS}}
+{{TO_TRY}}
+<section>
+<h2>On your MPC</h2>
+<ol>
+<li>Your MPC needs MPC OS 3.10.1 or later, with External Plugin Support switched on under Preferences, Enhancements (Beta).</li>
+<li>Send the plugin from MP Forge. It goes onto a USB drive or SD card in the MPC, and shows up once the MPC's app has been restarted.</li>
+<li>{{ON_YOUR_MPC}}</li>
+<li>The sixteen hardware knobs turn the controls of the page that is showing. The table above says which knob turns which control.</li>
+</ol>
+</section>
+<footer>
+This guide was made with MP Forge, a free, open-source app for making plugins for the Akai MPC: <a href="{{WEBSITE}}">{{WEBSITE}}</a>. MP Forge and this plugin are not affiliated with Akai.
+</footer>
+</main>
+</body>
+</html>

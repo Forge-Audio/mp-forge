@@ -15,6 +15,9 @@
   const ABOUT_ANOTHER_NAME = "The name is shown on the MPC. To the MPC a plugin is known by a hidden four-letter id, which stays the same, so if both are copies of one plugin the MPC will take them for the same one.";
   const ABOUT_IMPORTING = "Bring in a plugin somebody handed you: a file saved with Export, or the folder of a plugin's project, such as one written with Akai's SDK. It comes in as a new plugin. None of yours is replaced.";
   const ONLY_FROM_PEOPLE_YOU_TRUST = "Only bring in plugins from people you trust. A plugin is a program: its safety check builds its code and runs it on this computer. The check reads the code first and stops what it knows to be harmful, but it cannot catch everything.";
+  const ABOUT_THE_GUIDE = "One page on how to use this plugin, to keep or to hand to others: a picture of its screen, what every control does, where it starts and which hardware knob turns it, its presets, and things to try. It is saved in the plugin's folder and opens in your browser, where it can be printed or saved as a PDF.";
+  const GUIDE_ASKS_THE_AI = "Its words have not been written yet. Your AI is asked for them once, which uses a little of your AI credit and takes a minute or so. They are then kept with the plugin.";
+  const WRITE_THE_GUIDE_AGAIN = "Have the AI write its words again. This uses a little of your AI credit.";
   const ABOUT_DELETING = "Its folder is moved to the Trash on this computer, with its sound, its screen, its pictures and its conversation. A copy already on your MPC is not touched.";
 
   // Answers with the name typed, or nothing when the musician thought better of it.
@@ -61,6 +64,15 @@
     return asked(sheet, { title: "IMPORT A PLUGIN", confirmWords: "CHOOSE…", holds }, () => ({ asAFolder: kind.isSecond() }));
   }
 
+  // Answers with whether the AI is to write the guide's words again, or with nothing when the musician thought
+  // better of it. Words that are not written yet are always asked for, so there is nothing to tick.
+  function askAboutTheGuide(sheet, wordsAreWritten) {
+    const again = tick(WRITE_THE_GUIDE_AGAIN);
+    const holds = [element("div", "", ABOUT_THE_GUIDE), wordsAreWritten ? again.label : element("div", "soft small", GUIDE_ASKS_THE_AI)];
+    const details = { title: "A GUIDE TO THIS PLUGIN", confirmWords: wordsAreWritten ? "OPEN IT" : "WRITE IT", holds };
+    return asked(sheet, details, () => ({ writeAgain: wordsAreWritten && again.box.checked }));
+  }
+
   // Answers true only when the musician pressed DELETE.
   function askBeforeDeleting(sheet, pluginName) {
     const question = element("div", "", `Delete ${pluginName}?`);
@@ -92,5 +104,5 @@
     return asked(sheet, details, () => ({ address: address.value.trim(), restart: restart.box.checked })).then((answer) => (answer && answer.address ? answer : null));
   }
 
-  window.pluginSheets = { askForNewName, askForAnotherName, askWhatToImport, askBeforeDeleting, askBeforeSending };
+  window.pluginSheets = { askForNewName, askForAnotherName, askWhatToImport, askAboutTheGuide, askBeforeDeleting, askBeforeSending };
 })();

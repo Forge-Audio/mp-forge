@@ -8,7 +8,7 @@
   const knobChoosing = window.knobChoosing;
   const { withKnobGiven } = window.lookEdits;
   const blacksmith = window.blacksmith;
-  const { askForNewName, askForAnotherName, askWhatToImport, askBeforeDeleting, askBeforeSending } = window.pluginSheets;
+  const { askForNewName, askForAnotherName, askWhatToImport, askAboutTheGuide, askBeforeDeleting, askBeforeSending } = window.pluginSheets;
   const versionTimeline = window.versionTimeline;
   const pluginArchitect = window.pluginArchitect;
   const appSettings = window.appSettings;
@@ -56,6 +56,9 @@
   const AI_HAS_NO_ROOM = "The AI is already building five plugins. Build this one once one of them has finished.";
   const ABOUT_THE_CONTEXT = "How much the AI is holding in mind for this request, in tokens: your words, the files it has read and the pictures it was shown. It starts again with every request. Settings has the limit at which older material is dropped to make room.";
   const TOKENS_IN_A_THOUSAND = 1000;
+  const A_GUIDE_NEEDS_A_BUILD = "A guide can be made once the plugin has been built. Run its safety check first.";
+  const AI_IS_WRITING_THE_GUIDE = "Asking the AI to write the guide. This takes a minute or so, and the guide opens in your browser when it is done.";
+  const ABOUT_A_MADE_GUIDE = "Print it or save it as a PDF from there. Its words are kept with the plugin and go along when you export it.";
   const WHAT_AN_EXPORT_HOLDS = "The file holds the plugin's code, its screen and look, its pictures and its sounds. Your conversation with the AI and the plugin's earlier versions are not in it. Whoever you give it to brings it in with IMPORT A PLUGIN.";
   const IMPORTED_AND_NOT_RUN = "**Brought in.** Nothing of it has been run yet. Run the safety check to build it, then you can see its screen, play it and change it.";
   const NO_SUCH_VERSION = "That version could not be found, so nothing was changed.";
@@ -113,6 +116,7 @@
     settingsDone: document.getElementById("settings-done"),
     moreButton: document.getElementById("more-button"),
     moreMenu: document.getElementById("more-menu"),
+    guidePlugin: document.getElementById("guide-plugin"),
     exportPlugin: document.getElementById("export-plugin"),
     renamePlugin: document.getElementById("rename-plugin"),
     deletePlugin: document.getElementById("delete-plugin"),
@@ -1443,6 +1447,33 @@
     runSafetyCheck(newName);
   }
 
+  // --- A guide to the plugin -------------------------------------------------------------------
+
+  // Asks whether to make the guide, and whether the AI is to write its words. Answers with whether it is to write
+  // them again and whether it will be asked at all, or with nothing when no guide is to be made.
+  async function guideWanted(pluginName) {
+    const guide = await ask("guide_state", { name: pluginName });
+    if (!guide.built) {
+      addMessage(pluginName, { kind: "problem", text: A_GUIDE_NEEDS_A_BUILD });
+      return null;
+    }
+    const wanted = await askAboutTheGuide(page.appSheet, guide.written);
+    return wanted && { writeAgain: wanted.writeAgain, asksTheAi: wanted.writeAgain || !guide.written };
+  }
+
+  async function makeGuideOfOpenPlugin() {
+    const pluginName = state.openName;
+    try {
+      const wanted = await guideWanted(pluginName);
+      if (!wanted) return;
+      if (wanted.asksTheAi) addMessage(pluginName, { kind: "note", text: AI_IS_WRITING_THE_GUIDE });
+      const made = await ask("make_guide", { name: pluginName, writeAgain: wanted.writeAgain, ...aiMenu.chosen() });
+      addMessage(pluginName, { kind: "note", text: `**The guide is open in your browser.** It is saved as ${made.page}. ${ABOUT_A_MADE_GUIDE}` });
+    } catch (problem) {
+      addMessage(pluginName, { kind: "problem", text: describeProblem(problem) });
+    }
+  }
+
   // --- Handing a plugin to somebody else, and bringing one in ----------------------------------
 
   async function exportOpenPlugin() {
@@ -1634,6 +1665,7 @@
       appMenu.row("Versions…", showVersions, page.goBack.disabled),
       appMenu.row("Run the safety check", checkOpenPlugin, !canBeChecked()),
       appMenu.DIVIDER,
+      appMenu.row("Guide…", makeGuideOfOpenPlugin, cannotBeTouched),
       appMenu.row("Export…", exportOpenPlugin, cannotBeTouched),
       appMenu.row("Rename…", renameOpenPlugin, cannotBeTouched),
       appMenu.row("Delete…", deleteOpenPlugin, cannotBeTouched),
@@ -1835,6 +1867,7 @@
     page.editKnobs.addEventListener("click", toggleKnobChoosing);
     page.settingsButton.addEventListener("click", () => showSettings(page.settings.hidden));
     page.settingsDone.addEventListener("click", () => showSettings(false));
+    page.guidePlugin.addEventListener("click", makeGuideOfOpenPlugin);
     page.exportPlugin.addEventListener("click", exportOpenPlugin);
     page.importPlugin.addEventListener("click", importAPlugin);
     page.renamePlugin.addEventListener("click", renameOpenPlugin);
@@ -1854,7 +1887,7 @@
   // The menu for the open plugin closes as soon as one of its rows is picked.
   function connectMoreMenu() {
     const moreMenu = window.popupMenu(page.moreButton, page.moreMenu);
-    [page.exportPlugin, page.renamePlugin, page.deletePlugin].forEach((row) => row.addEventListener("click", moreMenu.close));
+    [page.guidePlugin, page.exportPlugin, page.renamePlugin, page.deletePlugin].forEach((row) => row.addEventListener("click", moreMenu.close));
   }
 
   // One plus button offers both things that can be added. Picking either closes the menu and opens its file picker.

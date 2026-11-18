@@ -167,6 +167,8 @@
 
   // --- The demo's stand-in for the app's own arranging -----------------------------------------
 
+  const guidesWritten = new Set();
+
   // The plugin the demo pretends somebody handed over.
   const DEMO_IMPORT = "Glass Pad";
 
@@ -487,6 +489,13 @@
       },
       delete_plugin: ({ name }) => { plugins.splice(plugins.findIndex((plugin) => plugin.name === name), 1); },
       export_plugin: ({ name }) => `/Users/you/Desktop/${name}.mpforge`,
+      // The demo keeps no guide's words until one has been made, and takes a moment to pretend the AI is writing.
+      guide_state: ({ name }) => ({ built: true, written: guidesWritten.has(name) }),
+      make_guide: ({ name, writeAgain }) => {
+        const asked = writeAgain || !guidesWritten.has(name);
+        guidesWritten.add(name);
+        return new Promise((resolve) => setTimeout(() => resolve({ page: `/Users/you/MP Forge/${name}/guide.html`, asked }), asked ? 900 : 50));
+      },
       choose_plugin_to_import: ({ asAFolder }) => (asAFolder ? `/Users/you/Downloads/${DEMO_IMPORT}` : `/Users/you/Downloads/${DEMO_IMPORT}.mpforge`),
       // The demo brings in a second Glass Pad, so the question asked when a name is taken can be tried.
       import_plugin: ({ named }) => {

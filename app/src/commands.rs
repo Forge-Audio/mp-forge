@@ -27,6 +27,7 @@ use workbench_engine::claude::Claude;
 use workbench_engine::codex::{self, CodexChoices, SignIn};
 use workbench_engine::delivery::Mpc;
 use workbench_engine::fonts;
+use workbench_engine::guide::{self, Facts, GuideError, Words};
 use workbench_engine::history;
 use workbench_engine::layers::layer_from;
 use workbench_engine::library;
@@ -204,6 +205,52 @@ fn asked_of(ai: ChosenAi, idea: &architect::Idea, stop: &StopSignal) -> Result<V
         ChosenAi::Codex(_) => return Err(NO_ARCHITECT_THROUGH_CODEX.to_string()),
     };
     asked.map_err(|problem| problem.to_string())
+}
+
+/// Whether the plugin has been built, which a guide needs, and whether the words of its guide are already
+/// written for the controls and presets it has now.
+#[tauri::command]
+pub fn guide_state(name: String, workbench: State<Workbench>) -> Result<Value, String> {
+    let plugin_dir = workbench.plugin_dir(&name)?;
+    match guide::facts_of(&plugin_dir) {
+        Ok(facts) => Ok(json!({ "built": true, "written": guide::kept_words(&plugin_dir, &facts).is_some() })),
+        Err(GuideError::NotBuiltYet) => Ok(json!({ "built": false, "written": false })),
+        Err(problem) => Err(problem.to_string()),
+    }
+}
+
+/// Makes the plugin's guide, saves it in the plugin's folder as one page and opens it in the browser.
+/// The AI is asked for the guide's words only when none are kept that fit the plugin, or when it is to write
+/// them again. It is given what the plugin is and can only answer. Answers with where the page is and whether
+/// the AI was asked. Takes a while when it is, so it runs off the main thread.
+#[tauri::command(async)]
+pub fn make_guide(name: String, write_again: bool, ai: AiChoice, picks: AiPicks, workbench: State<Workbench>) -> Result<Value, String> {
+    let _claim = workbench.claim_to_change_by_hand(&name)?;
+    let plugin_dir = workbench.plugin_dir(&name)?;
+    let facts = guide::facts_of(&plugin_dir).map_err(|problem| problem.to_string())?;
+    let kept = if write_again { None } else { guide::kept_words(&plugin_dir, &facts) };
+    let asked = kept.is_none();
+    let words = match kept {
+        Some(words) => words,
+        None => words_written_and_kept(chosen_ai(ai, &picks)?, &plugin_dir, &facts)?,
+    };
+    let page = guide::write_page(&plugin_dir, &facts, &words).map_err(|problem| format!("The guide could not be saved: {problem}."))?;
+    crate::accounts::open_in_the_browser(&page.to_string_lossy())?;
+    Ok(json!({ "page": page, "asked": asked }))
+}
+
+fn words_written_and_kept(ai: ChosenAi, plugin_dir: &Path, facts: &Facts) -> Result<Words, String> {
+    let material = guide::material_for(plugin_dir, facts);
+    let written = match ai {
+        ChosenAi::ClaudeCode(settings) => guide::ask_claude_code(&material, settings, &StopSignal::default()),
+        ChosenAi::ClaudeDirect(settings) => guide::ask_model(&mut claude_signed_in(settings)?, &material),
+        ChosenAi::Chat { provider, model } => guide::ask_model(&mut chat_model_for(provider, model)?, &material),
+        ChosenAi::ChatGptPlan(model) => guide::ask_model(&mut PlanModel::new(chatgpt::KeptAccess, model), &material),
+        ChosenAi::Codex(_) => return Err(NO_GUIDE_THROUGH_CODEX.to_string()),
+    };
+    let words = written.map_err(|problem| problem.to_string())?;
+    guide::keep_words(plugin_dir, facts, &words).map_err(|problem| format!("The guide's words could not be kept: {problem}."))?;
+    Ok(words)
 }
 
 /// Rolls the dice for "I'm feeling lucky": a theme, and whether the plugin is an effect or an instrument.
@@ -596,6 +643,7 @@ const CHATGPT_NOT_SIGNED_IN: &str = "Sign in with ChatGPT first: pick one of its
 const CODEX_NOT_SIGNED_IN: &str = "Codex is not signed in. Run `codex login` in a terminal and sign in with your ChatGPT account, then try again.";
 const CODEX_NOT_INSTALLED: &str = "Codex is not installed on this computer. Pick one of the ChatGPT models from the menu at the top to see how to set it up.";
 const NO_SCOUT_THROUGH_CODEX: &str = "The dice cannot be rolled through the ChatGPT sign-in yet. Pick another model from the menu at the top and roll again.";
+const NO_GUIDE_THROUGH_CODEX: &str = "A guide's words cannot be written through the ChatGPT sign-in yet. Pick another model for the guide.";
 const NO_ARCHITECT_THROUGH_CODEX: &str = "The plugin architect cannot ask its questions through the ChatGPT sign-in yet. Pick another model for the questions, or untick the architect and build straight away.";
 
 fn codex_if_ready(picks: &AiPicks) -> Result<ChosenAi, String> {

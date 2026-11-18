@@ -156,6 +156,8 @@ fn open_window() -> ExitCode {
             commands::keep_plugins_in,
             commands::delete_plugin,
             commands::export_plugin,
+            commands::guide_state,
+            commands::make_guide,
             commands::choose_plugin_to_import,
             commands::import_plugin,
             commands::begin_editing,

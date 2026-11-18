@@ -133,7 +133,7 @@ fn patience_with_the_browser() -> Patience<'static> {
     Patience { limit: browser_sign_in::LONGEST_WAIT, has_given_up: &|| STOPPED_SIGNING_IN.load(Ordering::Relaxed) }
 }
 
-fn open_in_the_browser(page: &str) -> Result<(), String> {
+pub fn open_in_the_browser(page: &str) -> Result<(), String> {
     let (program, told_first) = OPENS_PAGES;
     command_for(program).args(told_first).arg(page).spawn().map(drop).map_err(|problem| format!("Your browser could not be opened: {problem}."))
 }
