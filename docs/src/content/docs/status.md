@@ -14,6 +14,9 @@ It is free and open source, under the GNU General Public License, version 3 or l
 - Seeing the plugin's screen as it will look on the MPC, and playing the real plugin on your computer.
 - Asking for changes, going back to an earlier version, and editing the look by hand.
 - Sending a plugin over the network to a USB drive or SD card in an MPC.
+- Handing a plugin to another musician as one file, with a one-page guide to it, and getting one ready to be
+  listed in the Open MPC catalog. [Share a plugin](./sharing-plugins.md) has all three.
+- Experimental, and off until you switch it on: [plugins that bring in sound from the internet](./online-plugins.md).
 - Installers for macOS, Windows and Linux, on the [download page](/mp-forge/download/). They are not signed
   yet, so macOS and Windows each warn the first time MP Forge is opened.
   [Getting started](./getting-started.md#the-first-time-you-open-it) says what to do.

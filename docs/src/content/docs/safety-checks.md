@@ -40,7 +40,7 @@ They run in this order and stop at the first one that blocks.
 
 | Check | What it does |
 | --- | --- |
-| **Code stays inside the plugin** | Reads the plugin's code for things no plugin should do: starting other programs, using the network, starting its own threads, writing or deleting files, loading other code, stopping the MPC's app or pausing its audio. This comes first, before any of the plugin's code is run on your computer. |
+| **Code stays inside the plugin** | Reads the plugin's code for things no plugin should do: starting other programs, using the network, starting its own threads, writing or deleting files, loading other code, stopping the MPC's app or pausing its audio. This comes first, before any of the plugin's code is run on your computer. The one way round is experimental and off until you switch it on: [a plugin that goes online](./online-plugins.md) through MP Forge's own helper. |
 | **Pictures can be drawn** | Every picture on the plugin's screen can be drawn. |
 | **Builds for every MPC** | Akai's tools build the plugin for both kinds of chip MPCs use, and for your computer, then Akai's validator checks the result. |
 | **Screen loads with its pictures** | The finished screen, with its pictures and anything you arranged by hand, passes Akai's validator. |
