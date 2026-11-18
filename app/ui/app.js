@@ -8,7 +8,7 @@
   const knobChoosing = window.knobChoosing;
   const { withKnobGiven } = window.lookEdits;
   const blacksmith = window.blacksmith;
-  const { askForNewName, askBeforeDeleting, askBeforeSending } = window.pluginSheets;
+  const { askForNewName, askForAnotherName, askWhatToImport, askBeforeDeleting, askBeforeSending } = window.pluginSheets;
   const versionTimeline = window.versionTimeline;
   const pluginArchitect = window.pluginArchitect;
   const appSettings = window.appSettings;
@@ -56,6 +56,8 @@
   const AI_HAS_NO_ROOM = "The AI is already building five plugins. Build this one once one of them has finished.";
   const ABOUT_THE_CONTEXT = "How much the AI is holding in mind for this request, in tokens: your words, the files it has read and the pictures it was shown. It starts again with every request. Settings has the limit at which older material is dropped to make room.";
   const TOKENS_IN_A_THOUSAND = 1000;
+  const WHAT_AN_EXPORT_HOLDS = "The file holds the plugin's code, its screen and look, its pictures and its sounds. Your conversation with the AI and the plugin's earlier versions are not in it. Whoever you give it to brings it in with IMPORT A PLUGIN.";
+  const IMPORTED_AND_NOT_RUN = "**Brought in.** Nothing of it has been run yet. Run the safety check to build it, then you can see its screen, play it and change it.";
   const NO_SUCH_VERSION = "That version could not be found, so nothing was changed.";
   const NOT_SENT_UNTIL_SAFE = "A plugin has to pass its safety check before it can be sent to your MPC. Press the status at the top to run the check.";
   const SHOWS_AFTER_A_RESTART = "It shows in the MPC's plugin list once the MPC's app has next been restarted.";
@@ -92,6 +94,7 @@
     starters: document.getElementById("starters"),
     feelLucky: document.getElementById("feel-lucky"),
     remix: document.getElementById("remix"),
+    importPlugin: document.getElementById("import-plugin"),
     remixOf: document.getElementById("remix-of"),
     remixOfWords: document.getElementById("remix-of-words"),
     remixOfClear: document.getElementById("remix-of-clear"),
@@ -110,6 +113,7 @@
     settingsDone: document.getElementById("settings-done"),
     moreButton: document.getElementById("more-button"),
     moreMenu: document.getElementById("more-menu"),
+    exportPlugin: document.getElementById("export-plugin"),
     renamePlugin: document.getElementById("rename-plugin"),
     deletePlugin: document.getElementById("delete-plugin"),
     appSheet: document.getElementById("app-sheet"),
@@ -1439,6 +1443,49 @@
     runSafetyCheck(newName);
   }
 
+  // --- Handing a plugin to somebody else, and bringing one in ----------------------------------
+
+  async function exportOpenPlugin() {
+    const pluginName = state.openName;
+    try {
+      const savedAt = await ask("export_plugin", { name: pluginName });
+      if (savedAt) addMessage(pluginName, { kind: "note", text: exportedNote(savedAt) });
+    } catch (problem) {
+      addMessage(pluginName, { kind: "problem", text: describeProblem(problem) });
+    }
+  }
+
+  function exportedNote(savedAt) {
+    return `**Exported** to ${savedAt}. ${WHAT_AN_EXPORT_HOLDS}`;
+  }
+
+  // Takes the picked plugin in, asking for another name for as long as the one it would have is taken.
+  // Answers with the name it came in under, or with nothing when the musician gave up.
+  async function takeIn(from, named) {
+    const taken = await ask("import_plugin", { from, named: named || null });
+    if (taken.name) return taken.name;
+    const anotherName = await askForAnotherName(page.appSheet, taken.nameTaken);
+    return anotherName ? takeIn(from, anotherName) : null;
+  }
+
+  async function showImported(pluginName) {
+    await refreshLibrary();
+    await open(pluginName);
+    addMessage(pluginName, { kind: "note", text: IMPORTED_AND_NOT_RUN });
+  }
+
+  async function importAPlugin() {
+    const what = await askWhatToImport(page.appSheet);
+    if (!what) return;
+    try {
+      const from = await ask("choose_plugin_to_import", { asAFolder: what.asAFolder });
+      const pluginName = from && (await takeIn(from));
+      if (pluginName) await showImported(pluginName);
+    } catch (problem) {
+      addMessage(state.openName, { kind: "problem", text: describeProblem(problem) });
+    }
+  }
+
   async function deleteOpenPlugin() {
     const pluginName = state.openName;
     if (!(await askBeforeDeleting(page.appSheet, pluginName))) return;
@@ -1587,6 +1634,7 @@
       appMenu.row("Versions…", showVersions, page.goBack.disabled),
       appMenu.row("Run the safety check", checkOpenPlugin, !canBeChecked()),
       appMenu.DIVIDER,
+      appMenu.row("Export…", exportOpenPlugin, cannotBeTouched),
       appMenu.row("Rename…", renameOpenPlugin, cannotBeTouched),
       appMenu.row("Delete…", deleteOpenPlugin, cannotBeTouched),
     ];
@@ -1606,7 +1654,7 @@
     ];
   }
 
-  const ROWS_FOR_ANYWHERE = [appMenu.row("New plugin", () => open(NEW_PLUGIN)), appMenu.row("Settings", () => showSettings(true)), appMenu.row("Show me round", showTheGuide)];
+  const ROWS_FOR_ANYWHERE = [appMenu.row("New plugin", () => open(NEW_PLUGIN)), appMenu.row("Import a plugin…", importAPlugin), appMenu.row("Settings", () => showSettings(true)), appMenu.row("Show me round", showTheGuide)];
 
   // What the right-click menu offers depends on what was clicked. The editor has a menu of its own for its page.
   function rowsForWhatWasClicked(target) {
@@ -1787,6 +1835,8 @@
     page.editKnobs.addEventListener("click", toggleKnobChoosing);
     page.settingsButton.addEventListener("click", () => showSettings(page.settings.hidden));
     page.settingsDone.addEventListener("click", () => showSettings(false));
+    page.exportPlugin.addEventListener("click", exportOpenPlugin);
+    page.importPlugin.addEventListener("click", importAPlugin);
     page.renamePlugin.addEventListener("click", renameOpenPlugin);
     page.deletePlugin.addEventListener("click", deleteOpenPlugin);
     page.message.addEventListener("keydown", sendOnEnter);
@@ -1804,7 +1854,7 @@
   // The menu for the open plugin closes as soon as one of its rows is picked.
   function connectMoreMenu() {
     const moreMenu = window.popupMenu(page.moreButton, page.moreMenu);
-    [page.renamePlugin, page.deletePlugin].forEach((row) => row.addEventListener("click", moreMenu.close));
+    [page.exportPlugin, page.renamePlugin, page.deletePlugin].forEach((row) => row.addEventListener("click", moreMenu.close));
   }
 
   // One plus button offers both things that can be added. Picking either closes the menu and opens its file picker.

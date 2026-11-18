@@ -27,12 +27,18 @@ struct Renaming<'names> {
 /// Renames the plugin in `plugins_dir`. The caller has already made sure the new name is a usable one that is free.
 pub fn rename(plugins_dir: &Path, old_name: &str, new_name: &str) -> io::Result<()> {
     let plugin_dir = plugins_dir.join(old_name);
-    let renaming = Renaming { old_name, new_name };
-    for folder in folders_holding_its_name(&plugin_dir) {
-        rename_inside(&folder, &renaming)?;
-    }
+    rename_where_it_is_written(&plugin_dir, old_name, new_name)?;
     remove_if_present(&plugin_dir.join(BUILD_FOLDER))?;
     fs::rename(&plugin_dir, plugins_dir.join(new_name))
+}
+
+/// Gives the plugin in this folder another name wherever its files state it, and leaves the folder where it is.
+pub fn rename_where_it_is_written(plugin_dir: &Path, old_name: &str, new_name: &str) -> io::Result<()> {
+    let renaming = Renaming { old_name, new_name };
+    for folder in folders_holding_its_name(plugin_dir) {
+        rename_inside(&folder, &renaming)?;
+    }
+    Ok(())
 }
 
 /// Moves the plugin's folder to where this computer keeps what was thrown away: the Trash on a Mac, the Recycle
@@ -96,7 +102,7 @@ fn ends_with_each_in_turn(text: &str, words: [&str; 2]) -> bool {
 }
 
 /// The name as Akai's tools write it into file names: small letters and digits, with a hyphen for anything else.
-fn slug_of(name: &str) -> String {
+pub(crate) fn slug_of(name: &str) -> String {
     name.to_ascii_lowercase().chars().map(|letter| if letter.is_ascii_alphanumeric() { letter } else { '-' }).collect()
 }
 

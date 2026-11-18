@@ -59,6 +59,7 @@ pub mod plugin_name;
 pub mod plugin_tools;
 pub mod process;
 pub mod readiness;
+pub mod project_file;
 pub mod providers;
 pub mod samples;
 pub mod screen_layout;

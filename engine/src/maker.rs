@@ -27,6 +27,7 @@ use crate::kept_look::{self, NotKept};
 use crate::look::{self, Look};
 use crate::other_looks::note_on_other_looks;
 use crate::plugin_name;
+use crate::project_file::{self, NotTakenIn};
 use crate::plugin_tools::PluginTools;
 use crate::process::RunError;
 use crate::samples::{Sample, SampleError, SampleShelf};
@@ -355,6 +356,18 @@ impl Maker {
             NotKept::DoesNotFit(problems) => MakeError::LookDoesNotFit(problems),
             NotKept::CouldNotBeWritten(error) => MakeError::from(error),
         })
+    }
+
+    /// Packs the plugin's project into one file to hand to somebody else. Its builds, its earlier versions and its
+    /// conversation stay behind.
+    pub fn export_project(&self, plugin_name: &str, into: &Path) -> Result<(), MakeError> {
+        Ok(project_file::pack(&self.existing_plugin(plugin_name)?, into)?)
+    }
+
+    /// Takes in a project from a packed file or from a folder as a new plugin, and returns the plugin's name.
+    /// Nothing of it is run, and a plugin that is already there is never replaced.
+    pub fn import_project(&self, from: &Path, named: Option<&str>) -> Result<String, NotTakenIn> {
+        project_file::take_in(from, &self.plugins_dir, named)
     }
 
     /// Gives a plugin another name. Its build is thrown away, so it needs its safety check again.

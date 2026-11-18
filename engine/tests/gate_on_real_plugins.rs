@@ -21,6 +21,7 @@ use workbench_engine::picture_clock::{CLOCK_CONTROL, turn_seconds_of};
 use workbench_engine::picture_review::HOW_TO_READ_THE_PICTURES;
 use workbench_engine::pictures::pictures_of;
 use workbench_engine::plugin_tools::PluginTools;
+use workbench_engine::project_file::{pack, take_in};
 use workbench_engine::sdk::{Sdk, built_screen_file, native_library_of};
 use workbench_engine::simulation::Session;
 
@@ -361,6 +362,50 @@ fn a_plugin_whose_knobs_the_musician_chose_is_let_through_with_them_in_its_built
     assert_eq!(turned_by(9), built_control_number(&plugin.0, "Feedback"));
     assert_eq!(turned_by(16), built_control_number(&plugin.0, "Low Cut"));
     assert_eq!(turned_by(13), built_control_number(&plugin.0, "Sync"));
+}
+
+/// A folder of plugins on its own, removed when the test ends.
+struct PluginsFolder(PathBuf);
+
+impl PluginsFolder {
+    fn empty(label: &str) -> Self {
+        let folder = std::env::temp_dir().join(format!("workbench-gate-plugins-{label}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&folder);
+        Self(folder)
+    }
+}
+
+impl Drop for PluginsFolder {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+#[test]
+fn akais_delay_handed_over_as_a_file_and_taken_in_under_another_name_is_let_through() {
+    let plugins = PluginsFolder::empty("handed-over");
+    let packed = plugins.0.join("Stereo Delay.mpforge");
+
+    let from_its_folder = take_in(&akai_example("StereoDelay"), &plugins.0, None).unwrap();
+    pack(&plugins.0.join(&from_its_folder), &packed).unwrap();
+    let from_the_file = take_in(&packed, &plugins.0, Some("Borrowed Delay")).unwrap();
+
+    assert_eq!((from_its_folder.as_str(), from_the_file.as_str()), ("Stereo Delay", "Borrowed Delay"));
+    assert!(!plugins.0.join("Stereo Delay/build").exists(), "what Akai's example had built should stay behind");
+    let report = gate().inspect(&plugins.0.join("Borrowed Delay"));
+    assert!(report.may_be_sent(), "{report:#?}");
+}
+
+#[test]
+fn a_plugin_taken_in_that_starts_a_program_is_blocked_before_any_of_its_code_runs() {
+    let plugins = PluginsFolder::empty("handed-over-harmful");
+
+    let taken_in = take_in(&broken_plugin("Shell Effect"), &plugins.0, None).unwrap();
+
+    let report = gate().inspect(&plugins.0.join(&taken_in));
+    assert!(blocking_details(&report, SOURCE_CHECK).contains("starts another program"));
+    assert_eq!(report.outcome_of(BUILD_CHECK), Some(&Outcome::NotRun));
+    assert!(!plugins.0.join(&taken_in).join("build").exists(), "a blocked plugin must never be built");
 }
 
 #[test]

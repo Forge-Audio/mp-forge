@@ -37,6 +37,7 @@ use workbench_engine::page_art;
 use workbench_engine::picture_clock;
 use workbench_engine::pictures::Picture;
 use workbench_engine::process::command_for;
+use workbench_engine::project_file::{NotTakenIn, PROJECT_FILE_ENDING};
 use workbench_engine::readiness;
 use workbench_engine::maker::{Connection, Delivery, MakeError, Maker, PluginRequest, Sending};
 use workbench_engine::providers::{ANTHROPIC, Provider};
@@ -70,6 +71,9 @@ const CLIPBOARD_READERS: &[ClipboardReader] = if cfg!(target_os = "macos") {
 const CLIPBOARD_NOT_READ: &str = "The clipboard could not be read on this computer.";
 const CHOOSE_A_PLUGINS_FOLDER: &str = "Choose the folder to keep your plugins in";
 const CHOOSE_A_TEST_SOUND: &str = "Choose a sound to play through the effect";
+const SAVE_THE_PLUGIN_AS: &str = "Save this plugin to hand to somebody else";
+const CHOOSE_A_PLUGIN_TO_IMPORT: &str = "Choose the plugin to bring in";
+const PACKED_PLUGINS: &str = "MP Forge plugin";
 /// The program that shows a folder in the computer's own file manager.
 #[cfg(target_os = "macos")]
 const OPENS_FOLDERS: &str = "open";
@@ -431,6 +435,40 @@ fn nearest_folder_found(folder: &Path) -> PathBuf {
 pub fn rename_plugin(name: String, new_name: String, workbench: State<Workbench>) -> Result<(), String> {
     let _claim = workbench.claim_to_change_by_hand(&name)?;
     workbench.maker()?.rename_plugin(&name, &new_name).map_err(explain)
+}
+
+/// Lets the musician choose where to save the plugin's project as one file, and packs it there. The file holds
+/// what makes the plugin and nothing of its builds, its earlier versions or its conversation.
+/// Answers with where it was saved, or with nothing when they chose nowhere.
+#[tauri::command(async)]
+pub fn export_plugin(name: String, app: AppHandle, workbench: State<Workbench>) -> Result<Option<PathBuf>, String> {
+    let chooser = app.dialog().file().set_title(SAVE_THE_PLUGIN_AS).set_file_name(format!("{name}.{PROJECT_FILE_ENDING}"));
+    let Some(picked) = chooser.add_filter(PACKED_PLUGINS, &[PROJECT_FILE_ENDING]).blocking_save_file() else { return Ok(None) };
+    let file = picked.into_path().map_err(|problem| format!("That place cannot be used: {problem}."))?.with_extension(PROJECT_FILE_ENDING);
+    let _claim = workbench.claim_to_change_by_hand(&name)?;
+    workbench.maker()?.export_project(&name, &file).map_err(explain)?;
+    Ok(Some(file))
+}
+
+/// Lets the musician pick a plugin to bring in: a file packed by MP Forge, or the folder of a plugin's project.
+/// Answers with where it is, or with nothing when they picked nothing. Nothing is read yet.
+#[tauri::command(async)]
+pub fn choose_plugin_to_import(as_a_folder: bool, app: AppHandle) -> Result<Option<PathBuf>, String> {
+    let chooser = app.dialog().file().set_title(CHOOSE_A_PLUGIN_TO_IMPORT);
+    let picked = if as_a_folder { chooser.blocking_pick_folder() } else { chooser.add_filter(PACKED_PLUGINS, &[PROJECT_FILE_ENDING]).blocking_pick_file() };
+    picked.map(|picked| picked.into_path().map_err(|problem| format!("That cannot be used: {problem}."))).transpose()
+}
+
+/// Takes the picked project in as a new plugin, under `named` when a name is given. Nothing of it is run.
+/// Answers with the new plugin's `name`, or with `nameTaken` when there is already a plugin of its name,
+/// so the musician can pick another.
+#[tauri::command(async)]
+pub fn import_plugin(from: PathBuf, named: Option<String>, workbench: State<Workbench>) -> Result<Value, String> {
+    match workbench.maker()?.import_project(&from, named.as_deref()) {
+        Ok(name) => Ok(json!({ "name": name })),
+        Err(NotTakenIn::NameTaken(name)) => Ok(json!({ "nameTaken": name })),
+        Err(not_taken_in) => Err(not_taken_in.to_string()),
+    }
 }
 
 /// Moves a plugin's folder to the Trash. A plugin that is being worked on stays until that has finished.

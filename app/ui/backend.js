@@ -167,6 +167,9 @@
 
   // --- The demo's stand-in for the app's own arranging -----------------------------------------
 
+  // The plugin the demo pretends somebody handed over.
+  const DEMO_IMPORT = "Glass Pad";
+
   function demoPageLook(look, pageName) {
     const page = look.pages.find((known) => known.page === pageName) || {};
     return { items: page.items || [], artwork: page.artwork || [], added: page.added || [], removed: page.removed || [], knobs: page.knobs || [] };
@@ -483,6 +486,16 @@
         [DEMO_SCREENS, DEMO_PICTURES, looks, samples].forEach((known) => { known[newName] = known[name]; delete known[name]; });
       },
       delete_plugin: ({ name }) => { plugins.splice(plugins.findIndex((plugin) => plugin.name === name), 1); },
+      export_plugin: ({ name }) => `/Users/you/Desktop/${name}.mpforge`,
+      choose_plugin_to_import: ({ asAFolder }) => (asAFolder ? `/Users/you/Downloads/${DEMO_IMPORT}` : `/Users/you/Downloads/${DEMO_IMPORT}.mpforge`),
+      // The demo brings in a second Glass Pad, so the question asked when a name is taken can be tried.
+      import_plugin: ({ named }) => {
+        const name = named || DEMO_IMPORT;
+        if (plugins.some((plugin) => plugin.name === name)) return { nameTaken: name };
+        plugins.push({ ...plugins.find((plugin) => plugin.name === DEMO_IMPORT), name });
+        [DEMO_SCREENS, DEMO_PICTURES, looks, samples].forEach((known) => { known[name] = known[DEMO_IMPORT]; });
+        return { name };
+      },
       stop_work: ({ name }) => stopPretendingToWork(name),
       attachment_image: () => { throw "The demo keeps no pictures."; },
       // The demo's player makes no sound, but it plays in silence, so the piano and the presets can be tried.
