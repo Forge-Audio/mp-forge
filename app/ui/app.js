@@ -33,7 +33,6 @@
 
   const NEW_PLUGIN = null;
   const STATUS = { noPlugin: "NO PLUGIN YET", unchecked: "NOT CHECKED YET", working: "WORKING", building: "BUILDING", checking: "CHECKING", sending: "SENDING", listing: "GETTING READY", stopping: "STOPPING", safe: "SAFE TO SEND", blocked: "BLOCKED" };
-  const SMITH_WORKS_WHILE = [STATUS.building, STATUS.checking, STATUS.stopping];
   // Whatever the musician did not say themselves is said by MP Forge, whichever AI did the work.
   const SPEAKER = { you: "You", mpForge: "MP Forge" };
   const WAITS_ITS_TURN = `${SPEAKER.you} · waiting its turn`;
@@ -589,7 +588,8 @@
     page.send.disabled = canTakeNoRequest() && !canBeStoppedHere() && !typedWaitsItsTurn();
   }
 
-  // A plugin being worked on cannot be played. A sound that is playing can always be stopped.
+  // A plugin being worked on cannot be played, and the blacksmith is at work for as long as that lasts.
+  // A sound that is playing can always be stopped.
   function playCannotBePressed() {
     return state.openName === NEW_PLUGIN || (isBeingWorkedOn(state.openName) && !livePlayer.isSounding());
   }
@@ -865,12 +865,11 @@
 
   // The status is the open plugin's. When that plugin has not been checked, pressing the status offers to check it.
   // Work on any other plugin shows on that plugin's tab.
-  // While it is being built or checked, the blacksmith covers its view, with what he is doing written under him.
-  // A plugin the AI has only just begun has no screen to look at yet, so he works there until it has one.
+  // The blacksmith covers the plugin's view for as long as the plugin is out of reach, with what is being done
+  // written under him. That is exactly as long as its Play button is held: from the moment the AI starts on it,
+  // through building and checking, and while it is sent or got ready for a catalog.
   function smithIsAtWork() {
-    const hasNoScreenOfItsOwn = isAwaitingItsScreen(state.openPlugin) || !hasPagesToArrange(state.openPlugin);
-    const isBeingBegun = state.aiJobs.has(state.openName) && hasNoScreenOfItsOwn;
-    return isBeingBegun || SMITH_WORKS_WHILE.includes(statusOf(state.openName));
+    return isBeingWorkedOn(state.openName);
   }
 
   function drawSmith() {
