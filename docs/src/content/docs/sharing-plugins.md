@@ -121,12 +121,20 @@ anywhere. In it:
 | | What it is | Where it goes |
 | --- | --- | --- |
 | **START HERE** | The three steps, with your repository's name and the file names filled in. | Read it first. |
-| **1 - put in your repository** | The plugin's code, screen and pictures, the licence, and a README made from its guide, with pictures of its screen. | A public repository of yours on GitHub. |
+| **1 - put in your repository** | The plugin's code, screen and pictures, the licence, and a README made from its guide, with pictures of its screen and how to put the plugin on an MPC. | A public repository of yours on GitHub. |
 | **2 - attach to your release** | The built plugin as one zip. | A release in that repository. |
 | **3 - add to the catalog** | The small file that asks for the listing. | A pull request to Open MPC's catalog. |
 
+The catalog is not your repository, so GitHub will not let you put a file straight into it. Press **Fork** on
+the catalog's page to make a copy of your own, upload the file into `catalog/plugins` in that copy on a new
+branch, and GitHub turns it into a pull request. START HERE has the steps one by one, with the checksum the
+pull request's form asks for.
+
 One of Open MPC's maintainers reads the pull request and merges it. The catalog then fetches your release,
 checks the zip, and lists the plugin.
+
+Your plugin does not have to wait for that. Once the release is published, anyone can download the zip from
+your repository and copy it onto a drive for their MPC. The README says how.
 
 Things to know first:
 
@@ -135,7 +143,8 @@ Things to know first:
 - **The name on the card is your maker name.** It is public.
 - **It is listed for MPC OS 3.** MP Forge's screens use parts that MPC OS 2 does not have.
 - **A plugin that goes online is looked at by a person.** Open MPC's check marks plugins that use the
-  network, so say in your pull request what it fetches.
+  network, so say in your pull request what it fetches. The repository gets the whole of MP Forge's stream
+  helper with it, so a reviewer can read every line that touches the network.
 - **A later version** needs a higher version number and a new release. MP Forge does not change the number
   for you yet.
 
