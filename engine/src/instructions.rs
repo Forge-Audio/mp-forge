@@ -125,6 +125,15 @@ mod tests {
     }
 
     #[test]
+    fn the_instructions_ask_for_a_default_preset_first_and_leave_older_plugins_presets_in_order() {
+        let instructions = for_making_plugins();
+
+        assert!(instructions.contains("A first preset named `Default`, which holds every control at its starting value"));
+        assert!(instructions.contains("`addProgram(\"Default\", { ... })`"));
+        assert!(instructions.contains("add `Default` at the front only when the musician asks for it"));
+    }
+
+    #[test]
     fn the_instructions_never_change_between_requests() {
         assert_eq!(for_making_plugins(), for_making_plugins());
     }

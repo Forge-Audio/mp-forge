@@ -21,7 +21,9 @@ One raw oscillator into a filter, or a textbook delay with a Mix knob, is correc
 - **Let an effect listen.** An effect hears no notes, but it does hear the sound coming in and the song's tempo. Movement that follows how loud the input is, and times that lock to the tempo (cookbook section 9), make an effect feel played. Give it a `Mix` unless it only makes sense fully on.
 - **Keep it alive.** A sound that is the same from the start of a note to its end, and the same on every note, is the sound's version of an untouched grid. Small differences between voices, slow drift, and something that moves while a note is held bring it to life. See "Movement and routing" below.
 - **Good from the first note.** The starting settings are the first thing heard. They should show the plugin's idea at once, at a level that sits well with other plugins.
-- **Presets show the range.** Three to eight, each a different use and not a small variation, named for what is heard (`Seasick Tape`, `Glass Bells`). Keep them about equally loud. Between them they use every kind of movement the plugin has.
+- **The first preset is `Default`.** Write it first, with exactly the starting value of every control, in the controls' order: `addProgram("Default", { ... })`. An MPC shows the first preset's name when the plugin loads, so the name and the sound then agree, and choosing `Default` always brings the plugin back to how it began. When you change a control's starting value, change it in `Default` too.
+- **The other presets show the range.** Three to eight after `Default`, each a different use and not a small variation, named for what is heard (`Seasick Tape`, `Glass Bells`). Keep them about equally loud. Between them they use every kind of movement the plugin has.
+- **A plugin that already has presets keeps their order.** An MPC project remembers its preset by its place in the list. If a plugin you are asked to change has presets and no `Default`, leave them as they are, and add `Default` at the front only when the musician asks for it.
 - **Know the signs of a default.** You have not designed a sound yet if: nothing changes while a note is held; playing harder only makes it louder; half a knob's travel does nothing; every preset is the first one with two knobs moved; the only thing between this and the example plugin is its name.
 
 ## Keep the sound clean
@@ -83,5 +85,5 @@ You can look at the screen. You cannot listen to the sound. So be stricter here,
 - Notes start and stop without a click, and nothing sounds after all notes are off.
 - No setting of the knobs clips, and the starting settings are neither quiet nor hot.
 - Something moves in the sound, unless the musician asked for it still.
-- The presets differ from each other, are about equally loud, and show the movement.
+- The first preset is `Default` and holds every control's starting value. The presets after it differ from each other, are about equally loud, and show the movement.
 - The check passed with no warning about the sound that you have not dealt with.

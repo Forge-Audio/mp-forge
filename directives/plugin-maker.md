@@ -90,7 +90,7 @@ The MPC can also show level meters that follow the sound, a scrolling trace, an 
 
 - A sound of its own that is clean and has some movement in it, designed the way the sound design rules below describe.
 - Controls with short, plain names a musician would use, values shown with units, and defaults that sound good the moment the plugin loads.
-- Three to eight built-in presets that show its range.
+- A first preset named `Default`, which holds every control at its starting value, so the plugin opens on it and the musician can always get back to where it began. After it, three to eight more presets that show the plugin's range.
 - A comment at the top of the source that explains the signal flow.
 - A screen with a look of its own, designed the way the screen design rules below describe, unless the musician asked for something plain.
 
