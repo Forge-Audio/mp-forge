@@ -1,5 +1,6 @@
 // What the musician did by hand to a plugin's screen: where they put things, what they renamed and resized,
-// how they laid out the inside of a control, the artwork behind each page, and what they added or took off.
+// how they laid out the inside of a control, the artwork behind each page, what they added or took off, and
+// the hardware knobs they chose for a page's controls.
 //
 // A look holds only what was changed, page by page, in the shape the app keeps in the plugin's look.json.
 // Nothing here draws or talks to the app. Every function hands back a new look and leaves the old one alone.
@@ -16,11 +17,11 @@
 
   function pageOf(look, pageName) {
     const known = look.pages.find((page) => page.page === pageName) || {};
-    return { page: pageName, items: known.items || [], artwork: known.artwork || [], added: known.added || [], removed: known.removed || [] };
+    return { page: pageName, items: known.items || [], artwork: known.artwork || [], added: known.added || [], removed: known.removed || [], knobs: known.knobs || [] };
   }
 
   function saysNothing(page) {
-    return !page.items.length && !page.artwork.length && !page.added.length && !page.removed.length;
+    return !page.items.length && !page.artwork.length && !page.added.length && !page.removed.length && !page.knobs.length;
   }
 
   // The look with one page replaced. A page with nothing left to say is dropped, and empty lists are not written.
@@ -28,8 +29,30 @@
     const others = look.pages.filter((known) => known.page !== page.page);
     if (saysNothing(page)) return { pages: others };
     const written = { page: page.page, items: page.items };
-    ["artwork", "added", "removed"].filter((list) => page[list].length).forEach((list) => { written[list] = page[list]; });
+    ["artwork", "added", "removed", "knobs"].filter((list) => page[list].length).forEach((list) => { written[list] = page[list]; });
     return { pages: [...others, written] };
+  }
+
+  // --- The hardware knobs ----------------------------------------------------------------------
+
+  // The knob each control has once `controlName` is turned by `knob`. Whatever that knob turned before takes the
+  // knob the control gives up, so no control is ever left without one.
+  function knobsAfterGiving(controls, controlName, knob) {
+    const taking = controls.find((control) => control.name === controlName);
+    const givingWay = controls.find((control) => control.knob === knob && control !== taking);
+    return controls.map((control) => {
+      if (control === taking) return { ...control, knob };
+      return control === givingWay ? { ...control, knob: taking.knob } : control;
+    });
+  }
+
+  // The look once a control of the page is turned by another hardware knob. `controls` are the page's controls,
+  // each with its `name`, the `knob` that turns it now and its `ownKnob`, the one beside its slot.
+  // Only the controls that are not on their own knob are written down.
+  function withKnobGiven(look, pageName, controls, controlName, knob) {
+    const offTheirOwn = knobsAfterGiving(controls, controlName, knob).filter((control) => control.knob !== control.ownKnob);
+    const chosen = offTheirOwn.map((control) => ({ control: control.name, knob: control.knob }));
+    return withPage(look, { ...pageOf(look, pageName), knobs: chosen });
   }
 
   // --- Controls, headings and the AI's pictures ------------------------------------------------
@@ -278,6 +301,6 @@
     changeOf, moved, renamed, putBack, isChanged, placed, withParts, scaledParts, partsFromTheirCorner, withPictureHidden, isHidden,
     withPictureStyled, styleOfPicture,
     layersOn, withLayer, withLayerAtTheBack, withoutLayers, restacked, restackedToThe, nextLayerId, withControlAdded, withItemTakenOff,
-    withDesignCopied, lookHistory,
+    withDesignCopied, withKnobGiven, lookHistory,
   };
 })();

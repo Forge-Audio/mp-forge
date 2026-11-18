@@ -577,8 +577,15 @@
     return { stage, page, pictures, items: [...pictures.back.items, ...layers, ...pictures.behind.items, ...slots, ...pictures.front.items] };
   }
 
+  // While the musician is choosing what a hardware knob turns, pressing a control picks it.
+  function letControlsBePicked(items, onControlPicked) {
+    const controls = items.filter((item) => item.kind === "control");
+    controls.forEach((control) => control.made.addEventListener("click", () => onControlPicked(control.name)));
+  }
+
   // Draws one page of the plugin's screen, with its page buttons along the bottom as on the MPC.
   // `listeners.onPageChosen` hears which page button was pressed, and `listeners.onTurned` that a control was turned.
+  // With `listeners.onControlPicked`, a pressed control is picked and stays as it is, and the listener hears its name.
   function drawScreen(container, plugin, currentPage, listeners) {
     const pages = pagesOf(plugin);
     if (!pages.length) return showMessage(container, plugin ? "This plugin has no screen layout yet." : "Describe a plugin and its screen will appear here.");
@@ -587,6 +594,8 @@
     const drawn = stageOf(plugin, currentPage, listeners.onTurned);
     pageOnScreen = drawn.page;
     picturesOnScreen = drawn.pictures;
+    container.classList.toggle("picks-a-control", Boolean(listeners.onControlPicked));
+    if (listeners.onControlPicked) letControlsBePicked(drawn.items, listeners.onControlPicked);
     container.replaceChildren(drawn.stage, pageButtons(pages, currentPage, listeners.onPageChosen));
   }
 
@@ -639,9 +648,22 @@
 
   // --- The hardware knobs ----------------------------------------------------------------------
 
-  // On the MPC, the slot in row r and column c is turned by hardware knob 13 + c - 4r.
-  function hardwareKnobNumber(row, column) {
-    return 13 + column - SLOTS_PER_ROW * row;
+  // The MPC counts its knobs from the bottom left, so the knob beside the slot in row r and column c is 13 + c - 4r.
+  function knobBesideSlot(slot) {
+    return 13 + (slot % SLOTS_PER_ROW) - SLOTS_PER_ROW * Math.floor(slot / SLOTS_PER_ROW);
+  }
+
+  // The page's controls, each with the hardware `knob` that turns it and its `ownKnob`, the one beside its slot.
+  // A control is turned by its own knob unless the musician chose another.
+  function knobsOnPage(plugin, pageIndex) {
+    const pages = pagesOf(plugin);
+    if (!pages.length) return [];
+    const arranged = arrangedItems(plugin, pageIndex);
+    const withKnobs = controlsOf(pages[pageIndex]).map((control, slot) => {
+      const item = arranged.find((known) => known.slot === slot);
+      return { name: control.param, ownKnob: knobBesideSlot(slot), knob: (item && item.knob) || knobBesideSlot(slot) };
+    });
+    return withKnobs.filter((control) => control.name);
   }
 
   function pixelShape(className, path, offset) {
@@ -671,11 +693,11 @@
     return drawing;
   }
 
-  function hardwareCell(position, control, parameters) {
-    const name = control && control.param;
-    const number = hardwareKnobNumber(Math.floor(position / SLOTS_PER_ROW), position % SLOTS_PER_ROW);
+  function hardwareCell(number, control, parameters) {
+    const name = control && control.name;
     const amount = name ? amountNow(name, findParameter(parameters, name)) : null;
     const cell = element("div", name ? "hardware-cell in-use" : "hardware-cell");
+    cell.dataset.knob = String(number);
     cell.append(element("span", "hardware-number", String(number)), pixelKnob(amount), element("span", "hardware-name", name || "Free"));
     return cell;
   }
@@ -684,13 +706,36 @@
   // It is kept for whoever rests the pointer on the note, so the note itself stays one short line.
   const ABOUT_THE_KNOBS = "Every page has its own 16. An MPC with four knobs reaches them as four banks of four.";
 
-  // The 16 hardware knobs, each showing the control it turns on this page and where that control sits.
-  function drawHardware(grid, note, plugin, currentPage) {
+  function pressedLikeAButton(event) {
+    return event.type === "click" || event.key === "Enter" || event.key === " ";
+  }
+
+  // While the musician is giving the knobs other controls, every knob can be pressed, and the chosen one says so.
+  function letKnobsBeChosen(cells, choosing) {
+    cells.forEach((cell) => {
+      const number = Number(cell.dataset.knob);
+      const choose = (event) => pressedLikeAButton(event) && choosing.onKnobChosen(number);
+      cell.classList.add("can-be-chosen");
+      cell.classList.toggle("is-chosen", number === choosing.chosenKnob);
+      cell.tabIndex = 0;
+      cell.setAttribute("role", "button");
+      cell.setAttribute("aria-pressed", String(number === choosing.chosenKnob));
+      cell.setAttribute("aria-label", `Hardware knob ${number}`);
+      cell.addEventListener("click", choose);
+      cell.addEventListener("keydown", choose);
+    });
+  }
+
+  // The 16 hardware knobs, laid out as on the MPC, each showing the control it turns on this page.
+  // With `choosing`, a knob can be pressed: `choosing.onKnobChosen` hears its number, and `choosing.chosenKnob` is marked.
+  function drawHardware(grid, note, plugin, currentPage, choosing) {
     const pages = pagesOf(plugin);
-    const controls = pages.length ? controlsOf(pages[currentPage]) : [];
-    const cells = Array.from({ length: SLOTS_PER_PAGE }, (_, position) => hardwareCell(position, controls[position], plugin && plugin.parameters));
+    const controls = knobsOnPage(plugin, currentPage);
+    const turnedBy = (number) => controls.find((control) => control.knob === number);
+    const cells = Array.from({ length: SLOTS_PER_PAGE }, (_, slot) => hardwareCell(knobBesideSlot(slot), turnedBy(knobBesideSlot(slot)), plugin && plugin.parameters));
+    if (choosing) letKnobsBeChosen(cells, choosing);
     grid.replaceChildren(...cells);
-    const inUse = controls.filter((control) => control.param).length;
+    const inUse = controls.length;
     note.textContent = pages.length ? `${inUse} of ${SLOTS_PER_PAGE} knobs in use on this page.` : "";
     note.title = pages.length ? `${ABOUT_THE_KNOBS} ${knobsInAll(pages.length)}`.trim() : "";
   }
@@ -699,5 +744,5 @@
     return pages === 1 ? "" : `This plugin's ${pages} pages give ${pages * SLOTS_PER_PAGE} in all.`;
   }
 
-  window.pluginScreen = { drawScreen, drawForArranging, pageNamesOf, pageColourOf, layerToDraw, drawHardware, valueArrived, pluginMoved, controlsStandAt, turnedSettings, pixelKnob, letItBeTurned };
+  window.pluginScreen = { drawScreen, drawForArranging, pageNamesOf, pageColourOf, layerToDraw, drawHardware, knobsOnPage, valueArrived, pluginMoved, controlsStandAt, turnedSettings, pixelKnob, letItBeTurned };
 })();

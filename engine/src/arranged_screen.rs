@@ -6,11 +6,12 @@
 use std::path::Path;
 
 use crate::control_parts::Parts;
+use crate::hardware_knobs::{Seat, column_of_knob, knobs_for, own_knob_of};
 use crate::layers::Frame;
 use crate::look::{Depth, FULLY_SOLID, ItemKind, ItemLook, Look, look_of};
 use crate::page_art::frame_of;
 use crate::pictures::{Picture, Placement, pictures_of};
-use crate::screen_layout::{Area, LayoutPage, SLOTS_PER_SIDE, ScreenLayout, SlotContent, WHOLE_PAGE, area_of_slot, column_of_slot, generated_group_box};
+use crate::screen_layout::{Area, LayoutPage, SLOTS_PER_SIDE, ScreenLayout, SlotContent, WHOLE_PAGE, area_of_slot, generated_group_box};
 
 /// The room left between a group of controls and the box drawn round it.
 const GROUP_BOX_MARGIN: u32 = 6;
@@ -22,8 +23,10 @@ pub const TALLEST_FILM_STRIP: u32 = 16_128;
 pub struct ArrangedItem {
     pub kind: ItemKind,
     pub name: String,
-    /// The slot the layout gives it, counted in reading order from zero. This still decides its hardware knob.
+    /// The slot the layout gives it, counted in reading order from zero.
     pub slot: usize,
+    /// The hardware knob that turns it: the one beside its slot, unless the musician chose another. A heading has none.
+    pub knob: Option<u32>,
     pub area: Area,
     pub shown_name: Option<String>,
     /// How its inside is laid out, when the musician did that by hand.
@@ -35,8 +38,12 @@ impl ArrangedItem {
         self.area != area_of_slot(self.slot)
     }
 
+    pub fn is_turned_by_another_knob(&self) -> bool {
+        self.knob.is_some_and(|knob| knob != own_knob_of(self.slot))
+    }
+
     pub fn is_changed(&self) -> bool {
-        self.has_moved() || self.shown_name.is_some() || self.parts.is_some()
+        self.has_moved() || self.shown_name.is_some() || self.parts.is_some() || self.is_turned_by_another_knob()
     }
 }
 
@@ -73,14 +80,18 @@ pub struct ArrangedPage {
     pub hidden_pictures: Vec<String>,
     /// The artwork the musician laid behind the controls, from the back to the front.
     pub artwork: Vec<ArrangedLayer>,
-    /// The box drawn round each column's controls while the hardware knobs are on them.
-    /// Empty when no control moved, which leaves the boxes Akai's generator drew.
+    /// The box drawn round the controls of each column of knobs while the hardware knobs are on them.
+    /// Empty when no control moved or changed knobs, which leaves the boxes Akai's generator drew.
     pub group_boxes: Vec<Area>,
 }
 
 impl ArrangedPage {
     pub fn is_changed(&self) -> bool {
         self.items.iter().any(ArrangedItem::is_changed)
+    }
+
+    pub fn has_a_chosen_knob(&self) -> bool {
+        self.items.iter().any(ArrangedItem::is_turned_by_another_knob)
     }
 
     pub fn hides(&self, picture_name: &str) -> bool {
@@ -125,7 +136,8 @@ fn too_tall_to_play(page_name: &str, picture: &ArrangedPicture) -> Option<String
 
 fn arranged_page(page: &LayoutPage, pictures: &[Picture], look: &Look) -> ArrangedPage {
     let in_slots = page.slots().iter().enumerate();
-    let items: Vec<ArrangedItem> = in_slots.filter_map(|(slot, content)| arranged_item(&page.name, slot, content, look)).collect();
+    let in_their_slots: Vec<ArrangedItem> = in_slots.filter_map(|(slot, content)| arranged_item(&page.name, slot, content, look)).collect();
+    let items = with_their_knobs(in_their_slots, look, &page.name);
     let on_this_page = pictures.iter().filter(|picture| picture.page == page.name);
     let (hidden, showing): (Vec<&Picture>, Vec<&Picture>) = on_this_page.partition(|picture| look.hides(&page.name, &picture.name));
     ArrangedPage {
@@ -148,7 +160,16 @@ fn arranged_item(page: &str, slot: usize, content: &SlotContent, look: &Look) ->
     let shown_name = changed.and_then(|item| item.shown_name.clone());
     let parts = changed.and_then(|item| item.parts.clone());
     let area = placed(sized_for(area_of_slot(slot), parts.as_ref()), changed);
-    Some(ArrangedItem { kind, name: name.clone(), slot, area, shown_name, parts })
+    Some(ArrangedItem { kind, name: name.clone(), slot, knob: None, area, shown_name, parts })
+}
+
+/// Every control with the hardware knob that turns it, once the musician's own choices are counted.
+fn with_their_knobs(mut items: Vec<ArrangedItem>, look: &Look, page: &str) -> Vec<ArrangedItem> {
+    let seats: Vec<Seat> = controls_among(&items).map(|control| Seat { control: &control.name, slot: control.slot }).collect();
+    let knobs = knobs_for(&seats, look.knobs_chosen_on(page));
+    let controls = items.iter_mut().filter(|item| item.kind == ItemKind::Control);
+    controls.zip(knobs).for_each(|(control, knob)| control.knob = knob);
+    items
 }
 
 /// A control laid out by hand is as big as its parts. Any other fills its slot.
@@ -185,16 +206,16 @@ fn placed(own_area: Area, changed: Option<&ItemLook>) -> Area {
 }
 
 fn group_boxes_round(items: &[ArrangedItem]) -> Vec<Area> {
-    let a_control_moved = controls_among(items).any(ArrangedItem::has_moved);
-    if !a_control_moved {
+    let the_generated_boxes_still_fit = !controls_among(items).any(|control| control.has_moved() || control.is_turned_by_another_knob());
+    if the_generated_boxes_still_fit {
         return Vec::new();
     }
     (0..SLOTS_PER_SIDE as usize).map(|column| group_box_of(column, items)).collect()
 }
 
-/// The hardware knobs take one column of the layout at a time, wherever its controls now sit.
+/// The hardware knobs take one column of knobs at a time, wherever the controls they turn now sit.
 fn group_box_of(column: usize, items: &[ArrangedItem]) -> Area {
-    let in_the_column = controls_among(items).filter(|control| column_of_slot(control.slot) == column);
+    let in_the_column = controls_among(items).filter(|control| control.knob.map(column_of_knob) == Some(column));
     let around_them = in_the_column.map(|control| control.area).reduce(around_both);
     around_them.map(with_margin).unwrap_or_else(|| generated_group_box(column))
 }
@@ -221,7 +242,7 @@ pub mod test_support {
     use super::*;
 
     pub fn control_in_slot(name: &str, slot: usize) -> ArrangedItem {
-        ArrangedItem { kind: ItemKind::Control, name: name.to_string(), slot, area: area_of_slot(slot), shown_name: None, parts: None }
+        ArrangedItem { kind: ItemKind::Control, name: name.to_string(), slot, knob: Some(own_knob_of(slot)), area: area_of_slot(slot), shown_name: None, parts: None }
     }
 
     pub fn page_of(name: &str, items: Vec<ArrangedItem>) -> ArrangedPage {
@@ -236,7 +257,7 @@ mod tests {
     use super::*;
     use crate::control_parts::test_support::knob_over_its_name_and_value;
     use crate::layers::test_support::red_block;
-    use crate::look::test_support::{laid_out, look_of_main_page, look_with_artwork, moved, renamed};
+    use crate::look::test_support::{laid_out, look_of_main_page, look_with_artwork, look_with_knobs, moved, renamed};
     use crate::look::{Point, Size};
     use crate::pictures::Motion;
     use crate::pictures::test_support::{BOTTOM_LEFT_SLOT, looping_picture};
@@ -315,6 +336,30 @@ mod tests {
         assert_eq!(boxes.len(), 4);
         assert_eq!(boxes[0], Area { x: 17, y: 190, width: 767, height: 323 });
         assert_eq!(boxes[1], Area { x: 337, y: 39, width: 290, height: 119 });
+        assert_eq!((boxes[2], boxes[3]), (generated_group_box(2), generated_group_box(3)));
+    }
+
+    #[test]
+    fn each_control_is_turned_by_the_knob_beside_it_until_the_musician_chooses_another() {
+        let as_laid_out = arranged(&tape_layout(), &[], &Look::default());
+        let swapped = arranged(&tape_layout(), &[], &look_with_knobs(&[("Time", 14), ("Mix", 13)]));
+
+        let knobs_of = |pages: &[ArrangedPage]| ["Time", "Mix", "TAPE", "Tone"].map(|name| item(pages, 0, name).knob);
+
+        assert_eq!(knobs_of(&as_laid_out), [Some(13), Some(14), None, Some(9)]);
+        assert_eq!(knobs_of(&swapped), [Some(14), Some(13), None, Some(9)]);
+        assert!(!as_laid_out[0].has_a_chosen_knob() && swapped[0].has_a_chosen_knob() && swapped[0].is_changed());
+        assert_eq!(item(&swapped, 1, "Time").knob, Some(13));
+    }
+
+    #[test]
+    fn once_a_knob_is_chosen_each_box_is_drawn_round_the_controls_its_column_of_knobs_turns() {
+        let pages = arranged(&tape_layout(), &[], &look_with_knobs(&[("Time", 14), ("Mix", 13)]));
+
+        let boxes = &pages[0].group_boxes;
+
+        assert_eq!(boxes[0], Area { x: 17, y: 39, width: 610, height: 270 });
+        assert_eq!(boxes[1], Area { x: 17, y: 39, width: 290, height: 119 });
         assert_eq!((boxes[2], boxes[3]), (generated_group_box(2), generated_group_box(3)));
     }
 

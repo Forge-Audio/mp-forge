@@ -10,6 +10,7 @@ use serde_json::json;
 use workbench_engine::agent::{ToolOutput, Toolbox};
 use workbench_engine::artwork::{built_control_number, draw_pictures};
 use workbench_engine::beat_loop::beat_loop;
+use workbench_engine::built_knobs::KNOB_FILE;
 use workbench_engine::gate::{
     BUILD_CHECK, Gate, GateReport, MOVING_PICTURES_CHECK, Outcome, PICTURES_CHECK, SCREEN_CHECK, SOURCE_CHECK, TimeLimits, simulation_check_name,
 };
@@ -338,6 +339,28 @@ fn a_plugin_the_musician_arranged_by_hand_is_let_through_with_its_arrangement_on
     assert!(screen.contains("\"value\": \"WithName[ECHOES]/Parameter "), "{screen}");
     assert!(!screen.contains("\"bounds\": \"983 45 278 107\""), "the knob should have left its slot");
     assert!(screen.contains("\"494 190 773 323\""), "the fourth column's box should surround Feedback and Mix");
+}
+
+const FEEDBACK_AND_LOW_CUT_SWAP_KNOBS: &str = r#"{ "pages": [{ "page": "DELAY", "knobs": [
+    { "control": "Feedback", "knob": 9 }, { "control": "Low Cut", "knob": 16 }
+]}]}"#;
+
+#[test]
+fn a_plugin_whose_knobs_the_musician_chose_is_let_through_with_them_in_its_built_knob_file() {
+    let plugin = CopiedExample::of_the_delay("knobs-chosen");
+    fs::write(plugin.0.join("look.json"), FEEDBACK_AND_LOW_CUT_SWAP_KNOBS).unwrap();
+
+    let report = gate().inspect(&plugin.0);
+
+    assert!(report.may_be_sent(), "{report:#?}");
+    assert_eq!(report.outcome_of(SCREEN_CHECK), Some(&Outcome::Passed));
+    let knob_file = built_screen_file(&plugin.0).unwrap().with_file_name(KNOB_FILE);
+    let knobs: serde_json::Value = serde_json::from_str(&fs::read_to_string(knob_file).unwrap()).unwrap();
+    let on_the_page = &knobs["Screen Mode Q-Links"]["map"][0]["Q-Links"];
+    let turned_by = |knob: u32| on_the_page[format!("Q-Link {knob}")].as_u64().map(|number| number as u32);
+    assert_eq!(turned_by(9), built_control_number(&plugin.0, "Feedback"));
+    assert_eq!(turned_by(16), built_control_number(&plugin.0, "Low Cut"));
+    assert_eq!(turned_by(13), built_control_number(&plugin.0, "Sync"));
 }
 
 #[test]

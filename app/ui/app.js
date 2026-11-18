@@ -4,7 +4,9 @@
   "use strict";
 
   const { ask, on } = window.backend;
-  const { drawScreen, drawHardware, valueArrived, pluginMoved, controlsStandAt, turnedSettings } = window.pluginScreen;
+  const { drawScreen, drawHardware, knobsOnPage, pageNamesOf, valueArrived, pluginMoved, controlsStandAt, turnedSettings } = window.pluginScreen;
+  const knobChoosing = window.knobChoosing;
+  const { withKnobGiven } = window.lookEdits;
   const blacksmith = window.blacksmith;
   const { askForNewName, askBeforeDeleting, askBeforeSending } = window.pluginSheets;
   const versionTimeline = window.versionTimeline;
@@ -130,6 +132,7 @@
     screen: document.getElementById("mpc-screen"),
     hardwareGrid: document.getElementById("hardware-grid"),
     hardwareNote: document.getElementById("hardware-note"),
+    editKnobs: document.getElementById("edit-knobs"),
     checkSummary: document.getElementById("check-summary"),
     check: document.getElementById("check"),
     play: document.getElementById("play"),
@@ -498,7 +501,8 @@
 
   function drawMpcScreen(plugin) {
     if (isAwaitingItsScreen(plugin)) return drawEmptyScreen();
-    drawScreen(page.screen, plugin, state.screenPage, { onPageChosen: showScreenPage, onTurned: controlTurned });
+    const onControlPicked = isGivingAKnobAway() ? giveChosenKnobTo : undefined;
+    drawScreen(page.screen, plugin, state.screenPage, { onPageChosen: showScreenPage, onTurned: controlTurned, onControlPicked });
   }
 
   function drawMirror() {
@@ -513,7 +517,10 @@
   }
 
   function drawHardwareKnobs() {
-    drawHardware(page.hardwareGrid, page.hardwareNote, state.openPlugin, state.screenPage);
+    const choosing = isChoosingKnobs() ? { chosenKnob: knobChoosing.chosenKnob(), onKnobChosen: knobPressed } : null;
+    drawHardware(page.hardwareGrid, page.hardwareNote, state.openPlugin, state.screenPage, choosing);
+    page.editKnobs.setAttribute("aria-pressed", String(isChoosingKnobs()));
+    if (choosing) page.hardwareNote.textContent = knobChoosing.whatToDoNext();
   }
 
   function controlsOfOpenPlugin() {
@@ -579,6 +586,7 @@
     page.goBack.hidden = startingNew;
     page.goBack.disabled = isBeingWorkedOn(state.openName) || !(state.openPlugin && state.openPlugin.versionsKept);
     page.editLook.disabled = isBeingWorkedOn(state.openName) || !hasPagesToArrange(state.openPlugin);
+    page.editKnobs.disabled = !knobsCanBeChosen();
     page.play.disabled = playCannotBePressed();
     drawSendButton();
     page.moreButton.disabled = isBeingWorkedOn(state.openName) || startingNew;
@@ -608,6 +616,67 @@
 
   function hasPagesToArrange(plugin) {
     return Boolean(plugin && plugin.screen && plugin.screen.pages && plugin.screen.pages.length);
+  }
+
+  // --- Giving the hardware knobs other controls ------------------------------------------------
+
+  // The knobs are the musician's to give out while nothing else is changing the plugin.
+  function knobsCanBeChosen() {
+    return !isBeingWorkedOn(state.openName) && hasPagesToArrange(state.openPlugin);
+  }
+
+  function isChoosingKnobs() {
+    return knobChoosing.isOn() && knobsCanBeChosen();
+  }
+
+  // A knob has been picked, and the next control pressed on the screen is the one it will turn.
+  function isGivingAKnobAway() {
+    return isChoosingKnobs() && knobChoosing.chosenKnob() !== null;
+  }
+
+  function drawKnobChoosing() {
+    drawMpcScreen(state.openPlugin);
+    drawHardwareKnobs();
+  }
+
+  function toggleKnobChoosing() {
+    if (knobChoosing.isOn()) knobChoosing.end();
+    else knobChoosing.begin();
+    drawKnobChoosing();
+  }
+
+  function knobPressed(number) {
+    knobChoosing.knobPressed(number);
+    drawKnobChoosing();
+  }
+
+  async function keepAVersionBeforeTheFirstKnob(pluginName) {
+    if (!knobChoosing.stillNeedsAVersionKept()) return;
+    await ask("begin_editing", { name: pluginName });
+    knobChoosing.versionWasKept();
+  }
+
+  // The last safety check was of the plugin before this knob was given, so it no longer counts.
+  function knobWasGiven(pluginName, look, kept) {
+    knobChoosing.knobWasGiven();
+    state.reports.delete(pluginName);
+    state.editedSinceCheck.add(pluginName);
+    if (state.openName === pluginName) state.openPlugin = { ...state.openPlugin, look, arrangement: kept.arrangement, screen: kept.screen };
+  }
+
+  // The control takes the chosen knob, and whatever that knob turned before takes the one the control gives up.
+  async function giveChosenKnobTo(controlName) {
+    const pluginName = state.openName;
+    const plugin = state.openPlugin;
+    const pageName = pageNamesOf(plugin)[state.screenPage];
+    const look = withKnobGiven(plugin.look || { pages: [] }, pageName, knobsOnPage(plugin, state.screenPage), controlName, knobChoosing.chosenKnob());
+    try {
+      await keepAVersionBeforeTheFirstKnob(pluginName);
+      knobWasGiven(pluginName, look, await ask("keep_look", { name: pluginName, look }));
+    } catch (problem) {
+      addMessage(pluginName, { kind: "problem", text: describeProblem(problem) });
+    }
+    drawEverything();
   }
 
   function drawSamples() {
@@ -731,6 +800,7 @@
   async function open(pluginName) {
     const isAnotherConversation = pluginName !== state.openName;
     state.openName = pluginName;
+    if (isAnotherConversation) knobChoosing.end();
     aiMenu.showModelOf(pluginName === NEW_PLUGIN ? null : pluginName);
     appSettings.noteOpened(pluginName);
     state.screenPage = 0;
@@ -1714,6 +1784,7 @@
     page.remixOfClear.addEventListener("click", forgetTheRemix);
     page.showGuide.addEventListener("click", showTheGuide);
     page.editLook.addEventListener("click", editTheLook);
+    page.editKnobs.addEventListener("click", toggleKnobChoosing);
     page.settingsButton.addEventListener("click", () => showSettings(page.settings.hidden));
     page.settingsDone.addEventListener("click", () => showSettings(false));
     page.renamePlugin.addEventListener("click", renameOpenPlugin);

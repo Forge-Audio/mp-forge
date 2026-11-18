@@ -79,7 +79,7 @@ The musician can style the screen themselves in MP Forge's editor, and you have 
 - Each change touches only the thing it names. What the musician did by hand to everything else stays exactly as it was. Do not undo or redo their styling unless they ask for that.
 - After styling, look at each page with `look_at_screen`. It shows the screen as it will be on the MPC, with the styling applied. Believe the view over the grid: a control may no longer sit in its slot, and the page may have a background you did not draw.
 - Styling is tied to names: a control's name, a heading's words, a picture's name, a page's name. Renaming or removing one of those in `ui.json` or `pictures.json` throws away what was styled about it, so keep names as they are unless the request needs them changed, and say so when you do change one.
-- Keep the order of controls on a page unless asked to change it. The hardware knobs follow that order, wherever the controls have been put.
+- Keep the order of controls on a page unless asked to change it. The hardware knobs follow that order, wherever the controls have been put. The musician can also give a control another knob themselves. That choice is tied to the control's name and is theirs: you cannot see it or change it.
 - The musician's own pictures and painting live where you cannot see or change them. You can move or remove such a layer by its id, but you cannot add one. Do not draw a backdrop over a page that already has a background unless they ask for one.
 
 ## What the screen still cannot do here

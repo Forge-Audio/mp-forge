@@ -1,6 +1,7 @@
 //! What the musician did by hand to a plugin's screen, as its `look.json` keeps it: where they put a
 //! control, a heading or a picture, what they renamed or resized, how they laid out the inside of a
-//! control, the artwork they laid behind a page, and the controls they added to or took off a page.
+//! control, the artwork they laid behind a page, the controls they added to or took off a page, and
+//! the hardware knobs they chose for a page's controls.
 //!
 //! The file holds only what was changed. Anything it does not mention sits where the screen's own
 //! layout, `ui.json`, puts it. Only the workbench writes this file; the AI cannot.
@@ -12,6 +13,7 @@ use std::path::Path;
 use serde_json::{Map, Value, json};
 
 use crate::control_parts::{Parts, parts_as_json, parts_from};
+use crate::hardware_knobs::{KNOBS_ON_A_PAGE, KnobChoice};
 use crate::layers::{Layer, layer_as_json, layers_from};
 use crate::screen_layout::WHOLE_PAGE;
 
@@ -20,13 +22,14 @@ pub const LOOK_FILE: &str = "look.json";
 const LONGEST_SHOWN_NAME: usize = 24;
 /// Punctuation a shown name may use. Brackets and slashes are left out: the MPC reads them as instructions.
 const PUNCTUATION_IN_NAMES: &str = " -+.#&'!?%";
-const PAGE_FIELDS: [&str; 5] = ["page", "items", "artwork", "added", "removed"];
+const PAGE_FIELDS: [&str; 6] = ["page", "items", "artwork", "added", "removed", "knobs"];
 const ITEM_FIELDS: [&str; 9] = ["kind", "name", "place", "shownName", "size", "parts", "hidden", "opacity", "depth"];
 pub const FULLY_SOLID: u32 = 100;
 const PLACE_FIELDS: [&str; 2] = ["x", "y"];
 const SIZE_FIELDS: [&str; 2] = ["width", "height"];
 const ADDED_FIELDS: [&str; 2] = ["control", "widget"];
 const REMOVED_FIELDS: [&str; 2] = ["slot", "entry"];
+const KNOB_FIELDS: [&str; 2] = ["control", "knob"];
 /// The kinds of control the musician can put on a page themselves, as `ui.json` names them.
 pub const WIDGETS_TO_ADD: [&str; 4] = ["knob", "fader", "switch", "slider"];
 const SMALLEST_PICTURE_SIDE: u64 = 8;
@@ -140,6 +143,8 @@ pub struct PageLook {
     pub artwork: Vec<Layer>,
     pub added: Vec<AddedControl>,
     pub removed: Vec<RemovedEntry>,
+    /// The hardware knobs the musician chose for controls of this page, in place of the knob beside each.
+    pub knobs: Vec<KnobChoice>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -160,6 +165,11 @@ impl Look {
 
     pub fn of_page(&self, page: &str) -> Option<&PageLook> {
         self.pages.iter().find(|listed| listed.page == page)
+    }
+
+    /// The hardware knobs the musician chose on one page.
+    pub fn knobs_chosen_on(&self, page: &str) -> &[KnobChoice] {
+        self.of_page(page).map(|listed| listed.knobs.as_slice()).unwrap_or_default()
     }
 
     /// The artwork behind one page's controls, from the back to the front.
@@ -218,7 +228,28 @@ fn page_from(page: &Value) -> Result<PageLook, String> {
         artwork: fields.get("artwork").map(layers_from).transpose().map_err(on_this_page)?.unwrap_or_default(),
         added: list("added")?.iter().map(added_from).collect::<Result<_, _>>().map_err(on_this_page)?,
         removed: list("removed")?.iter().map(removed_from).collect::<Result<_, _>>().map_err(on_this_page)?,
+        knobs: knobs_from(list("knobs")?).map_err(on_this_page)?,
     })
+}
+
+/// Every knob the musician chose on a page. No knob is given twice, and no control is given two knobs.
+fn knobs_from(written: &[Value]) -> Result<Vec<KnobChoice>, String> {
+    let chosen: Vec<KnobChoice> = written.iter().map(knob_from).collect::<Result<_, _>>()?;
+    let given_twice = |choice: &KnobChoice| chosen.iter().filter(|other| other.knob == choice.knob || other.control == choice.control).count() > 1;
+    match chosen.iter().find(|choice| given_twice(choice)) {
+        Some(choice) => Err(format!("knob {} or control `{}` is listed twice among its \"knobs\".", choice.knob, choice.control)),
+        None => Ok(chosen),
+    }
+}
+
+fn knob_from(choice: &Value) -> Result<KnobChoice, String> {
+    let fields = known_fields(choice, &KNOB_FIELDS, "A chosen knob")?;
+    let control = fields.get("control").and_then(Value::as_str).filter(|control| !control.trim().is_empty());
+    let knob = fields.get("knob").and_then(Value::as_u64).filter(|knob| (1..=u64::from(KNOBS_ON_A_PAGE)).contains(knob));
+    match (control, knob) {
+        (Some(control), Some(knob)) => Ok(KnobChoice { control: control.to_string(), knob: knob as u32 }),
+        _ => Err(format!("a chosen knob has its \"control\" name and a \"knob\" from 1 to {KNOBS_ON_A_PAGE}.")),
+    }
 }
 
 fn added_from(added: &Value) -> Result<AddedControl, String> {
@@ -342,6 +373,9 @@ fn page_as_json(page: &PageLook) -> Value {
     if !page.removed.is_empty() {
         written["removed"] = Value::Array(page.removed.iter().map(|removed| json!({ "slot": removed.slot, "entry": removed.entry })).collect());
     }
+    if !page.knobs.is_empty() {
+        written["knobs"] = Value::Array(page.knobs.iter().map(|choice| json!({ "control": choice.control, "knob": choice.knob })).collect());
+    }
     written
 }
 
@@ -393,6 +427,11 @@ pub mod test_support {
 
     pub fn look_of_main_page(items: Vec<ItemLook>) -> Look {
         Look { pages: vec![main_page(items)] }
+    }
+
+    pub fn look_with_knobs(knobs: &[(&str, u32)]) -> Look {
+        let knobs = knobs.iter().map(|(control, knob)| KnobChoice { control: control.to_string(), knob: *knob }).collect();
+        Look { pages: vec![PageLook { knobs, ..main_page(Vec::new()) }] }
     }
 
     pub fn look_with_artwork(artwork: Vec<Layer>) -> Look {
@@ -516,6 +555,28 @@ mod tests {
         assert!(look_written_in(&page_with(r#""removed": [{ "slot": 16, "entry": "Tone" }]"#)).unwrap_err().contains("the \"slot\" it was in"));
         assert!(look_written_in(&page_with(r#""artwork": [{ "kind": "lamp", "id": 1 }]"#)).unwrap_err().starts_with("Page `MAIN`: Layer 1"));
         assert!(look_written_in(&page_with(r#""items": [{ "kind": "picture", "name": "reels", "size": { "width": 4000, "height": 20 } }]"#)).unwrap_err().contains("no bigger than the page"));
+    }
+
+    #[test]
+    fn the_knobs_chosen_on_a_page_are_read_and_written_back() {
+        let chosen = r#"{ "pages": [{ "page": "MAIN", "items": [], "knobs": [{ "control": "Time", "knob": 14 }, { "control": "Mix", "knob": 13 }] }] }"#;
+
+        let look = look_written_in(chosen).unwrap();
+
+        assert_eq!(look.knobs_chosen_on("MAIN"), [KnobChoice { control: "Time".to_string(), knob: 14 }, KnobChoice { control: "Mix".to_string(), knob: 13 }]);
+        assert!(look.knobs_chosen_on("MORE").is_empty());
+        assert_eq!(look_from(&look.as_json()), Ok(look));
+    }
+
+    #[test]
+    fn chosen_knobs_that_make_no_sense_are_refused() {
+        let page_with = |knobs: &str| format!(r#"{{ "pages": [{{ "page": "MAIN", "knobs": [{knobs}] }}] }}"#);
+
+        assert!(look_written_in(&page_with(r#"{ "control": "Time", "knob": 17 }"#)).unwrap_err().contains("from 1 to 16"));
+        assert!(look_written_in(&page_with(r#"{ "control": "Time", "knob": 0 }"#)).unwrap_err().contains("from 1 to 16"));
+        assert!(look_written_in(&page_with(r#"{ "control": " ", "knob": 4 }"#)).unwrap_err().contains("\"control\" name"));
+        assert!(look_written_in(&page_with(r#"{ "control": "Time", "knob": 4 }, { "control": "Mix", "knob": 4 }"#)).unwrap_err().contains("listed twice"));
+        assert!(look_written_in(&page_with(r#"{ "control": "Time", "knob": 4 }, { "control": "Time", "knob": 5 }"#)).unwrap_err().contains("listed twice"));
     }
 
     #[test]

@@ -169,7 +169,7 @@
 
   function demoPageLook(look, pageName) {
     const page = look.pages.find((known) => known.page === pageName) || {};
-    return { items: page.items || [], artwork: page.artwork || [], added: page.added || [], removed: page.removed || [] };
+    return { items: page.items || [], artwork: page.artwork || [], added: page.added || [], removed: page.removed || [], knobs: page.knobs || [] };
   }
 
   function isDemoEmpty(entry) {
@@ -197,6 +197,12 @@
   }
 
   // Each thing sits where its look puts it, at the size its look gives it, or else in its slot.
+  // The hardware knob that turns a control: the one the musician chose, or the one beside its slot.
+  function demoKnobOf(pageLook, controlName, slot) {
+    const chosen = (pageLook.knobs || []).find((choice) => choice.control === controlName);
+    return chosen ? chosen.knob : 13 + (slot % 4) - 4 * Math.floor(slot / 4);
+  }
+
   function demoArrangement(screen, pictures, look) {
     const { areaOfSlot, areaOfBlock, PAGE } = window.mpcStage;
     const changeOf = (pageLook, kind, name) => pageLook.items.find((change) => change.kind === kind && change.name === name) || {};
@@ -207,7 +213,7 @@
       const name = typeof entry === "string" ? entry : isHeading ? entry.text : entry.param;
       const change = changeOf(pageLook, kind, name);
       const sized = change.parts ? { ...areaOfSlot(slot), ...demoSizeOfParts(change.parts) } : areaOfSlot(slot);
-      return { kind, name, slot, area: placed(sized, change), shownName: change.shownName || null, moved: Boolean(change.place), parts: change.parts || null };
+      return { kind, name, slot, knob: isHeading ? null : demoKnobOf(pageLook, name, slot), area: placed(sized, change), shownName: change.shownName || null, moved: Boolean(change.place), parts: change.parts || null };
     };
     const pictureOn = (pageLook, picture) => {
       const ownArea = picture.slots ? areaOfBlock(picture.slots) : PAGE;

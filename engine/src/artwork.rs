@@ -1,6 +1,6 @@
 //! Draws a plugin's pictures into the image files the MPC plays, and finishes the screen the build made:
 //! what the musician arranged by hand is applied to it, the artwork they laid behind each page is drawn
-//! and put there, and the pictures are added.
+//! and put there, and the pictures are added. The hardware knobs they chose are written beside it.
 //!
 //! The drawn pictures go in the plugin's `assets/pictures` folder, which Akai's build copies next to the
 //! screen file. The folder is emptied before every drawing, so it only ever holds the current pictures.
@@ -14,6 +14,7 @@ use resvg::tiny_skia::Pixmap;
 use serde_json::Value;
 
 use crate::arranged_screen::{self, ArrangedPage, arranged};
+use crate::built_knobs::{KNOB_FILE, with_chosen_knobs};
 use crate::built_screen::{
     IMAGES_FOLDER, LOOK_FILE_START, PlacedPicture, Playback, SizedArt, page_art_file_name, sized_art_in, with_arrangement, with_headings_shown, with_page_art, with_pictures,
 };
@@ -228,7 +229,20 @@ impl FinishedScreen<'_> {
         if !sized_art.is_empty() {
             draw_sized_art(&sized_art)?;
         }
-        fs::write(&screen_file, finished).map_err(|error| format!("The built screen file could not be saved: {error}"))
+        fs::write(&screen_file, finished).map_err(|error| format!("The built screen file could not be saved: {error}"))?;
+        self.write_chosen_knobs(plugin, beside_it)
+    }
+
+    /// The knobs the musician chose go into the knob file the build put beside the screen.
+    fn write_chosen_knobs(&self, plugin: &Path, beside_the_screen: &Path) -> Result<(), String> {
+        if !self.arrangement.pages.iter().any(ArrangedPage::has_a_chosen_knob) {
+            return Ok(());
+        }
+        let knob_file = beside_the_screen.join(KNOB_FILE);
+        let as_built = fs::read_to_string(&knob_file).map_err(|error| format!("The built knob file could not be read: {error}"))?;
+        let control_names = built_control_names(plugin);
+        let chosen = with_chosen_knobs(&as_built, &self.arrangement.pages, &|control| number_of(control, &control_names))?;
+        fs::write(&knob_file, chosen).map_err(|error| format!("The built knob file could not be saved: {error}"))
     }
 
     /// A picture the musician made see-through is faded in the copy the build put beside the screen.
@@ -536,6 +550,40 @@ mod tests {
 
         assert!(finish_built_screen(&plugin.0, &no_sized_art).unwrap());
         assert!(fs::read_to_string(screen_file).unwrap().contains("WithName[SPEED]/Parameter 1"));
+    }
+
+    const KNOBS_AS_BUILT: &str = r#"{"version": 4, "Screen Mode Q-Links": {"version": 4, "map": [{"Tab": 1, "SubTab": 1, "Bank Direction": "Column", "Q-Links": {
+        "Q-Link 9": -1, "Q-Link 13": 1, "Q-Link 14": -1}}]}}"#;
+    const TIME_ON_THE_KNOB_BELOW: &str = r#"{ "pages": [{ "page": "MAIN", "knobs": [{ "control": "Time", "knob": 9 }] }] }"#;
+
+    #[test]
+    fn the_knobs_the_musician_chose_are_written_into_the_knob_file_the_build_made() {
+        let plugin = plugin_with_pictures("");
+        let screen_file = add_built_screen(&plugin, &["Volume", "Time"]);
+        let knob_file = screen_file.with_file_name(KNOB_FILE);
+        fs::write(&screen_file, GENERATED_TIME_KNOB).unwrap();
+        fs::write(&knob_file, KNOBS_AS_BUILT).unwrap();
+        fs::write(plugin.0.join(LOOK_FILE), TIME_ON_THE_KNOB_BELOW).unwrap();
+
+        assert_eq!(finish_built_screen(&plugin.0, &no_sized_art), Ok(true));
+
+        let knobs: Value = serde_json::from_str(&fs::read_to_string(knob_file).unwrap()).unwrap();
+        let of_main = &knobs["Screen Mode Q-Links"]["map"][0]["Q-Links"];
+        assert_eq!([&of_main["Q-Link 9"], &of_main["Q-Link 13"], &of_main["Q-Link 14"]], [1, -1, -1]);
+    }
+
+    #[test]
+    fn with_no_knob_chosen_the_knob_file_is_left_as_the_build_made_it() {
+        let plugin = plugin_with_pictures("");
+        let screen_file = add_built_screen(&plugin, &["Volume", "Time"]);
+        let knob_file = screen_file.with_file_name(KNOB_FILE);
+        fs::write(&screen_file, GENERATED_TIME_KNOB).unwrap();
+        fs::write(&knob_file, KNOBS_AS_BUILT).unwrap();
+        fs::write(plugin.0.join(LOOK_FILE), TIME_MOVED_AND_RENAMED).unwrap();
+
+        assert_eq!(finish_built_screen(&plugin.0, &no_sized_art), Ok(true));
+
+        assert_eq!(fs::read_to_string(knob_file).unwrap(), KNOBS_AS_BUILT);
     }
 
     #[test]

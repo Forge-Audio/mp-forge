@@ -216,12 +216,14 @@ fn arranged_page(page: &ArrangedPage) -> Value {
 }
 
 /// `slot` is the item's place in the page's list of controls in `ui.json`, counted from zero.
+/// `knob` is the hardware knob that turns a control, from 1 to 16, and is null for a heading.
 /// `parts` says how its inside was laid out by hand, and is null when the generator's own layout stands.
 fn arranged_item(item: &ArrangedItem) -> Value {
     json!({
         "kind": item.kind.word(),
         "name": item.name,
         "slot": item.slot,
+        "knob": item.knob,
         "area": area(&item.area),
         "shownName": item.shown_name,
         "moved": item.has_moved(),
@@ -442,7 +444,7 @@ mod tests {
     }
 
     #[test]
-    fn an_arrangement_says_where_each_item_sits_and_whether_it_was_moved() {
+    fn an_arrangement_says_where_each_item_sits_which_knob_turns_it_and_whether_it_was_moved() {
         let layout = workbench_engine::screen_layout::ScreenLayout::from_json(&json!({ "pages": [{ "name": "MAIN", "controls": ["Time", "Mix"] }] }));
         let look = workbench_engine::look::look_written_in(
             r#"{ "pages": [{ "page": "MAIN", "items": [{ "kind": "control", "name": "Mix", "place": { "x": 600, "y": 300 }, "shownName": "BLEND" }] }] }"#,
@@ -452,8 +454,8 @@ mod tests {
         let shown = arrangement(&pages);
 
         let items = &shown["pages"][0]["items"];
-        assert_eq!(items[0], json!({ "kind": "control", "name": "Time", "slot": 0, "area": { "x": 23, "y": 45, "width": 278, "height": 107 }, "shownName": null, "moved": false, "parts": null }));
-        assert_eq!(items[1], json!({ "kind": "control", "name": "Mix", "slot": 1, "area": { "x": 600, "y": 300, "width": 278, "height": 107 }, "shownName": "BLEND", "moved": true, "parts": null }));
+        assert_eq!(items[0], json!({ "kind": "control", "name": "Time", "slot": 0, "knob": 13, "area": { "x": 23, "y": 45, "width": 278, "height": 107 }, "shownName": null, "moved": false, "parts": null }));
+        assert_eq!(items[1], json!({ "kind": "control", "name": "Mix", "slot": 1, "knob": 14, "area": { "x": 600, "y": 300, "width": 278, "height": 107 }, "shownName": "BLEND", "moved": true, "parts": null }));
         assert_eq!(shown["pages"][0]["groupBoxes"].as_array().unwrap().len(), 4);
     }
 

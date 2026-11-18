@@ -466,6 +466,37 @@ body.keeps-still .mpc-picture.loops { animation: none; }
 }
 
 .hardware-cell.in-use { border: 2px solid var(--line); background: var(--well); color: var(--ink); }
+
+/* The pencil beside the knobs lets the musician give a knob another control. */
+.hardware-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.knob-edit-button { flex: none; width: 28px; height: 28px; display: grid; place-items: center; padding: 0; border: 2px solid var(--line); background: var(--well); box-shadow: inset -2px -2px 0 var(--lo), inset 2px 2px 0 var(--hi); }
+.knob-edit-button .tool-icon { width: 16px; height: 16px; }
+.knob-edit-button:hover:not(:disabled), .knob-edit-button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.knob-edit-button:disabled { opacity: 0.45; }
+
+/* While knobs are being given out, each can be pressed. Dashes march round the one that is chosen. */
+.hardware-cell.can-be-chosen { cursor: pointer; }
+.hardware-cell.can-be-chosen:hover, .hardware-cell.can-be-chosen:focus-visible { border-color: var(--accent); color: var(--ink); outline: none; }
+.hardware-cell.is-chosen {
+  --dash: 10px;
+  border-color: transparent;
+  color: var(--ink);
+  background-image: linear-gradient(90deg, var(--accent) 50%, transparent 50%), linear-gradient(90deg, var(--accent) 50%, transparent 50%), linear-gradient(0deg, var(--accent) 50%, transparent 50%), linear-gradient(0deg, var(--accent) 50%, transparent 50%);
+  background-size: var(--dash) 2px, var(--dash) 2px, 2px var(--dash), 2px var(--dash);
+  background-position: 0 0, 0 100%, 0 0, 100% 0;
+  background-repeat: repeat-x, repeat-x, repeat-y, repeat-y;
+  background-origin: border-box;
+  background-clip: border-box;
+  animation: dashes-march 500ms linear infinite;
+}
+.hardware-cell.is-chosen:hover, .hardware-cell.is-chosen:focus-visible { border-color: transparent; }
+@keyframes dashes-march { to { background-position: var(--dash) 0, calc(-1 * var(--dash)) 100%, 0 calc(-1 * var(--dash)), 100% var(--dash); } }
+body.keeps-still .hardware-cell.is-chosen { animation: none; }
+
+/* With a knob chosen, a control on the plugin's screen is pressed to take it, not turned. */
+.mpc-screen.picks-a-control .mpc-slot { pointer-events: auto; cursor: pointer; }
+.mpc-screen.picks-a-control .mpc-slot * { pointer-events: none; }
+.mpc-screen.picks-a-control .mpc-slot:hover { outline: max(1px, calc(2 * var(--px))) dashed var(--device-ink); outline-offset: 0; background: rgba(255, 255, 255, 0.12); }
 .hardware-number { position: absolute; top: 2px; left: 4px; font-family: Silkscreen, monospace; font-size: 11px; }
 .hardware-name { max-width: 100%; font-size: clamp(12px, 10cqw, 15px); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
