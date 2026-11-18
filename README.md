@@ -78,6 +78,8 @@ tools to install.
 - **Edit the look by hand.** Move, resize and restyle the controls, and add your own artwork.
 - **Starting points.** I'M FEELING LUCKY builds a surprise. REMIX A PLUGIN starts from a plugin in the Open
   MPC catalog. The plugin architect asks you a few questions first.
+- **Share what you make.** Export a plugin's project as one file and hand it to another musician, who brings
+  it into their own MP Forge and carries on from there.
 - **Sent the careful way.** A plugin goes onto a USB drive or SD card in the MPC, never onto its built-in
   storage, so pulling the drive out always takes the plugin away again.
 
@@ -103,7 +105,7 @@ What you need besides MP Forge itself:
 
 ## Where it stands
 
-- **Version 0.1.2 is out**, with installers for macOS, Windows and Linux on the [download page][download].
+- **Version 0.1.3 is out**, with installers for macOS, Windows and Linux on the [download page][download].
   They are not signed yet, so macOS and Windows each warn the first time MP Forge is opened.
   [Getting started][get-started] says what to do.
 - **Written on a Mac, and tested by hand on a Mac and on Windows.** Linux is tested by automated tests so

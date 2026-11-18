@@ -11,7 +11,8 @@ description: Describing a plugin, hearing it, changing it, going back a version 
 - A plugin's screen is a touch screen of pages. Each page holds up to sixteen controls: knobs, faders and
   switches, with pictures and artwork behind them. The MPC's sixteen hardware knobs turn the controls of
   the page that is showing.
-- It can play sound files you add, and it comes with a handful of presets.
+- It can play sound files you add, and it comes with a handful of presets. The first is always called
+  Default: it is how the plugin sounds when it loads, and choosing it brings the plugin back to that.
 
 Some things are out of reach. A plugin cannot send notes to the MPC or control other plugins. It runs on a
 small computer inside the MPC, so nothing that needs heavy number work: no long convolution reverbs, no

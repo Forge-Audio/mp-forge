@@ -47,7 +47,7 @@ export default defineConfig({
 			sidebar: [
 				{ label: 'Download MP Forge', link: '/download/' },
 				{ label: 'Start here', items: ['getting-started', 'what-you-need'] },
-				{ label: 'Making plugins', items: ['choosing-an-ai', 'first-plugin', 'safety-checks', 'send-to-your-mpc'] },
+				{ label: 'Making plugins', items: ['choosing-an-ai', 'first-plugin', 'safety-checks', 'send-to-your-mpc', 'sharing-plugins'] },
 				{ label: 'When something is wrong', items: ['troubleshooting', 'status'] },
 				{ label: 'For developers', items: ['building-from-source'] },
 			],
