@@ -762,3 +762,26 @@ fn akais_delay_is_got_ready_for_the_open_mpc_catalog_with_its_source_its_zip_and
     }
     assert!(written("START HERE.md").contains("Give it the tag `v1.0.0`"));
 }
+
+#[test]
+fn a_plugin_that_goes_online_is_listed_with_the_whole_stream_helper_and_says_so() {
+    let plugin = CopiedExample::of_the_delay_with_a_stream("open-mpc-online");
+    let into = PluginsFolder::empty("open-mpc-online-into");
+    fs::create_dir_all(&into.0).unwrap();
+    assert!(gate().with_online_plugins(true).inspect(&plugin.0).may_be_sent());
+    let listing = Listing::given("somebody/stereo-delay", License::Gpl3, "A stereo delay with a radio in it.");
+
+    let folder = open_mpc_listing::prepare(&plugin.0, &listing, &into.0).unwrap();
+
+    let written = |file: &str| fs::read_to_string(folder.join(file)).unwrap_or_else(|_| panic!("`{file}` was not written"));
+    let in_the_plugin = |file: &str| fs::read_to_string(plugin.0.join(file)).unwrap();
+    for helper_file in ["src/mp_forge_stream.h", "src/mp_forge_stream.cpp", "src/mp-forge-online/small_sockets.h", "src/mp-forge-online/minimp3.h", "src/mp-forge-online/streams.inc"] {
+        assert_eq!(written(&format!("1 - put in your repository/{helper_file}")), in_the_plugin(helper_file), "`{helper_file}`");
+    }
+    assert!(written("1 - put in your repository/README.md").contains("This plugin brings in sound from the internet"));
+    assert!(written("1 - put in your repository/LICENSE").contains("GNU GENERAL PUBLIC LICENSE"));
+    let steps = written("START HERE.md");
+    assert!(steps.contains("**This plugin goes online.**") && steps.contains("http://stream.example.com/jazz.mp3"));
+    assert!(steps.contains("press Fork, then Create fork") && steps.contains("In your copy, open the folder `catalog/plugins`"), "nobody can upload into a repository that is not theirs");
+    assert!(steps.contains("SHA-256, which is `"));
+}

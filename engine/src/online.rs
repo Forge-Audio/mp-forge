@@ -162,12 +162,16 @@ pub fn make_ready(plugin: &Path, online_is_switched_on: bool) -> Result<(), Vec<
 }
 
 fn put_helper_into(plugin: &Path, streams: &[Stream]) -> io::Result<()> {
-    let code = plugin.join(SOURCE_FOLDER);
-    fs::create_dir_all(code.join(HELPER_FOLDER))?;
-    for (place, contents) in HELPER_FILES {
-        fs::write(code.join(place), contents)?;
-    }
-    fs::write(code.join(STREAMS_FILE), streams_as_code(streams))
+    fs::create_dir_all(plugin.join(SOURCE_FOLDER).join(HELPER_FOLDER))?;
+    helper_for(streams).into_iter().try_for_each(|(place, contents)| fs::write(plugin.join(place), contents))
+}
+
+/// MP Forge's stream helper for these streams: every file of it, by its place in a plugin's folder. With a
+/// plugin's own code this is all of its source, so whoever is handed the source can read what goes online.
+pub fn helper_for(streams: &[Stream]) -> Vec<(PathBuf, String)> {
+    let in_the_code = |place: &str| PathBuf::from(SOURCE_FOLDER).join(place);
+    let own_files = HELPER_FILES.iter().map(|(place, contents)| (in_the_code(place), contents.to_string()));
+    own_files.chain([(in_the_code(STREAMS_FILE), streams_as_code(streams))]).collect()
 }
 
 fn take_helper_out_of(plugin: &Path) -> io::Result<()> {

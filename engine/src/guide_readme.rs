@@ -16,16 +16,27 @@ pub fn picture_file_of(page_number: usize) -> String {
     format!("docs/screen-{page_number}.png")
 }
 
-/// The README. `about` is what is said of the plugin when its guide has no words on that yet.
-pub fn readme_of(facts: &Facts, words: &Words, about: &str) -> String {
-    let said_about = if words.about.is_empty() { about } else { &words.about };
+const WHAT_THE_MPC_NEEDS: &str = "The MPC needs MPC OS 3.10.1 or later, with External Plugin Support switched on under Preferences, Enhancements (Beta).";
+const NEEDS_THE_INTERNET: &str = "This plugin brings in sound from the internet, so the MPC also has to be on a network with a way out to it.";
+
+/// What a README says that neither the plugin nor its guide knows.
+pub struct AsShared<'a> {
+    /// What is said of the plugin when its guide has no words on that yet.
+    pub about: &'a str,
+    /// The page the built plugin is downloaded from.
+    pub releases_page: &'a str,
+    pub goes_online: bool,
+}
+
+pub fn readme_of(facts: &Facts, words: &Words, shared: &AsShared) -> String {
+    let said_about = if words.about.is_empty() { shared.about } else { &words.about };
     let pages = facts.pages.iter().enumerate().map(|(index, page)| page_section(facts, page, index + 1, words));
     let sections = [
         format!("# {}\n\n{}.\n\n{}", plain(&facts.name), plain(&facts.what_it_is()), plain(said_about)),
         pages.collect::<Vec<String>>().join("\n\n"),
         presets_section(facts, words),
         things_to_try_section(words),
-        format!("## On your MPC\n\n{}", plain(&facts.where_it_is_on_the_mpc())),
+        putting_it_on_an_mpc(facts, shared),
         format!("Made with [MP Forge]({WEBSITE})."),
     ];
     sections.into_iter().filter(|section| !section.is_empty()).collect::<Vec<String>>().join("\n\n") + "\n"
@@ -37,6 +48,22 @@ fn page_section(facts: &Facts, page: &Page, page_number: usize, words: &Words) -
     let rows: Vec<String> = page.controls.iter().map(|control| control_row(control, words)).collect();
     let table = if rows.is_empty() { String::new() } else { format!("\n\n{}\n{}", table_heading(words), rows.join("\n")) };
     format!("## {heading}{picture}{table}")
+}
+
+/// How somebody who finds the plugin here gets it onto their own MPC, with no other program.
+fn putting_it_on_an_mpc(facts: &Facts, shared: &AsShared) -> String {
+    let folder = plain(&format!("{} - VST - {}", facts.maker, facts.name));
+    let needs = if shared.goes_online { format!("{WHAT_THE_MPC_NEEDS} {NEEDS_THE_INTERNET}") } else { WHAT_THE_MPC_NEEDS.to_string() };
+    format!(
+        "## Put it on your MPC\n\n\
+         1. Download the zip from the [latest release]({}) and unzip it. It holds one folder, `{folder}`.\n\
+         2. Copy that folder into a folder called `VST2 Plugins` at the top of a USB drive or SD card.\n\
+         3. Put the drive in the MPC and restart the MPC's app.\n\
+         4. {}\n\n\
+         {needs}",
+        shared.releases_page,
+        plain(&facts.where_it_is_on_the_mpc()),
+    )
 }
 
 fn table_heading(words: &Words) -> String {
@@ -103,6 +130,10 @@ mod tests {
         Facts { name: "Tape Echo".to_string(), maker: "Somebody".to_string(), is_effect: true, pages: vec![main, more], presets: vec!["Default".to_string()] }
     }
 
+    fn shared(about: &str) -> AsShared<'_> {
+        AsShared { about, releases_page: "https://github.com/somebody/tape-echo/releases/latest", goes_online: false }
+    }
+
     fn its_words() -> Words {
         let said = |of: &str, words: &str| Said { of: of.to_string(), words: words.to_string() };
         Words {
@@ -115,18 +146,19 @@ mod tests {
 
     #[test]
     fn the_readme_says_what_the_guide_says_with_the_pictures_beside_it() {
-        let readme = readme_of(&tape_echo(), &its_words(), "An echo.");
+        let readme = readme_of(&tape_echo(), &its_words(), &shared("An echo."));
 
         assert!(readme.starts_with("# Tape Echo\n\nAn effect for the Akai MPC, by Somebody.\n\nA worn tape echo.\n\n## The MAIN page\n\n![The MAIN page of the plugin's screen](docs/screen-1.png)\n\n| Control |"));
         assert!(readme.contains("| **Time** | How long before the sound comes back. | 350 ms | 1 |"));
         assert!(readme.contains("| **Mode** | Settings: Clean, Worn. | Clean | 2 |"));
-        assert!(readme.contains("## The MORE page\n\n## Presets\n\n- **Default** How the plugin starts.\n\n## Things to try\n\n1. Turn Time up slowly.\n\n## On your MPC\n\n"));
+        assert!(readme.contains("## The MORE page\n\n## Presets\n\n- **Default** How the plugin starts.\n\n## Things to try\n\n1. Turn Time up slowly.\n\n## Put it on your MPC\n\n1. Download the zip from the [latest release](https://github.com/somebody/tape-echo/releases/latest) and unzip it. It holds one folder, `Somebody - VST - Tape Echo`.\n"));
+        assert!(readme.contains("4. On the MPC, open the list of plugins.") && !readme.contains("way out to it"));
         assert!(readme.ends_with("Made with [MP Forge](https://forge-audio.github.io/mp-forge/).\n"));
     }
 
     #[test]
     fn a_plugin_without_a_guide_still_gets_its_controls_and_what_was_said_about_it() {
-        let readme = readme_of(&tape_echo(), &Words::default(), "An echo with a worn sound.");
+        let readme = readme_of(&tape_echo(), &Words::default(), &shared("An echo with a worn sound."));
 
         assert!(readme.contains("by Somebody.\n\nAn echo with a worn sound.\n\n## The MAIN page"));
         assert!(readme.contains("| Control | Settings | Starts at | Hardware knob |") && !readme.contains("What it does"));
@@ -135,11 +167,18 @@ mod tests {
     }
 
     #[test]
+    fn a_plugin_that_goes_online_says_its_mpc_needs_the_internet() {
+        let readme = readme_of(&tape_echo(), &its_words(), &AsShared { goes_online: true, ..shared("") });
+
+        assert!(readme.contains("Enhancements (Beta). This plugin brings in sound from the internet"));
+    }
+
+    #[test]
     fn nothing_written_in_a_readme_can_act_as_markdown_or_markup() {
         let mut words = its_words();
         words.about = "See [this](http://example.com) <script>alert(1)</script>\n# Heading | cell".to_string();
 
-        let readme = readme_of(&tape_echo(), &words, "");
+        let readme = readme_of(&tape_echo(), &words, &shared(""));
 
         assert!(readme.contains("See \\[this\\](http://example.com) &lt;script&gt;alert(1)&lt;/script&gt; \\# Heading \\| cell"));
     }

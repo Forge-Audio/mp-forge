@@ -14,8 +14,10 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use ring::digest::{SHA256, digest};
+
 use crate::guide::{self, Facts, GuideError, Words};
-use crate::guide_readme::{picture_file_of, readme_of};
+use crate::guide_readme::{AsShared, picture_file_of, readme_of};
 use crate::online;
 use crate::ordered_json::Json;
 use crate::project_file::carried_files_in;
@@ -243,10 +245,11 @@ impl BuiltPlugin {
     }
 
     fn write_listing(&self, listing: &Listing, folder: &Path) -> io::Result<()> {
+        let zip = self.zipped(listing)?;
         self.write_the_repository(listing, &folder.join(FOR_THE_REPOSITORY))?;
-        write_into(&folder.join(FOR_THE_RELEASE).join(self.zip_name()), &self.zipped(listing)?)?;
+        write_into(&folder.join(FOR_THE_RELEASE).join(self.zip_name()), &zip)?;
         write_into(&folder.join(FOR_THE_CATALOG).join(format!("{}.json", self.id())), self.catalog_entry(listing).as_bytes())?;
-        write_into(&folder.join(STEPS_FILE), self.steps(listing).as_bytes())
+        write_into(&folder.join(STEPS_FILE), self.steps(listing, &checksum_of(&zip)).as_bytes())
     }
 
     // ---------------------------------------------------------------------------------------
@@ -258,7 +261,7 @@ impl BuiltPlugin {
             write_into(&repository.join(&carried), &fs::read(self.project.join(&carried))?)?;
         }
         write_into(&repository.join(MANIFEST), self.manifest_as_listed(&self.manifest, listing).as_bytes())?;
-        write_into(&repository.join(README), readme_of(&self.facts, &self.words, &listing.summary).as_bytes())?;
+        write_into(&repository.join(README), self.readme(listing).as_bytes())?;
         write_into(&repository.join(LICENSE_FILE), listing.license.text_for(&self.facts.maker, this_year()).as_bytes())?;
         for (page_number, page) in self.pages_with_a_picture() {
             write_into(&repository.join(picture_file_of(page_number)), &page.picture)?;
@@ -266,7 +269,27 @@ impl BuiltPlugin {
         if self.guide_is_written {
             write_into(&repository.join(GUIDE_IN_THE_REPOSITORY), guide::page_of(&self.facts, &self.words).as_bytes())?;
         }
-        Ok(())
+        self.write_what_goes_online(repository)
+    }
+
+    fn readme(&self, listing: &Listing) -> String {
+        let releases_page = format!("https://github.com/{}/releases/latest", listing.repository);
+        let shared = AsShared { about: &listing.summary, releases_page: &releases_page, goes_online: !self.streams().is_empty() };
+        readme_of(&self.facts, &self.words, &shared)
+    }
+
+    fn streams(&self) -> Vec<online::Stream> {
+        online::streams_of(&self.project).unwrap_or_default()
+    }
+
+    /// A plugin that goes online is handed over with the whole of MP Forge's stream helper, as MP Forge itself
+    /// writes it, so that the source in the repository is all of the plugin's source, network code included.
+    fn write_what_goes_online(&self, repository: &Path) -> io::Result<()> {
+        let streams = self.streams();
+        if streams.is_empty() {
+            return Ok(());
+        }
+        online::helper_for(&streams).into_iter().try_for_each(|(place, contents)| write_into(&repository.join(place), contents.as_bytes()))
     }
 
     fn pages_with_a_picture(&self) -> impl Iterator<Item = (usize, &guide::Page)> {
@@ -337,7 +360,7 @@ impl BuiltPlugin {
     // The steps: what is left for the musician to do on GitHub
     // ---------------------------------------------------------------------------------------
 
-    fn steps(&self, listing: &Listing) -> String {
+    fn steps(&self, listing: &Listing, checksum: &str) -> String {
         let (name, repository, license) = (&self.facts.name, &listing.repository, listing.license.name());
         let (zip, id, tag) = (self.zip_name(), self.id(), self.tag());
         let guide = if self.guide_is_written { "a README made from its guide" } else { "a README with its screen and controls" };
@@ -355,9 +378,21 @@ impl BuiltPlugin {
              `{FOR_THE_RELEASE}`, which is `{zip}`. Leave the file's name as it is: the catalog finds it by its ending.\n\n\
              ## 3. Ask for it to be listed\n\n\
              The file in `{FOR_THE_CATALOG}`, `{id}.json`, goes into the folder `catalog/plugins` of \
-             https://github.com/{THE_CATALOG} as a pull request. Open that folder on GitHub, choose Add file, then Upload \
-             files, and GitHub walks you through the rest. One of Open MPC's maintainers reads it and merges it. The \
-             catalog then fetches your release, checks the zip and lists the plugin, usually by the next day.\n\n\
+             https://github.com/{THE_CATALOG} as a pull request. That repository is not yours, so GitHub will not let \
+             you put a file straight into it. You work in a copy of your own:\n\n\
+             1. Open https://github.com/{THE_CATALOG} and press Fork, then Create fork. That makes your own copy of \
+             the catalog.\n\
+             2. In your copy, open the folder `catalog/plugins`, choose Add file, then Upload files, and drag in \
+             `{id}.json`.\n\
+             3. Under the file, choose to create a new branch for the commit and start a pull request, and press \
+             Propose changes.\n\
+             4. On the next page, check that the base repository is `{THE_CATALOG}`, press Create pull request, fill in \
+             the form and submit it.\n\n\
+             The form asks for the release zip's SHA-256, which is `{checksum}`. It also asks for the output of Open \
+             MPC's own check tool. If you cannot run that, say so, and say the zip was made by MP Forge from a plugin \
+             built with Akai's SDK.\n\n\
+             One of Open MPC's maintainers reads it and merges it. The catalog then fetches your release, checks the \
+             zip and lists the plugin, usually by the next day.\n\n\
              ## Before you do\n\n\
              - **Is all of it yours to share?** A remix of somebody else's plugin has to keep that plugin's licence and \
              name its author. Sound files and pictures you added have to be yours to share too.\n\
@@ -375,7 +410,7 @@ impl BuiltPlugin {
 
     /// The catalog's check marks a plugin that uses the network for a person to look at, so the maker should say why.
     fn note_on_going_online(&self) -> String {
-        let streams = online::streams_of(&self.project).unwrap_or_default();
+        let streams = self.streams();
         if streams.is_empty() {
             return String::new();
         }
@@ -386,6 +421,11 @@ impl BuiltPlugin {
             addresses.join(", ")
         )
     }
+}
+
+/// The SHA-256 of a file, written the way checksum tools print it. The catalog's form asks for the zip's.
+fn checksum_of(contents: &[u8]) -> String {
+    digest(&SHA256, contents).as_ref().iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 fn words_joined_by_hyphens(name: &str) -> String {
@@ -482,6 +522,11 @@ mod tests {
         assert_eq!(words_joined_by_hyphens("retro delay"), "retro-delay");
         assert_eq!(words_joined_by_hyphens("  6W6 -- (mk II)! "), "6W6-mk-II");
         assert_eq!(words_joined_by_hyphens("!!!"), "");
+    }
+
+    #[test]
+    fn a_checksum_is_written_the_way_checksum_tools_print_it() {
+        assert_eq!(checksum_of(b"abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
     }
 
     #[test]
