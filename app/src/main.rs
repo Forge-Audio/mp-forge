@@ -157,6 +157,8 @@ fn open_window() -> ExitCode {
             commands::keep_plugins_in,
             commands::delete_plugin,
             commands::export_plugin,
+            commands::open_mpc_listing_state,
+            commands::list_on_open_mpc,
             commands::allow_online_plugins,
             commands::guide_state,
             commands::make_guide,

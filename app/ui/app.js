@@ -8,7 +8,7 @@
   const knobChoosing = window.knobChoosing;
   const { withKnobGiven } = window.lookEdits;
   const blacksmith = window.blacksmith;
-  const { askForNewName, askForAnotherName, askWhatToImport, askAboutTheGuide, askBeforeDeleting, askBeforeSending } = window.pluginSheets;
+  const { askForNewName, askForAnotherName, askWhatToImport, askAboutTheGuide, askAboutListing, askBeforeDeleting, askBeforeSending } = window.pluginSheets;
   const versionTimeline = window.versionTimeline;
   const pluginArchitect = window.pluginArchitect;
   const appSettings = window.appSettings;
@@ -32,13 +32,13 @@
   const outputVolume = window.outputVolume;
 
   const NEW_PLUGIN = null;
-  const STATUS = { noPlugin: "NO PLUGIN YET", unchecked: "NOT CHECKED YET", working: "WORKING", building: "BUILDING", checking: "CHECKING", sending: "SENDING", stopping: "STOPPING", safe: "SAFE TO SEND", blocked: "BLOCKED" };
+  const STATUS = { noPlugin: "NO PLUGIN YET", unchecked: "NOT CHECKED YET", working: "WORKING", building: "BUILDING", checking: "CHECKING", sending: "SENDING", listing: "GETTING READY", stopping: "STOPPING", safe: "SAFE TO SEND", blocked: "BLOCKED" };
   const SMITH_WORKS_WHILE = [STATUS.building, STATUS.checking, STATUS.stopping];
   // Whatever the musician did not say themselves is said by MP Forge, whichever AI did the work.
   const SPEAKER = { you: "You", mpForge: "MP Forge" };
   const WAITS_ITS_TURN = `${SPEAKER.you} · waiting its turn`;
   const NO_PICTURES = { names: [], addresses: [], handed: [] };
-  const WORKING_WORDS = { [STATUS.checking]: "Its safety check is running.", [STATUS.sending]: "It is being sent to your MPC." };
+  const WORKING_WORDS = { [STATUS.checking]: "Its safety check is running.", [STATUS.sending]: "It is being sent to your MPC.", [STATUS.listing]: "It is being got ready for Open MPC." };
   const WIDEN_THE_CONVERSATION = "Give the conversation the whole window.";
   const SHOW_THE_PLUGIN = "Bring the plugin's view back beside the conversation.";
   const ASK_FOR_A_PLUGIN = "Describe your plugin";
@@ -59,6 +59,8 @@
   const A_GUIDE_NEEDS_A_BUILD = "A guide can be made once the plugin has been built. Run its safety check first.";
   const AI_IS_WRITING_THE_GUIDE = "Asking the AI to write the guide. This takes a minute or so, and the guide opens in your browser when it is done.";
   const ABOUT_A_MADE_GUIDE = "Print it or save it as a PDF from there. Its words are kept with the plugin and go along when you export it.";
+  const A_LISTING_NEEDS_A_BUILD = "Only a built plugin can be listed. Run its safety check first.";
+  const ABOUT_A_LISTING_MADE = "Nothing has been sent anywhere. Open START HERE in that folder: it has the three steps to do on GitHub.";
   const GOES_ONLINE_FOR = "This plugin goes online. On your MPC and when you play it here, it fetches sound from:";
   const WHAT_AN_EXPORT_HOLDS = "The file holds the plugin's code, its screen and look, its pictures and its sounds. Your conversation with the AI and the plugin's earlier versions are not in it. Whoever you give it to brings it in with IMPORT A PLUGIN.";
   const IMPORTED_AND_NOT_RUN = "**Brought in.** Nothing of it has been run yet. Run the safety check to build it, then you can see its screen, play it and change it.";
@@ -119,6 +121,7 @@
     moreMenu: document.getElementById("more-menu"),
     guidePlugin: document.getElementById("guide-plugin"),
     exportPlugin: document.getElementById("export-plugin"),
+    listPlugin: document.getElementById("list-plugin"),
     renamePlugin: document.getElementById("rename-plugin"),
     deletePlugin: document.getElementById("delete-plugin"),
     appSheet: document.getElementById("app-sheet"),
@@ -1487,6 +1490,36 @@
     }
   }
 
+  // --- Listing a plugin in the Open MPC catalog -------------------------------------------------
+
+  // The app runs the safety check once more before it makes the listing's folder, so a plugin that no longer
+  // passes is held back and shown as blocked, the same as after any check.
+  async function getReadyForOpenMpc(pluginName, listing) {
+    state.checking.set(pluginName, STATUS.listing);
+    drawWork();
+    try {
+      const outcome = await ask("list_on_open_mpc", { name: pluginName, listing });
+      if (outcome) showReport(pluginName, outcome.report);
+      if (outcome && outcome.ready) addMessage(pluginName, { kind: "note", text: `**Ready for Open MPC.** Everything is in ${outcome.folder}. ${ABOUT_A_LISTING_MADE}` });
+    } catch (problem) {
+      addMessage(pluginName, { kind: "problem", text: describeProblem(problem) });
+    }
+    state.checking.delete(pluginName);
+    drawWork();
+  }
+
+  async function listOpenPluginOnOpenMpc() {
+    const pluginName = state.openName;
+    try {
+      const listed = await ask("open_mpc_listing_state", { name: pluginName });
+      if (!listed.built) return addMessage(pluginName, { kind: "problem", text: A_LISTING_NEEDS_A_BUILD });
+      const listing = await askAboutListing(page.appSheet, pluginName, listed);
+      if (listing) await getReadyForOpenMpc(pluginName, listing);
+    } catch (problem) {
+      addMessage(pluginName, { kind: "problem", text: describeProblem(problem) });
+    }
+  }
+
   // --- Handing a plugin to somebody else, and bringing one in ----------------------------------
 
   async function exportOpenPlugin() {
@@ -1680,6 +1713,7 @@
       appMenu.DIVIDER,
       appMenu.row("Guide…", makeGuideOfOpenPlugin, cannotBeTouched),
       appMenu.row("Export…", exportOpenPlugin, cannotBeTouched),
+      appMenu.row("List on Open MPC…", listOpenPluginOnOpenMpc, cannotBeTouched),
       appMenu.row("Rename…", renameOpenPlugin, cannotBeTouched),
       appMenu.row("Delete…", deleteOpenPlugin, cannotBeTouched),
     ];
@@ -1882,6 +1916,7 @@
     page.settingsDone.addEventListener("click", () => showSettings(false));
     page.guidePlugin.addEventListener("click", makeGuideOfOpenPlugin);
     page.exportPlugin.addEventListener("click", exportOpenPlugin);
+    page.listPlugin.addEventListener("click", listOpenPluginOnOpenMpc);
     page.importPlugin.addEventListener("click", importAPlugin);
     page.renamePlugin.addEventListener("click", renameOpenPlugin);
     page.deletePlugin.addEventListener("click", deleteOpenPlugin);
@@ -1900,7 +1935,7 @@
   // The menu for the open plugin closes as soon as one of its rows is picked.
   function connectMoreMenu() {
     const moreMenu = window.popupMenu(page.moreButton, page.moreMenu);
-    [page.guidePlugin, page.exportPlugin, page.renamePlugin, page.deletePlugin].forEach((row) => row.addEventListener("click", moreMenu.close));
+    [page.guidePlugin, page.exportPlugin, page.listPlugin, page.renamePlugin, page.deletePlugin].forEach((row) => row.addEventListener("click", moreMenu.close));
   }
 
   // One plus button offers both things that can be added. Picking either closes the menu and opens its file picker.

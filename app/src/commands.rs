@@ -35,13 +35,14 @@ use workbench_engine::look::{look_from, look_of};
 use workbench_engine::lucky_find::{self, Find, Hunt};
 use workbench_engine::online;
 use workbench_engine::open_mpc;
+use workbench_engine::open_mpc_listing::NotListed;
 use workbench_engine::page_art;
 use workbench_engine::picture_clock;
 use workbench_engine::pictures::Picture;
 use workbench_engine::process::command_for;
 use workbench_engine::project_file::{NotTakenIn, PROJECT_FILE_ENDING};
 use workbench_engine::readiness;
-use workbench_engine::maker::{Connection, Delivery, MakeError, Maker, PluginRequest, Sending};
+use workbench_engine::maker::{Connection, Delivery, Listed, MakeError, Maker, PluginRequest, Sending};
 use workbench_engine::providers::{ANTHROPIC, Provider};
 use workbench_engine::samples::SampleShelf;
 use workbench_engine::sdk::{PluginIdentity, PluginKind, Sdk, built_screen_file, built_skin_image};
@@ -52,7 +53,7 @@ use workbench_engine::ai_settings::AiSettings;
 use crate::accounts::{CODEX_ACCOUNT, MPC_ACCOUNT, has_key_for, key_for, service_called};
 use crate::chatgpt;
 use crate::key_store;
-use crate::payloads::{self, AiChoice, AiPicks, ChangeAsked, HuntAsked, IdeaAsked, MpcAsked, NewPlugin};
+use crate::payloads::{self, AiChoice, AiPicks, ChangeAsked, HuntAsked, IdeaAsked, ListingAsked, MpcAsked, NewPlugin};
 use crate::player::{LivePlayer, Played};
 use crate::upload::UploadedFile;
 use crate::workbench::Workbench;
@@ -75,6 +76,7 @@ const CHOOSE_A_PLUGINS_FOLDER: &str = "Choose the folder to keep your plugins in
 const CHOOSE_A_TEST_SOUND: &str = "Choose a sound to play through the effect";
 const SAVE_THE_PLUGIN_AS: &str = "Save this plugin to hand to somebody else";
 const CHOOSE_A_PLUGIN_TO_IMPORT: &str = "Choose the plugin to bring in";
+const CHOOSE_WHERE_THE_LISTING_GOES: &str = "Choose where to put the folder for Open MPC";
 const PACKED_PLUGINS: &str = "MP Forge plugin";
 /// The program that shows a folder in the computer's own file manager.
 #[cfg(target_os = "macos")]
@@ -504,6 +506,36 @@ pub fn export_plugin(name: String, app: AppHandle, workbench: State<Workbench>) 
     let _claim = workbench.claim_to_change_by_hand(&name)?;
     workbench.maker()?.export_project(&name, &file).map_err(explain)?;
     Ok(Some(file))
+}
+
+/// How the plugin would be listed in the Open MPC catalog, for the sheet that asks about it. Only a built
+/// plugin can be listed.
+#[tauri::command]
+pub fn open_mpc_listing_state(name: String, workbench: State<Workbench>) -> Result<Value, String> {
+    match workbench.maker()?.as_listed_on_open_mpc(&name) {
+        Ok(listed) => Ok(payloads::as_it_would_be_listed(&listed)),
+        Err(MakeError::NotListed(NotListed::NotBuiltYet)) => Ok(json!({ "built": false })),
+        Err(problem) => Err(explain(problem)),
+    }
+}
+
+/// Lets the musician choose a folder, and makes in it everything a listing in the Open MPC catalog needs: the
+/// plugin's source with its guide as the README, the built plugin as a zip, and the file that asks for the
+/// listing. The safety check is run on the plugin as it stands first, and a plugin it stops is not got ready.
+/// Nothing is sent anywhere. Answers with nothing when they chose no folder.
+#[tauri::command(async)]
+pub fn list_on_open_mpc(name: String, listing: ListingAsked, app: AppHandle, workbench: State<Workbench>) -> Result<Option<Value>, String> {
+    let listing = listing.as_listing()?;
+    let Some(picked) = app.dialog().file().set_title(CHOOSE_WHERE_THE_LISTING_GOES).blocking_pick_folder() else { return Ok(None) };
+    let into = picked.into_path().map_err(|problem| format!("That place cannot be used: {problem}."))?;
+    let _claim = workbench.claim_to_check(&name)?;
+    match workbench.maker()?.list_on_open_mpc(&name, &listing, &into).map_err(explain)? {
+        Listed::HeldBack(report) => Ok(Some(json!({ "ready": false, "report": payloads::report(&report) }))),
+        Listed::Ready { report, folder } => {
+            let _ = command_for(OPENS_FOLDERS).arg(&folder).spawn();
+            Ok(Some(json!({ "ready": true, "report": payloads::report(&report), "folder": folder })))
+        }
+    }
 }
 
 /// Lets the musician pick a plugin to bring in: a file packed by MP Forge, or the folder of a plugin's project.

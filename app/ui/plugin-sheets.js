@@ -18,6 +18,14 @@
   const ABOUT_THE_GUIDE = "One page on how to use this plugin, to keep or to hand to others: a picture of its screen, what every control does, where it starts and which hardware knob turns it, its presets, and things to try. It is saved in the plugin's folder and opens in your browser, where it can be printed or saved as a PDF.";
   const GUIDE_ASKS_THE_AI = "Its words have not been written yet. Your AI is asked for them once, which uses a little of your AI credit and takes a minute or so. They are then kept with the plugin.";
   const WRITE_THE_GUIDE_AGAIN = "Have the AI write its words again. This uses a little of your AI credit.";
+  const LONGEST_REPOSITORY = 100;
+  const LONGEST_SUMMARY = 350;
+  const LICENCES = ["MIT", "GPL-3.0-only"];
+  const ABOUT_LISTING = "Open MPC is the community's catalog of open plugins for the MPC. This makes a folder with everything a listing there needs: the plugin's source for your GitHub repository, with a page made from its guide; the built plugin as a zip for a release; and the file that asks for the listing. Nothing is sent anywhere. The steps on GitHub are yours, and are written out in the folder.";
+  const LISTING_MAKES_IT_PUBLIC = "The catalog lists open plugins only. Listing a plugin makes its code public, for anyone to read, change and share.";
+  const ABOUT_THE_LICENCES = "MIT lets anyone do anything with it, as long as your name stays on it. GPL lets anyone change and share it, as long as what they share stays open the same way. A remix of somebody else's plugin has to keep that plugin's licence.";
+  const ABOUT_LISTING_UNCHECKED = "The safety check runs once more first, and only a plugin that passes is got ready.";
+  const NO_GUIDE_YET = "This plugin has no guide yet, so its page will show its screen and controls without saying what each one does. For a fuller page, make its guide first: ⋯, then Guide….";
   const ABOUT_DELETING = "Its folder is moved to the Trash on this computer, with its sound, its screen, its pictures and its conversation. A copy already on your MPC is not touched.";
 
   // Answers with the name typed, or nothing when the musician thought better of it.
@@ -73,6 +81,36 @@
     return asked(sheet, details, () => ({ writeAgain: wordsAreWritten && again.box.checked }));
   }
 
+  function textBox(label, longest) {
+    const box = element("input", "item-input");
+    box.type = "text";
+    box.maxLength = longest;
+    box.spellcheck = false;
+    box.setAttribute("aria-label", label);
+    return box;
+  }
+
+  // Answers with the repository, the licence and the line for the card, or with nothing when the musician
+  // thought better of it. `listed` is how the plugin would be listed: who by, and what its guide suggests saying.
+  function askAboutListing(sheet, pluginName, listed) {
+    const repository = textBox("Your repository on GitHub", LONGEST_REPOSITORY);
+    repository.placeholder = `yourname/${listed.id}`;
+    const summary = textBox("One line for its card in the catalog", LONGEST_SUMMARY);
+    summary.value = listed.summary;
+    summary.placeholder = "What it sounds like or does, in one line";
+    const licence = eitherOf(...LICENCES);
+    const holds = [
+      element("div", "", ABOUT_LISTING),
+      element("div", "sheet-problem", `${LISTING_MAKES_IT_PUBLIC} ${pluginName} would be listed as made by ${listed.author}.`),
+      element("div", "field-label", "Your repository on GitHub"), repository,
+      element("div", "field-label", "One line for its card"), summary,
+      element("div", "field-label", "Licence"), licence.row, element("div", "soft small", ABOUT_THE_LICENCES),
+      element("div", "soft small", listed.guideWritten ? ABOUT_LISTING_UNCHECKED : `${NO_GUIDE_YET} ${ABOUT_LISTING_UNCHECKED}`),
+    ];
+    const details = { title: "LIST ON OPEN MPC", confirmWords: "CHOOSE A FOLDER…", holds, wide: true, focusOn: repository };
+    return asked(sheet, details, () => ({ repository: repository.value.trim(), license: LICENCES[Number(licence.isSecond())], summary: summary.value.trim() }));
+  }
+
   // Answers true only when the musician pressed DELETE.
   function askBeforeDeleting(sheet, pluginName) {
     const question = element("div", "", `Delete ${pluginName}?`);
@@ -106,5 +144,5 @@
     return asked(sheet, details, () => ({ address: address.value.trim(), restart: restart.box.checked })).then((answer) => (answer && answer.address ? answer : null));
   }
 
-  window.pluginSheets = { askForNewName, askForAnotherName, askWhatToImport, askAboutTheGuide, askBeforeDeleting, askBeforeSending };
+  window.pluginSheets = { askForNewName, askForAnotherName, askWhatToImport, askAboutTheGuide, askAboutListing, askBeforeDeleting, askBeforeSending };
 })();

@@ -490,6 +490,11 @@
       delete_plugin: ({ name }) => { plugins.splice(plugins.findIndex((plugin) => plugin.name === name), 1); },
       export_plugin: ({ name }) => `/Users/you/Desktop/${name}.mpforge`,
       allow_online_plugins: () => {},
+      open_mpc_listing_state: ({ name }) => ({ built: true, id: name.toLowerCase().replace(/[^a-z0-9]+/g, "-"), author: "Demo", version: "1.0.0", summary: guidesWritten.has(name) ? "A worn tape echo with wow, flutter and a tone control." : "", guideWritten: guidesWritten.has(name) }),
+      list_on_open_mpc: ({ name, listing }) => {
+        if (!/^[\w.-]+\/[\w.-]+$/.test(listing.repository)) return Promise.reject("The repository has to be written as owner/name, such as yourname/tape-echo.");
+        return new Promise((resolve) => setTimeout(() => resolve({ ready: true, report: DEMO_REPORT, folder: `/Users/you/Desktop/${name} for Open MPC` }), 700));
+      },
       // The demo keeps no guide's words until one has been made, and takes a moment to pretend the AI is writing.
       guide_state: ({ name }) => ({ built: true, written: guidesWritten.has(name) }),
       make_guide: ({ name, writeAgain }) => {

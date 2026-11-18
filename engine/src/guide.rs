@@ -48,13 +48,13 @@ const LONGEST_NAME: usize = 64;
 const MOST_CONTROLS: usize = 128;
 const MOST_PRESETS: usize = 64;
 const MOST_THINGS_TO_TRY: usize = 6;
-const MOST_CHOICES_LISTED: usize = 12;
+pub(crate) const MOST_CHOICES_LISTED: usize = 12;
 const MOST_OF_A_NOTE: usize = 8_000;
 const MOST_OF_THE_CODE: usize = 60_000;
 const NOTES_BY_THE_MAKER: [(&str, &str); 2] = [("README.md", "What its maker wrote about it"), ("DESIGN.md", "The plan for its sound and its look")];
 const CODE_FOLDER: &str = "src";
 const CODE_ENDINGS: [&str; 3] = ["cpp", "h", "hpp"];
-const WEBSITE: &str = "https://forge-audio.github.io/mp-forge/";
+pub(crate) const WEBSITE: &str = "https://forge-audio.github.io/mp-forge/";
 
 /// One control as the built plugin reports it and as the screen places it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -192,8 +192,19 @@ impl Facts {
         digest(&SHA256, listed.as_bytes()).as_ref().iter().map(|byte| format!("{byte:02x}")).collect()
     }
 
-    fn kind(&self) -> &'static str {
+    pub(crate) fn kind(&self) -> &'static str {
         if self.is_effect { "effect" } else { "instrument" }
+    }
+
+    /// "An effect for the Akai MPC, by its maker": what the plugin is, in one line.
+    pub(crate) fn what_it_is(&self) -> String {
+        format!("An {} for the Akai MPC, by {}", self.kind(), self.maker)
+    }
+
+    /// Where a musician finds the plugin once it is on their MPC.
+    pub(crate) fn where_it_is_on_the_mpc(&self) -> String {
+        let where_it_goes = if self.is_effect { "It is an effect, so it goes on an insert." } else { "It is an instrument, so it goes on a plugin track." };
+        format!("On the MPC, open the list of plugins. It is under External Plugins, by {}. {where_it_goes}", self.maker)
     }
 }
 
@@ -225,11 +236,11 @@ impl Words {
         !self.about.is_empty() || !self.controls.is_empty()
     }
 
-    fn of_control(&self, name: &str) -> &str {
+    pub(crate) fn of_control(&self, name: &str) -> &str {
         words_of(&self.controls, name)
     }
 
-    fn of_preset(&self, name: &str) -> &str {
+    pub(crate) fn of_preset(&self, name: &str) -> &str {
         words_of(&self.presets, name)
     }
 }
@@ -352,7 +363,7 @@ pub fn page_of(facts: &Facts, words: &Words) -> String {
     let screen: Vec<String> = facts.pages.iter().map(|page| page_section(page, facts.pages.len(), words)).collect();
     let filled_in = [
         ("{{NAME}}", plain(&facts.name)),
-        ("{{WHAT_IT_IS}}", plain(&format!("An {} for the Akai MPC, by {}", facts.kind(), facts.maker))),
+        ("{{WHAT_IT_IS}}", plain(&facts.what_it_is())),
         ("{{ABOUT}}", paragraph(&words.about)),
         ("{{SCREEN}}", screen.join("\n")),
         ("{{PRESETS}}", presets_section(facts, words)),
@@ -426,8 +437,7 @@ fn things_to_try_section(words: &Words) -> String {
 }
 
 fn on_your_mpc(facts: &Facts) -> String {
-    let where_it_goes = if facts.is_effect { "It is an effect, so it goes on an insert." } else { "It is an instrument, so it goes on a plugin track." };
-    plain(&format!("On the MPC, open the list of plugins. It is under External Plugins, by {}. {where_it_goes}", facts.maker))
+    plain(&facts.where_it_is_on_the_mpc())
 }
 
 #[cfg(test)]

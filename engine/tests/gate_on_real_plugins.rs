@@ -17,6 +17,7 @@ use workbench_engine::gate::{
 use workbench_engine::hosted_plugin::{HostedPlugin, LARGEST_BLOCK, Note, moves_made_by_the_plugin};
 use workbench_engine::library::built_parameters;
 use workbench_engine::online::{ONLINE_FILE, ONLINE_IS_SWITCHED_OFF};
+use workbench_engine::open_mpc_listing::{self, License, Listing};
 use workbench_engine::live_player::Rig;
 use workbench_engine::picture_clock::{CLOCK_CONTROL, turn_seconds_of};
 use workbench_engine::picture_review::HOW_TO_READ_THE_PICTURES;
@@ -724,4 +725,40 @@ fn the_check_shows_the_ai_each_whole_page_once_the_plugin_builds() {
     assert!(shown[1].starts_with("Picture `reel`") && shown[2].starts_with("Picture `lamp`"), "{shown:?}");
     assert!(first.content.contains("Each page of the screen follows"));
     assert!(with_nothing_changed.illustrations.is_empty());
+}
+
+#[test]
+fn akais_delay_is_got_ready_for_the_open_mpc_catalog_with_its_source_its_zip_and_its_entry() {
+    let plugin = CopiedExample::of_the_delay("open-mpc");
+    let into = PluginsFolder::empty("open-mpc-into");
+    fs::create_dir_all(&into.0).unwrap();
+    assert!(gate().inspect(&plugin.0).may_be_sent());
+    let listing = Listing::given("somebody/stereo-delay", License::Mit, "A stereo delay that keeps time with the song.");
+
+    let listed = open_mpc_listing::as_it_would_be_listed(&plugin.0).unwrap();
+    let folder = open_mpc_listing::prepare(&plugin.0, &listing, &into.0).unwrap();
+    let again = open_mpc_listing::prepare(&plugin.0, &listing, &into.0).unwrap();
+
+    let written = |file: &str| fs::read_to_string(folder.join(file)).unwrap_or_else(|_| panic!("`{file}` was not written"));
+    let readme = written("1 - put in your repository/README.md");
+    let entry: serde_json::Value = serde_json::from_str(&written("3 - add to the catalog/stereo-delay.json")).unwrap();
+    let zip = fs::read(folder.join("2 - attach to your release/Stereo-Delay-1.0.0-mpc-sdk.zip")).unwrap();
+    let zip_as_text = String::from_utf8_lossy(&zip);
+    assert_eq!((listed.id.as_str(), listed.version.as_str(), listed.guide_is_written), ("stereo-delay", "1.0.0", false));
+    assert_eq!(folder, into.0.join("Stereo Delay for Open MPC"));
+    assert_eq!(again, into.0.join("Stereo Delay for Open MPC 2"), "the first folder is never written over");
+    assert!(readme.starts_with("# Stereo Delay\n\nAn effect for the Akai MPC, by MPC SDK Examples.\n\nA stereo delay that keeps time with the song."));
+    assert!(readme.contains("![The DELAY page of the plugin's screen](docs/screen-1.png)") && readme.contains("| **Feedback** |"));
+    assert!(folder.join("1 - put in your repository/docs/screen-1.png").is_file());
+    assert!(written("1 - put in your repository/LICENSE").contains("MPC SDK Examples"));
+    assert!(written("1 - put in your repository/src/StereoDelay.cpp").contains("class StereoDelay"));
+    assert!(written("1 - put in your repository/plugin.json").contains("\"description\": \"A stereo delay that keeps time with the song.\""));
+    assert_eq!(entry["repo"], "somebody/stereo-delay");
+    assert_eq!(entry["kind"], "effect");
+    assert_eq!(entry["screenshot"], "https://raw.githubusercontent.com/somebody/stereo-delay/v1.0.0/docs/screen-1.png");
+    assert!(zip.starts_with(b"PK"));
+    for carried in ["MPC SDK Examples - VST - Stereo Delay/plugin.json", "MPC SDK Examples - VST - Stereo Delay/VST/stereo-delay-arm32.so", "MPC SDK Examples - VST - Stereo Delay/Plugin Skins/TUI.json"] {
+        assert!(zip_as_text.contains(carried), "the zip has no `{carried}`");
+    }
+    assert!(written("START HERE.md").contains("Give it the tag `v1.0.0`"));
 }

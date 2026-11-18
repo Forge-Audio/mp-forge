@@ -12,6 +12,7 @@ use workbench_engine::ai_settings::AiSettings;
 use workbench_engine::chat_model::ChosenModel;
 use workbench_engine::codex::CodexChoices;
 use workbench_engine::history::Version;
+use workbench_engine::open_mpc_listing::{AsItWouldBeListed, License, Listing};
 use workbench_engine::arranged_screen::{ArrangedItem, ArrangedLayer, ArrangedPage, ArrangedPicture};
 use workbench_engine::control_parts::parts_as_json;
 use workbench_engine::gate::GateReport;
@@ -160,6 +161,38 @@ pub struct MpcAsked {
     pub drive: Option<String>,
     #[serde(default)]
     pub restart: bool,
+}
+
+const NOT_A_LICENCE: &str = "Pick one of the licences on the sheet.";
+
+/// What the musician decided about listing a plugin in the Open MPC catalog.
+#[derive(Debug, Deserialize)]
+pub struct ListingAsked {
+    pub repository: String,
+    pub license: String,
+    pub summary: String,
+}
+
+impl ListingAsked {
+    /// The listing asked for, or everything about it the catalog would send back.
+    pub fn as_listing(&self) -> Result<Listing, String> {
+        let license = License::named(&self.license).ok_or(NOT_A_LICENCE)?;
+        let listing = Listing::given(&self.repository, license, &self.summary);
+        let problems = listing.problems();
+        if problems.is_empty() { Ok(listing) } else { Err(problems.join(" ")) }
+    }
+}
+
+/// How a plugin would be listed, for the sheet that asks about it.
+pub fn as_it_would_be_listed(listed: &AsItWouldBeListed) -> Value {
+    json!({
+        "built": true,
+        "id": listed.id,
+        "author": listed.author,
+        "version": listed.version,
+        "summary": listed.suggested_summary,
+        "guideWritten": listed.guide_is_written,
+    })
 }
 
 const WEB_SWITCHED_OFF: &str = "off";
@@ -314,6 +347,19 @@ pub fn failed(plugin_name: &str, explanation: &str) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn listing_asked(repository: &str, license: &str) -> ListingAsked {
+        ListingAsked { repository: repository.to_string(), license: license.to_string(), summary: "A worn tape echo.".to_string() }
+    }
+
+    #[test]
+    fn a_listing_is_taken_from_the_sheet_only_when_the_catalog_would_take_it() {
+        let taken = listing_asked("https://github.com/somebody/tape-echo", "GPL-3.0-only").as_listing().unwrap();
+
+        assert_eq!((taken.repository.as_str(), taken.license), ("somebody/tape-echo", License::Gpl3));
+        assert_eq!(listing_asked("somebody/tape-echo", "Proprietary").as_listing().unwrap_err(), NOT_A_LICENCE);
+        assert!(listing_asked("tape-echo", "MIT").as_listing().unwrap_err().contains("owner/name"));
+    }
 
     #[test]
     fn a_model_from_another_service_is_named_exactly_as_that_service_listed_it() {

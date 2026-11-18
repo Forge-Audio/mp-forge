@@ -48,6 +48,15 @@ impl Json {
         fields.iter_mut().find(|(name, _)| name == key).map(|(_, value)| value)
     }
 
+    /// Gives the field this value, in the place it has, or at the end when it is new. Only an object has fields.
+    pub fn set(&mut self, key: &str, value: Json) {
+        let Json::Object(fields) = self else { return };
+        match fields.iter_mut().find(|(name, _)| name == key) {
+            Some((_, held)) => *held = value,
+            None => fields.push((key.to_string(), value)),
+        }
+    }
+
     pub fn items(&self) -> Option<&[Json]> {
         if let Json::List(items) = self { Some(items) } else { None }
     }

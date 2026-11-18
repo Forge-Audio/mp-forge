@@ -25,6 +25,7 @@ use crate::history::{self, Version};
 use crate::instructions;
 use crate::kept_look::{self, NotKept};
 use crate::look::{self, Look};
+use crate::open_mpc_listing::{self, AsItWouldBeListed, Listing, NotListed};
 use crate::other_looks::note_on_other_looks;
 use crate::plugin_name;
 use crate::project_file::{self, NotTakenIn};
@@ -78,6 +79,13 @@ pub enum Sending {
     HeldBack(GateReport),
 }
 
+/// How getting a plugin ready for the Open MPC catalog ended. Either way the gate's report comes with it.
+pub enum Listed {
+    /// Everything the listing needs is in this folder.
+    Ready { report: GateReport, folder: PathBuf },
+    HeldBack(GateReport),
+}
+
 pub struct Delivery {
     pub plugin_dir: PathBuf,
     pub closing_words: String,
@@ -110,6 +118,7 @@ pub enum MakeError {
     /// The plugin could not be moved to the Trash, so it is still where it was.
     NotDeleted(String),
     NotSent(DeliveryError),
+    NotListed(NotListed),
     Io(io::Error),
 }
 
@@ -137,6 +146,7 @@ impl fmt::Display for MakeError {
             MakeError::NameTaken(name) => write!(formatter, "There is already a plugin called `{name}`. Pick another name."),
             MakeError::NotDeleted(cause) => write!(formatter, "The plugin could not be moved to the Trash, so nothing was deleted: {cause}"),
             MakeError::NotSent(problem) => write!(formatter, "{problem}"),
+            MakeError::NotListed(problem) => write!(formatter, "{problem}"),
             MakeError::Io(cause) => write!(formatter, "A file could not be used: {cause}"),
         }
     }
@@ -151,6 +161,12 @@ impl From<AttachmentError> for MakeError {
 impl From<DeliveryError> for MakeError {
     fn from(problem: DeliveryError) -> Self {
         MakeError::NotSent(problem)
+    }
+}
+
+impl From<NotListed> for MakeError {
+    fn from(problem: NotListed) -> Self {
+        MakeError::NotListed(problem)
     }
 }
 
@@ -336,6 +352,27 @@ impl Maker {
         }
         let onto_drive = delivery::install(&self.sdk, &plugin_dir, mpc)?;
         Ok(Sending::Sent { report, onto_drive })
+    }
+
+    /// How the plugin would be listed in the Open MPC catalog, for the musician to see before they decide.
+    pub fn as_listed_on_open_mpc(&self, plugin_name: &str) -> Result<AsItWouldBeListed, MakeError> {
+        Ok(open_mpc_listing::as_it_would_be_listed(&self.existing_plugin(plugin_name)?)?)
+    }
+
+    /// Makes everything a listing in the Open MPC catalog needs, in a new folder inside `into`, but only once
+    /// the gate has passed the plugin as it stands right now. Nothing is sent anywhere.
+    pub fn list_on_open_mpc(&self, plugin_name: &str, listing: &Listing, into: &Path) -> Result<Listed, MakeError> {
+        let plugin_dir = self.existing_plugin(plugin_name)?;
+        let problems = listing.problems();
+        if !problems.is_empty() {
+            return Err(NotListed::DoesNotFit(problems).into());
+        }
+        let report = self.gate.inspect(&plugin_dir);
+        if !report.may_be_sent() {
+            return Ok(Listed::HeldBack(report));
+        }
+        let folder = open_mpc_listing::prepare(&plugin_dir, listing, into)?;
+        Ok(Listed::Ready { report, folder })
     }
 
     /// Restarts the MPC's app so it finds a plugin just sent. Anything unsaved on the MPC is lost, so this is

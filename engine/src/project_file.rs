@@ -128,7 +128,7 @@ pub fn take_in(from: &Path, plugins_dir: &Path, named: Option<&str>) -> Result<S
 }
 
 /// Every file of the project in this folder that is carried, by its path inside the folder.
-fn carried_files_in(project: &Path) -> Vec<PathBuf> {
+pub(crate) fn carried_files_in(project: &Path) -> Vec<PathBuf> {
     let at_the_top = std::iter::once(MANIFEST).chain(OTHER_FILES_AT_THE_TOP).map(PathBuf::from);
     let on_the_shelves = SHELVES.iter().flat_map(|shelf| files_on(shelf, project));
     let mut carried: Vec<PathBuf> = at_the_top.chain(on_the_shelves).filter(|file| is_a_plain_file(&project.join(file))).collect();

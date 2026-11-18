@@ -18,6 +18,7 @@ use workbench_engine::claude::Claude;
 use workbench_engine::gate::Gate;
 use workbench_engine::live_player::{self, PLAY_COMMAND};
 use workbench_engine::maker::{Connection, Delivery, MakeError, Maker, ONLINE_PLUGINS_FLAG, PluginRequest, SERVE_TOOLS_COMMAND};
+use workbench_engine::open_mpc_listing::{self, License, Listing};
 use workbench_engine::picture_clock::{self, READ_CLOCK_COMMAND};
 use workbench_engine::plugin_tools;
 use workbench_engine::sdk::{PluginIdentity, PluginKind, Sdk};
@@ -25,6 +26,8 @@ use workbench_engine::sdk::{PluginIdentity, PluginKind, Sdk};
 const USAGE: &str = "\
 usage:
   workbench gate <plugin folder> [--online-plugins] [--sdk <folder>]
+  workbench list-on-open-mpc <plugin folder> --repo <owner/name> --summary <one line>
+                 [--license MIT|GPL-3.0-only] [--into <folder>] [--online-plugins] [--sdk <folder>]
   workbench make --name <plugin name> --maker <your name> --kind effect|instrument
                  [--with api|claude-code] [--model fable|opus|sonnet|haiku]
                  [--effort low|medium|high|xhigh|max] [--web on|off]
@@ -95,6 +98,7 @@ fn run(arguments: Arguments) -> Result<ExitCode, String> {
     match arguments.words.split_first() {
         Some((command, [plugin_dir])) if command == "gate" => Ok(run_gate(sdk, plugin_dir, arguments.online_plugins)),
         Some((command, [plugin_dir])) if command == SERVE_TOOLS_COMMAND => serve_tools(sdk, plugin_dir, arguments.online_plugins),
+        Some((command, [plugin_dir])) if command == "list-on-open-mpc" => list_on_open_mpc(sdk, plugin_dir, &arguments),
         Some((command, [description])) if command == "make" => run_make(sdk, &arguments, description),
         _ => Err(USAGE.to_string()),
     }
@@ -104,6 +108,26 @@ fn run_gate(sdk: Sdk, plugin_dir: &str, online_plugins: bool) -> ExitCode {
     let report = Gate::new(sdk).with_online_plugins(online_plugins).inspect(Path::new(plugin_dir));
     println!("{report}");
     exit_code_for(report.may_be_sent())
+}
+
+/// Makes what a listing in the Open MPC catalog needs, once the gate has passed the plugin, and says where it is.
+fn list_on_open_mpc(sdk: Sdk, plugin_dir: &str, arguments: &Arguments) -> Result<ExitCode, String> {
+    let listing = listing_asked_for(arguments)?;
+    let report = Gate::new(sdk).with_online_plugins(arguments.online_plugins).inspect(Path::new(plugin_dir));
+    if !report.may_be_sent() {
+        println!("{report}");
+        return Ok(ExitCode::from(NOT_SAFE_TO_SEND));
+    }
+    let into = Path::new(arguments.option("into").unwrap_or("."));
+    let folder = open_mpc_listing::prepare(Path::new(plugin_dir), &listing, into).map_err(|not_listed| not_listed.to_string())?;
+    println!("{}", folder.display());
+    Ok(ExitCode::SUCCESS)
+}
+
+fn listing_asked_for(arguments: &Arguments) -> Result<Listing, String> {
+    let license = License::named(arguments.option("license").unwrap_or(License::Mit.name())).ok_or(USAGE)?;
+    let (repository, summary) = arguments.option("repo").zip(arguments.option("summary")).ok_or(USAGE)?;
+    Ok(Listing::given(repository, license, summary))
 }
 
 /// Standard output carries only protocol messages here, so nothing else may print to it.
