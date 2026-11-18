@@ -18,7 +18,7 @@ List the pictures in `pictures.json`, and write each drawing to `pictures/<name>
 - `page`: the page's `name` in `ui.json`.
 - `where`: a block of slots on the page's 4 by 4 grid, counted from 1 (`rows` and `columns` are 1 when left out), or `"backdrop"` for the whole page behind the controls. A block may only cover slots with no control in them, so leave those slots out of `ui.json` or mark them `"empty"`.
 - `motion`: `"still"` (the default), `"loops"`, or `{ "follows": "<control name>" }`. A picture that follows a control shows its first frame when the control is at its lowest and its last frame at its highest. A `"loops"` picture needs the plugin's `Picture Clock`: see "Pictures that play on their own" below.
-- `frames`: needed when the picture moves, from 2 to 64. Twelve to twenty-four is usually plenty.
+- `frames`: needed when the picture moves, from 2 to 64. A moving picture is only as smooth as its frames. An MPC shows up to 30 pictures a second, so a looping picture is at its smoothest with 30 frames for each second its loop takes: 30 for a one-second loop, 60 for two seconds. Give a small picture that many. A large one cannot have them (see the memory rule below), so give it as many as fit. A picture that follows a control is fine with 24, and smoother to turn with more.
 
 A drawing is one SVG file. Anything that should change from frame to frame is written as a sum in curly brackets, which MP Forge works out for every frame:
 
@@ -65,9 +65,9 @@ Declare it last, after every other control, add `kPictureClock` to the end of yo
 Add this to the plugin's class, and call `turnPictureClock(ctx);` once in every `process()`:
 
 ```cpp
-    // One play of every looping picture takes this long, in this many steps: 15 a second.
+    // One play of every looping picture takes this long, in this many steps: 30 a second, the most an MPC shows.
     static constexpr float kClockTurnSeconds = 2.0f;
-    static constexpr int   kClockSteps       = 30;
+    static constexpr int   kClockSteps       = 60;
 
     // An MPC draws a picture again only when a control changes, so the plugin turns this one itself.
     void turnPictureClock(const mpc::ProcessContext& ctx)
@@ -89,7 +89,8 @@ Add this to the plugin's class, and call `turnPictureClock(ctx);` once in every 
 
 - Keep the line that goes on from where the MPC set the clock. The MPC puts every control back when a project loads, and the safety check tests that a control it put back stays put.
 - If the plugin acts when a control changes (`parameterChanged`), let it ignore the clock.
-- Every looping picture takes one turn of the clock for one play, whatever its `frames`. To make something move faster, draw more of the movement into the loop (`{720 * t}` is two turns in one play), or shorten `kClockTurnSeconds`. A turn may take from half a second to 6 seconds. Keep the steps at 15 a second: change `kClockSteps` with `kClockTurnSeconds`.
+- Every looping picture takes one turn of the clock for one play, whatever its `frames`. To make something move faster, draw more of the movement into the loop (`{720 * t}` is two turns in one play), or shorten `kClockTurnSeconds`. A turn may take from half a second to 6 seconds. Keep the steps at 30 a second: change `kClockSteps` with `kClockTurnSeconds`, so a one-second turn has 30 steps. An MPC's screen shows no more than 30 pictures a second, and steps beyond that only cost it work.
+- One exception: when a looping picture is a backdrop or covers more than two rows of the page, keep the clock at 15 steps a second (`kClockSteps` 30 for a two-second turn). What a large moving picture costs an MPC at 30 a second has not been measured yet.
 - Do not give a picture `{ "follows": ... }` of a hidden control of your own to make it play round and round. Write `"loops"` and use the clock.
 - A picture that shows what the plugin is doing, such as lamps that light for the notes held, is different: it should only move when that happens. Give it a hidden control of its own, declared like the clock (on no page, not automatable), and have the picture follow that control. Set the control from `process()` when the thing it shows changes, and call `notifyHostParameterChanged` every time you set it. It may stand still while nothing is played. MP Forge's preview shows it moving while the plugin is played there.
 
