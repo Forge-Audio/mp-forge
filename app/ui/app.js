@@ -59,6 +59,7 @@
   const A_GUIDE_NEEDS_A_BUILD = "A guide can be made once the plugin has been built. Run its safety check first.";
   const AI_IS_WRITING_THE_GUIDE = "Asking the AI to write the guide. This takes a minute or so, and the guide opens in your browser when it is done.";
   const ABOUT_A_MADE_GUIDE = "Print it or save it as a PDF from there. Its words are kept with the plugin and go along when you export it.";
+  const GOES_ONLINE_FOR = "This plugin goes online. On your MPC and when you play it here, it fetches sound from:";
   const WHAT_AN_EXPORT_HOLDS = "The file holds the plugin's code, its screen and look, its pictures and its sounds. Your conversation with the AI and the plugin's earlier versions are not in it. Whoever you give it to brings it in with IMPORT A PLUGIN.";
   const IMPORTED_AND_NOT_RUN = "**Brought in.** Nothing of it has been run yet. Run the safety check to build it, then you can see its screen, play it and change it.";
   const NO_SUCH_VERSION = "That version could not be found, so nothing was changed.";
@@ -480,7 +481,18 @@
   function summaryLine(plugin) {
     const kind = plugin.summary.kind === "instrument" ? "Instrument" : "Effect";
     const kept = plugin.versionsKept ? ` · ${plugin.versionsKept} earlier version${plugin.versionsKept === 1 ? "" : "s"} kept` : "";
-    return `${kind} by ${plugin.summary.maker}${kept}`;
+    return `${kind} by ${plugin.summary.maker}${kept}${streamsOf(plugin).length ? " · ONLINE" : ""}`;
+  }
+
+  // The addresses the plugin brings sound in from over the internet. Most plugins have none.
+  function streamsOf(plugin) {
+    return (plugin && plugin.streams) || [];
+  }
+
+  // What a plugin that goes online fetches, said in full for whoever rests the pointer on its summary.
+  function whereItGoesOnline(plugin) {
+    const addresses = streamsOf(plugin).map((stream) => `${stream.name}: ${stream.address}`);
+    return addresses.length ? `${GOES_ONLINE_FOR} ${addresses.join(", ")}` : "";
   }
 
   function whereItWasBlocked(report) {
@@ -517,6 +529,7 @@
     const plugin = state.openPlugin;
     page.title.textContent = plugin ? plugin.summary.name : "New plugin";
     page.subtitle.textContent = plugin ? summaryLine(plugin) : "";
+    page.subtitle.title = whereItGoesOnline(plugin);
     livePlayer.follow(plugin && plugin.builtAt ? plugin : null);
     drawMpcScreen(plugin);
     drawHardwareKnobs();
@@ -1502,7 +1515,7 @@
   async function showImported(pluginName) {
     await refreshLibrary();
     await open(pluginName);
-    addMessage(pluginName, { kind: "note", text: IMPORTED_AND_NOT_RUN });
+    addMessage(pluginName, { kind: "note", text: `${IMPORTED_AND_NOT_RUN} ${whereItGoesOnline(state.openPlugin)}`.trim() });
   }
 
   async function importAPlugin() {
@@ -1632,7 +1645,7 @@
   async function sendOpenPluginToMpc() {
     const pluginName = state.openName;
     if (!canBeSent()) return addMessage(pluginName, { kind: "problem", text: NOT_SENT_UNTIL_SAFE });
-    const asked = await askBeforeSending(page.appSheet, pluginName, appSettings.mpc());
+    const asked = await askBeforeSending(page.appSheet, pluginName, appSettings.mpc(), whereItGoesOnline(state.openPlugin));
     if (!asked) return;
     await send(pluginName, { address: asked.address, drive: appSettings.mpc().drive || null, restart: asked.restart });
   }
@@ -1913,7 +1926,7 @@
     const part = (id) => document.getElementById(id);
     return {
       sheet: page.appSheet, modeDark: part("mode-dark"), modeLight: part("mode-light"), startsNew: part("starts-new"), startsLast: part("starts-last"),
-      versionsKept: part("versions-kept"), compactAt: part("compact-at"), motion: part("motion"), thisCopy: part("this-copy"),
+      versionsKept: part("versions-kept"), compactAt: part("compact-at"), motion: part("motion"), onlinePlugins: part("online-plugins"), thisCopy: part("this-copy"),
       mpcAddress: part("mpc-address"), mpcDrive: part("mpc-drive"), mpcPasswordState: part("mpc-password-state"), mpcPassword: part("mpc-password"),
       accounts: part("ai-accounts"),
     };

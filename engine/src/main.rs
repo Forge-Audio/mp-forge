@@ -17,14 +17,14 @@ use workbench_engine::ai_settings::AiSettings;
 use workbench_engine::claude::Claude;
 use workbench_engine::gate::Gate;
 use workbench_engine::live_player::{self, PLAY_COMMAND};
-use workbench_engine::maker::{Connection, Delivery, MakeError, Maker, PluginRequest, SERVE_TOOLS_COMMAND};
+use workbench_engine::maker::{Connection, Delivery, MakeError, Maker, ONLINE_PLUGINS_FLAG, PluginRequest, SERVE_TOOLS_COMMAND};
 use workbench_engine::picture_clock::{self, READ_CLOCK_COMMAND};
 use workbench_engine::plugin_tools;
 use workbench_engine::sdk::{PluginIdentity, PluginKind, Sdk};
 
 const USAGE: &str = "\
 usage:
-  workbench gate <plugin folder> [--sdk <folder>]
+  workbench gate <plugin folder> [--online-plugins] [--sdk <folder>]
   workbench make --name <plugin name> --maker <your name> --kind effect|instrument
                  [--with api|claude-code] [--model fable|opus|sonnet|haiku]
                  [--effort low|medium|high|xhigh|max] [--web on|off]
@@ -43,19 +43,21 @@ const COULD_NOT_RUN: u8 = 2;
 struct Arguments {
     words: Vec<String>,
     options: HashMap<String, String>,
+    /// Whether a plugin may bring sound in from the internet, which is experimental and off unless asked for.
+    online_plugins: bool,
 }
 
 impl Arguments {
     fn parse(mut raw: impl Iterator<Item = String>) -> Option<Self> {
-        let mut arguments = Self { words: Vec::new(), options: HashMap::new() };
+        let mut arguments = Self { words: Vec::new(), options: HashMap::new(), online_plugins: false };
         while let Some(argument) = raw.next() {
-            match argument.strip_prefix("--") {
-                Some(option) => arguments.options.insert(option.to_string(), raw.next()?),
-                None => {
-                    arguments.words.push(argument);
-                    None
-                }
-            };
+            if argument == ONLINE_PLUGINS_FLAG {
+                arguments.online_plugins = true;
+            } else if let Some(option) = argument.strip_prefix("--") {
+                arguments.options.insert(option.to_string(), raw.next()?);
+            } else {
+                arguments.words.push(argument);
+            }
         }
         Some(arguments)
     }
@@ -91,22 +93,22 @@ fn run(arguments: Arguments) -> Result<ExitCode, String> {
     }
     let sdk = Sdk::at(arguments.sdk_dir()).map_err(|not_found| not_found.to_string())?;
     match arguments.words.split_first() {
-        Some((command, [plugin_dir])) if command == "gate" => Ok(run_gate(sdk, plugin_dir)),
-        Some((command, [plugin_dir])) if command == SERVE_TOOLS_COMMAND => serve_tools(sdk, plugin_dir),
+        Some((command, [plugin_dir])) if command == "gate" => Ok(run_gate(sdk, plugin_dir, arguments.online_plugins)),
+        Some((command, [plugin_dir])) if command == SERVE_TOOLS_COMMAND => serve_tools(sdk, plugin_dir, arguments.online_plugins),
         Some((command, [description])) if command == "make" => run_make(sdk, &arguments, description),
         _ => Err(USAGE.to_string()),
     }
 }
 
-fn run_gate(sdk: Sdk, plugin_dir: &str) -> ExitCode {
-    let report = Gate::new(sdk).inspect(Path::new(plugin_dir));
+fn run_gate(sdk: Sdk, plugin_dir: &str, online_plugins: bool) -> ExitCode {
+    let report = Gate::new(sdk).with_online_plugins(online_plugins).inspect(Path::new(plugin_dir));
     println!("{report}");
     exit_code_for(report.may_be_sent())
 }
 
 /// Standard output carries only protocol messages here, so nothing else may print to it.
-fn serve_tools(sdk: Sdk, plugin_dir: &str) -> Result<ExitCode, String> {
-    plugin_tools::serve_on_standard_io(&sdk, Path::new(plugin_dir)).map_err(|error| error.to_string())?;
+fn serve_tools(sdk: Sdk, plugin_dir: &str, online_plugins: bool) -> Result<ExitCode, String> {
+    plugin_tools::serve_on_standard_io(&sdk, Path::new(plugin_dir), online_plugins).map_err(|error| error.to_string())?;
     Ok(ExitCode::SUCCESS)
 }
 

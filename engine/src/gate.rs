@@ -16,6 +16,7 @@ use crate::process::{Finished, RunError};
 use crate::screen_layout::ScreenLayout;
 use crate::sdk::{Sdk, native_library_of};
 use crate::simulation::{Session, SimulationReport};
+use crate::online;
 use crate::source_scan::{Violation, scan_plugin};
 
 pub const SOURCE_CHECK: &str = "Code stays inside the plugin";
@@ -143,16 +144,23 @@ pub struct Gate {
     limits: TimeLimits,
     /// The program started to run a plugin's own code, so that it never runs inside this one.
     plugin_host: PathBuf,
+    /// Whether the musician has switched online plugins on. Without that, a plugin that goes online is blocked.
+    online_is_switched_on: bool,
 }
 
 impl Gate {
     /// Plugins are hosted by another run of the program that made the gate, which answers `read-clock`.
     pub fn new(sdk: Sdk) -> Self {
-        Self { sdk, limits: TimeLimits::default(), plugin_host: env::current_exe().unwrap_or_default() }
+        Self { sdk, limits: TimeLimits::default(), plugin_host: env::current_exe().unwrap_or_default(), online_is_switched_on: false }
     }
 
     pub fn hosting_plugins_with(mut self, program: impl Into<PathBuf>) -> Self {
         self.plugin_host = program.into();
+        self
+    }
+
+    pub fn with_online_plugins(mut self, switched_on: bool) -> Self {
+        self.online_is_switched_on = switched_on;
         self
     }
 
@@ -163,7 +171,7 @@ impl Gate {
 
     pub fn inspect(&self, plugin: &Path) -> GateReport {
         let mut report = GateReport::default();
-        report.record(SOURCE_CHECK, || check_source(plugin));
+        report.record(SOURCE_CHECK, || check_source(plugin, self.online_is_switched_on));
         report.record(PICTURES_CHECK, || check_pictures(plugin));
         report.record(BUILD_CHECK, || self.check_build(plugin));
         report.record(SCREEN_CHECK, || self.check_screen(plugin));
@@ -251,7 +259,12 @@ pub fn simulation_check_name(session: &Session) -> String {
     format!("Survives {}", session.name)
 }
 
-fn check_source(plugin: &Path) -> Outcome {
+/// A plugin that lists streams is first given MP Forge's stream helper afresh, which is the one part of its
+/// code allowed online. Everything else in its code is read as it always was.
+fn check_source(plugin: &Path, online_is_switched_on: bool) -> Outcome {
+    if let Err(problems) = online::make_ready(plugin, online_is_switched_on) {
+        return Outcome::Blocked(problems);
+    }
     match scan_plugin(plugin) {
         Ok(violations) if violations.is_empty() => Outcome::Passed,
         Ok(violations) => Outcome::Blocked(violations.iter().map(Violation::describe).collect()),

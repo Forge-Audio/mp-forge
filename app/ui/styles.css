@@ -701,6 +701,8 @@ body.editing .tabs { pointer-events: none; opacity: 0.55; }
 .sheet { width: min(460px, 100%); max-height: 100%; overflow: auto; }
 .sheet .window-body { gap: 10px; }
 .sheet-tick { display: flex; align-items: center; gap: 10px; }
+/* What is still being tried out says so beside its name. */
+.experimental { margin-left: 8px; padding: 1px 6px; border: 2px solid var(--accent); color: var(--accent); font-size: 10px; letter-spacing: 1px; vertical-align: middle; }
 .sheet-choices { display: flex; border: 2px solid var(--line); align-self: flex-start; }
 .sheet-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
 .sheet-buttons .item-button { min-width: 110px; }

@@ -22,6 +22,7 @@ use std::time::Duration;
 use serde_json::{Value, json};
 
 use crate::hosted_plugin::HostedPlugin;
+use crate::online::STAYS_OFFLINE;
 use crate::pictures::{Motion, Picture};
 use crate::process::{RunError, command_for, run_with_time_limit};
 use crate::screen_layout::{ScreenLayout, SlotContent};
@@ -144,7 +145,7 @@ pub fn print_watched(library: &Path, control: &str) -> Result<(), String> {
 /// takes down that process and nothing else.
 pub fn watched_by(program: &Path, library: &Path, control: u32, limit: Duration) -> Result<Watched, String> {
     let mut command = command_for(program);
-    command.arg(READ_CLOCK_COMMAND).arg(library).arg(control.to_string());
+    command.arg(READ_CLOCK_COMMAND).arg(library).arg(control.to_string()).envs([STAYS_OFFLINE]);
     match run_with_time_limit(&mut command, limit) {
         Ok(finished) => finished.output.lines().rev().find_map(Watched::read_from).ok_or_else(|| could_not_watch(&finished.output)),
         Err(RunError::TimedOut { .. }) => Err("The plugin stopped answering while its moving pictures were being watched.".to_string()),

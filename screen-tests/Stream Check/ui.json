@@ -1,0 +1,11 @@
+{
+  "kit": "cyan",
+  "pages": [
+    { "name": "STREAM",
+      "controls": [
+        { "param": "Volume", "widget": "knob" },
+        { "param": "Playing", "widget": "switch" },
+        { "param": "Station", "widget": "slider", "overlay": "menu" }
+      ] }
+  ]
+}

@@ -8,6 +8,7 @@ use std::process::Command;
 use std::time::Duration;
 
 use crate::built_screen::SizedArt;
+use crate::online::STAYS_OFFLINE;
 use crate::own_python::OwnPython;
 use crate::process::{Finished, RunError, command_for, run_with_time_limit};
 use crate::simulation::Session;
@@ -109,7 +110,7 @@ impl Sdk {
     pub(crate) fn python(&self) -> Command {
         let own = self.own_python();
         let mut python = if own.is_there() { command_for(own.program()) } else { command_for(PYTHON_OF_THE_COMPUTER) };
-        python.envs(WRITES_EVERY_LETTER);
+        python.envs(WRITES_EVERY_LETTER).envs([STAYS_OFFLINE]);
         python
     }
 
@@ -175,7 +176,7 @@ impl Sdk {
 
     fn simulator_command(&self, library: &Path, session: &Session) -> Command {
         let mut command = command_for(self.host_simulator());
-        command.arg(library).arg("test").args(session.simulator_arguments());
+        command.arg(library).arg("test").args(session.simulator_arguments()).envs([STAYS_OFFLINE]);
         command
     }
 

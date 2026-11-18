@@ -45,6 +45,7 @@ pub mod mcp_server;
 pub mod model_http;
 pub mod mp3;
 pub mod ollama;
+pub mod online;
 pub mod open_mpc;
 pub mod own_python;
 pub mod other_looks;

@@ -1,0 +1,17 @@
+{
+  "name": "Radio Check",
+  "manufacturer": "Workbench Tests",
+  "version": "1.0.0",
+  "format": "vst2",
+  "kind": "effect",
+  "uid": "WRc1",
+  "numInputs": 2,
+  "numOutputs": 2,
+  "category": "Effect",
+  "file32": "VST/radio-check-arm32.so",
+  "file64": "VST/radio-check-arm64.so",
+  "description": "Radio Check: a screen test card. It plays one internet radio station on top of what passes through it.",
+  "author": "Workbench Tests",
+  "url": "",
+  "license": "MIT"
+}

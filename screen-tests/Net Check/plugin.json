@@ -1,0 +1,17 @@
+{
+  "name": "Net Check",
+  "manufacturer": "Workbench Tests",
+  "version": "1.0.0",
+  "format": "vst2",
+  "kind": "effect",
+  "uid": "WNc1",
+  "numInputs": 2,
+  "numOutputs": 2,
+  "category": "Effect",
+  "file32": "VST/net-check-arm32.so",
+  "file64": "VST/net-check-arm64.so",
+  "description": "Net Check: a screen test card. It tries to reach example.com every ten seconds and shows whether it could. It does nothing to the sound.",
+  "author": "Workbench Tests",
+  "url": "",
+  "license": "MIT"
+}

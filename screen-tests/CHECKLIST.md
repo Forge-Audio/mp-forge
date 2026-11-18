@@ -1,6 +1,6 @@
 # Screen test cards: what to look at on the MPC
 
-Eight small effect plugins that do nothing to the sound. Their screens try things out so we can see what an
+Ten small effect plugins. Nine do nothing to the sound, and Radio Check plays a station on top of it. Their screens try things out so we can see what an
 MPC plugin screen really supports before building the edit mode.
 
 - **Test Card** holds the checks the edit mode depends on.
@@ -8,6 +8,8 @@ MPC plugin screen really supports before building the edit mode.
   They are kept apart because one entry the MPC dislikes blanks a card's whole screen.
 - **Draw Live** tests whether pictures can move by themselves, driven by the plugin.
 - **Draw Fast** tests how often a second a picture can be changed before more stops looking smoother.
+- **Net Check** tests whether a plugin can keep a thread of its own and reach the internet.
+- **Radio Check** tests whether a plugin can play an internet radio station.
 
 Every item has a number and a caption drawn into the page. A photo of each page is the easiest report. For a
 Draw card, "blank" or "shows its page" is already an answer.
@@ -63,6 +65,9 @@ Draw card, "blank" or "shows its page" is already an answer.
 | Does 30 pictures a second cost anything you can hear or see? | No. Smooth, with no crackles (reported, by ear and eye). The MPC's Resources screen read 2% CPU across 8 cores, busiest core 8%, memory 2.3 of 3.8 GB, about 47 °C | Draw Live, item 1 |
 | Does the MPC follow hardware knobs that were given other controls? | Yes. A plugin whose knobs were reassigned in MP Forge worked on the MPC (reported) | a plugin sent from MP Forge |
 | Does the MPC show more than 30 pictures a second? | **No. 30 is the cap.** Rows changed 45, 60 and up to 240 times a second looked no smoother than the row changed 30 times a second (reported) | Draw Fast |
+| Can a plugin keep a thread of its own? | **Yes.** The card's thread counted up once a second (33 after about half a minute) | Net Check, row 6 (photo) |
+| Can a plugin reach the internet? | **Yes.** From its own thread it asked a public name server for example.com's address, connected and was answered with 200, four tries out of four, the last in 29 ms. The MPC was on the home network | Net Check, rows 1 to 5 (photo) |
+| Can a plugin play an internet radio station? | **Yes, and it sounds good**, At rest the MPC asked the plugin for 44,160 frames a second in 345 calls of 128, the same as a computer does (photo). The first card skipped, then went jumbled and silent by turns: that was the card's own fault, not the MPC's. It gave the decoder the very end of each piece that arrived, where a cut-off piece of sound is thrown away. Fed a saved sample in pieces of 1448 bytes, it got 3 seconds of sound out of 22. Keeping the last 4096 bytes back until more arrives gets all of it, at any piece size | Radio Check, by ear and rows 7 to 10 |
 | How much memory does a session of loading and restarting leave behind? | Memory read 2.3 of 3.8 GB after a morning of installs and app restarts, and 1.3 GB after a full reboot. Not a clean comparison: the cards were loaded in the first reading and may not have been in the second | MPC Resources screen |
 | Does the MPC keep running an effect when nothing is playing? | Yes, so displays keep moving while the song is stopped | Draw Live |
 
@@ -100,10 +105,10 @@ page background on the computer. Renaming a control needs no change to the plugi
 ## Putting the cards on the MPC
 
 1. Save any open project on the MPC. The MPC app has to restart to see new plugins.
-2. Install or refresh all eight (put the MPC's address in place of `ADDRESS`):
+2. Install or refresh all ten (put the MPC's address in place of `ADDRESS`):
 
    ```bash
-   python3 vendor/mpc-plugin-builder-sdk/tools/mpc_remote.py ADDRESS update "screen-tests/Test Card" "screen-tests/Draw Path" "screen-tests/Draw Plot" "screen-tests/Draw Knobs" "screen-tests/Draw Guess" "screen-tests/Draw Extras" "screen-tests/Draw Live" "screen-tests/Draw Fast"
+   python3 vendor/mpc-plugin-builder-sdk/tools/mpc_remote.py ADDRESS update "screen-tests/Test Card" "screen-tests/Draw Path" "screen-tests/Draw Plot" "screen-tests/Draw Knobs" "screen-tests/Draw Guess" "screen-tests/Draw Extras" "screen-tests/Draw Live" "screen-tests/Draw Fast" "screen-tests/Net Check" "screen-tests/Radio Check"
    ```
 
 3. Restart the MPC app:
@@ -275,6 +280,82 @@ dot has 61 frames and takes two seconds to cross, so it can show about 30 places
 A phone's slow-motion video of the whole page is the surest report: by eye, 45 and 60 are hard to tell apart.
 
 Like Draw Live, this card fails the simulator's check that saved settings come back, for the same reason.
+
+### Net Check
+
+Every ten seconds a thread the plugin starts itself makes one try: it asks a public name server (1.1.1.1) for the
+address of example.com, connects to that address, asks for the front page and reads the first line of the answer.
+It sends nothing else, and keeps only the number the web server answered with. The MPC needs to be on a network
+that reaches the internet.
+
+| Row | What to look for | What it tells us |
+|---|---|---|
+| 1 | Answered, No name, No connection, No answer, or still Waiting | How far a plugin gets towards the internet |
+| 2 | 200 | The web server answered properly |
+| 3, 4 | Tries made, and how many were answered | Whether it works every time |
+| 5 | A number of milliseconds | How long one try takes |
+| 6 | A number that goes up once a second | Whether a plugin's own thread runs at all |
+
+The thread never waits longer than a tenth of a second without looking whether the plugin is going away, so
+removing the card does not hold the MPC up.
+
+### Radio Check
+
+A thread the plugin starts itself connects to one station, which has to stream plain MP3 without encryption. No
+station is kept with the card: copy `shared/station_here.example.h` to `shared/station_here.h`, put a station of
+your own choosing in it, and build the card. Without that the card builds, and shows No name. It turns what arrives into sound with minimp3 and leaves it waiting in memory, and the audio thread
+plays what is waiting on top of whatever passes through the card. The plugin sends the station one request and
+nothing else. The MPC needs to be on a network that reaches the internet. Volume turns the station down.
+
+| Row | What to look for | What it tells us |
+|---|---|---|
+| by ear | Music, a second or two after the card is added. Is it clean? Does it ever stutter, and does anything else on the MPC stutter with it? | Whether a plugin can play a station at all |
+| 1 | Playing. Otherwise No name, No connection, Refused, Tuning in or Lost | How far it got |
+| 2 | 200 | The station answered properly |
+| 3 | Seconds played, counting up | That it keeps playing |
+| 4 | 0, or a small number that stays put | How often the sound ran out. A number that keeps climbing means the network cannot keep up |
+| 5 | Close to 100 % | How much sound is waiting. It should fill within seconds and stay full |
+| 6 | 44100 | The station's rate. If the MPC's project runs at another rate, the station plays at the wrong speed |
+| 7 | About 44100, whatever the tempo | How much sound the MPC asks a plugin for each second. More than the station sends means the sound must run out |
+| 8 | The number of calls that second | Whether the MPC asks in more, smaller calls as the tempo rises |
+| 9, 10 | The fewest and the most frames in one call | How the MPC cuts its calls up while a sequence plays |
+
+Things worth trying: leave it playing for ten minutes; play pads and a sequence over it; pull the network cable or
+switch Wi-Fi off and on again (the sound should stop within seconds and come back by itself, with row 4 one higher);
+remove the card (the MPC should not hang).
+
+The decoder, `engine/helpers/online/minimp3.h`, is lieff/minimp3 at commit 142823796ab8 (CC0, its licence is beside it). It was
+checked to hold nothing but decoding: it includes only the standard memory and integer headers and the
+processor's own, and calls nothing that touches files, the network or other programs.
+
+### Stream Check
+
+Not a test card but a small plugin of MP Forge's own kind: it is written the way the AI's guide
+(`directives/reference/online.md`) says to, it lists two stations in `online.json`, and it is built by MP
+Forge's safety check with online plugins switched on. So the helper in it is the one MP Forge writes into every
+plugin that goes online, which Radio Check never ran. No station is kept with it: copy `online.example.json` to
+`online.json` and put in the addresses of two stations of your own choosing. Then build it and send it:
+
+```bash
+cargo run --manifest-path engine/Cargo.toml -- gate "screen-tests/Stream Check" --online-plugins
+```
+
+```bash
+python3 vendor/mpc-plugin-builder-sdk/tools/mpc_remote.py ADDRESS update "screen-tests/Stream Check"
+```
+
+Without `--online-plugins` the check must block it, saying online plugins are switched off.
+
+Heard on the Key 37 (2026-11-18): it plays. MP Forge's own helper brings a station in on a real MPC.
+
+| Try | What to look for | What it tells us |
+|---|---|---|
+| Add it to a track | The first station fades in a second or two later, clean, at the right speed | MP Forge's own helper plays a station on the MPC |
+| Station to Second | The first station stops, and the other fades in a second or two later | A plugin can change streams |
+| Playing off, then on | Silence, then the station again | A stream can be closed and opened |
+| Volume | The station gets quieter and louder, and what passes through the plugin does not | The sound is the plugin's to shape |
+| Leave it for ten minutes, with a sequence playing | No stutter, no drift | It keeps up |
+| Remove it | The MPC does not hang | The helper's thread ends with the plugin |
 
 ## Changing the cards
 

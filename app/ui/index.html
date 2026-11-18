@@ -219,6 +219,11 @@
         <div id="motion" class="mode" role="group" aria-label="When MP Forge animates"></div>
       </div>
       <div class="setting">
+        <div class="field-label">Online plugins <span class="experimental">EXPERIMENTAL</span></div>
+        <div class="soft small">Lets a plugin bring in sound from the internet, such as a radio station. A plugin's own code still never goes online: it lists the addresses it wants, and MP Forge's own helper fetches sound from those and from nowhere else. Such a plugin is marked ONLINE, with its addresses. While this is off, a plugin like that is not built or sent, and it stays silent when you play it here. Sound from the internet is decoded inside your MPC's app, which can never be as safe as staying offline, so leave this off unless you want such a plugin. On Windows a stream is silent in MP Forge and plays on the MPC.</div>
+        <div id="online-plugins" class="mode" role="group" aria-label="Whether plugins may go online"></div>
+      </div>
+      <div class="setting">
         <div class="field-label">New here?</div>
         <button type="button" id="show-guide" class="item-button">SHOW ME ROUND</button>
       </div>

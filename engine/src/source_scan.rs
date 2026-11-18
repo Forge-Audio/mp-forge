@@ -9,6 +9,8 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use crate::online;
+
 const STARTS_PROGRAMS: &str = "starts another program";
 const USES_NETWORK: &str = "uses the network";
 const STARTS_THREADS: &str = "starts its own threads";
@@ -21,6 +23,7 @@ const RAW_INSTRUCTIONS: &str = "uses raw machine instructions";
 const LEAVES_THE_PLUGIN: &str = "pulls in code from outside the plugin";
 const REACHES_PAST_HEADERS: &str = "declares system functions by hand, which gets around the header rules";
 const GLUES_NAMES: &str = "glues a name together out of pieces, which hides what the code calls";
+const REACHES_INTO_THE_HELPER: &str = "reaches into MP Forge's stream helper, which only goes online for the addresses in online.json";
 
 /// The two ways C++ writes the operator that glues pieces into one name.
 const NAME_GLUE: [&str; 2] = ["##", "%:%:"];
@@ -30,6 +33,8 @@ const RAW_TEXT_MARKS: [&str; 5] = ["R", "LR", "uR", "UR", "u8R"];
 /// Names that are forbidden wherever they appear, including as a prefix such as `std::filesystem::path`.
 const FORBIDDEN_NAMES: &[(&str, &str)] = &[
     ("extern", REACHES_PAST_HEADERS),
+    ("mp_forge_net", REACHES_INTO_THE_HELPER),
+    ("mp_forge_online", REACHES_INTO_THE_HELPER),
     ("popen", STARTS_PROGRAMS),
     ("fork", STARTS_PROGRAMS),
     ("vfork", STARTS_PROGRAMS),
@@ -136,10 +141,17 @@ pub struct Hit {
     pub reason: &'static str,
 }
 
+/// Reads every file of the plugin's code but MP Forge's own stream helper, exactly as MP Forge writes it,
+/// which is the one part of a plugin that may go online.
 pub fn scan_plugin(plugin: &Path) -> io::Result<Vec<Violation>> {
+    let code = plugin.join("src");
     let mut violations = Vec::new();
-    for file in files_under(&plugin.join("src"))? {
-        let text = String::from_utf8_lossy(&fs::read(&file)?).into_owned();
+    for file in files_under(&code)? {
+        let written = fs::read(&file)?;
+        if online::is_mp_forges_own(file.strip_prefix(&code).unwrap_or(&file), &written) {
+            continue;
+        }
+        let text = String::from_utf8_lossy(&written).into_owned();
         let in_this_file = |hit: Hit| Violation { file: file.clone(), line: hit.line, found: hit.found, reason: hit.reason };
         violations.extend(scan_text(&text).into_iter().map(in_this_file));
     }
@@ -201,6 +213,9 @@ fn include_target(line: &str) -> Option<&str> {
 fn reason_against_header(header: &str) -> Option<&'static str> {
     if header.starts_with('/') || header.contains("..") {
         return Some(LEAVES_THE_PLUGIN);
+    }
+    if header.contains(online::HELPER_FOLDER) {
+        return Some(REACHES_INTO_THE_HELPER);
     }
     reason_listed_for(header, FORBIDDEN_HEADERS)
 }

@@ -90,7 +90,8 @@
 
   // Answers with where to send the plugin and whether to restart the MPC's app afterwards, or with nothing.
   // The restart is asked afresh every time, and is never ticked to begin with.
-  function askBeforeSending(sheet, pluginName, mpc) {
+  // `goingOnline` says what the plugin fetches from the internet once it is on the MPC, when it fetches anything.
+  function askBeforeSending(sheet, pluginName, mpc, goingOnline) {
     const address = element("input", "item-input");
     address.type = "text";
     address.maxLength = LONGEST_ADDRESS;
@@ -99,7 +100,8 @@
     address.spellcheck = false;
     address.setAttribute("aria-label", "Your MPC's address");
     const restart = tick(ABOUT_RESTARTING);
-    const holds = [element("div", "", `Send ${pluginName} to the MPC at this address?`), address, element("div", "soft small", ABOUT_SENDING), restart.label];
+    const online = goingOnline ? [element("div", "sheet-problem", goingOnline)] : [];
+    const holds = [element("div", "", `Send ${pluginName} to the MPC at this address?`), address, element("div", "soft small", ABOUT_SENDING), ...online, restart.label];
     const details = { title: "SEND TO YOUR MPC", confirmWords: "SEND", holds, focusOn: address };
     return asked(sheet, details, () => ({ address: address.value.trim(), restart: restart.box.checked })).then((answer) => (answer && answer.address ? answer : null));
   }

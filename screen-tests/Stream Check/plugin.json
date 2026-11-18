@@ -1,0 +1,17 @@
+{
+  "name": "Stream Check",
+  "manufacturer": "Workbench Tests",
+  "version": "1.0.0",
+  "format": "vst2",
+  "kind": "effect",
+  "uid": "WSc1",
+  "numInputs": 2,
+  "numOutputs": 2,
+  "category": "Effect",
+  "file32": "VST/stream-check-arm32.so",
+  "file64": "VST/stream-check-arm64.so",
+  "description": "Stream Check: plays one of two internet radio stations, through MP Forge's own stream helper, on top of what passes through it.",
+  "author": "Workbench Tests",
+  "url": "",
+  "license": "MIT"
+}

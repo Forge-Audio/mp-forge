@@ -7,6 +7,7 @@ use std::env;
 use std::fs;
 use std::ffi::OsStr;
 use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use serde_json::{Value, json};
@@ -73,6 +74,8 @@ pub struct Workbench {
     work: Arc<Mutex<Work>>,
     /// The signal held by the AI's job on each plugin, so the musician can stop that job and no other.
     stops: Mutex<HashMap<String, StopSignal>>,
+    /// Whether the musician has switched online plugins on, which is experimental and off until they do.
+    online_plugins: AtomicBool,
 }
 
 impl Workbench {
@@ -88,7 +91,7 @@ impl Workbench {
     }
 
     fn keeping(sdk_folder: Result<PathBuf, String>, plugins: PathBuf) -> Self {
-        Self { sdk_folder, plugins: Mutex::new(plugins), places_note: None, work: Arc::default(), stops: Mutex::default() }
+        Self { sdk_folder, plugins: Mutex::new(plugins), places_note: None, work: Arc::default(), stops: Mutex::default(), online_plugins: AtomicBool::new(false) }
     }
 
     /// The same workbench, keeping its plugins in the folder noted among the app's settings, if one was chosen,
@@ -142,7 +145,16 @@ impl Workbench {
     }
 
     pub fn maker(&self) -> Result<Maker, String> {
-        Ok(Maker::new(self.sdk()?, self.plugins_dir()))
+        Ok(Maker::new(self.sdk()?, self.plugins_dir()).with_online_plugins(self.online_plugins_are_allowed()))
+    }
+
+    pub fn online_plugins_are_allowed(&self) -> bool {
+        self.online_plugins.load(Ordering::Relaxed)
+    }
+
+    /// Switches online plugins on or off for every check and build from now on.
+    pub fn allow_online_plugins(&self, allowed: bool) {
+        self.online_plugins.store(allowed, Ordering::Relaxed);
     }
 
     /// A fresh signal for the job about to start on a plugin. Asking to stop reaches that job and no later one.

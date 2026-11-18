@@ -242,8 +242,9 @@ fn how_many_changes(input: &Value) -> String {
 
 /// Serves the tools for one plugin on standard input and output until the caller hangs up.
 /// This is what an outside agent program, such as Claude Code, starts to reach the tools.
-pub fn serve_on_standard_io(sdk: &Sdk, plugin_dir: &Path) -> io::Result<()> {
-    let gate = Gate::new(sdk.clone());
+/// `online_plugins` says whether the musician has switched those on, which the safety check has to know.
+pub fn serve_on_standard_io(sdk: &Sdk, plugin_dir: &Path, online_plugins: bool) -> io::Result<()> {
+    let gate = Gate::new(sdk.clone()).with_online_plugins(online_plugins);
     let mut tools = PluginTools::open(plugin_dir, sdk.root(), &gate)?;
     mcp_server::serve(&mut tools, io::stdin().lock(), io::stdout().lock())
 }
@@ -261,7 +262,7 @@ impl Toolbox for PluginTools<'_> {
                 name: READ_REFERENCE,
                 description: "Reads one file from the reference library. Read the overview, the DSP cookbook, the \
                     framework header and the closest example before writing audio code, the UI guide before \
-                    writing ui.json, and mp-forge/pictures.md before drawing a picture. The library is read-only.",
+                    writing ui.json, mp-forge/pictures.md before drawing a picture, and mp-forge/online.md before bringing in sound from the internet. The library is read-only.",
                 input_schema: path_input("A path from list_reference, such as docs/overview.md"),
             },
             ToolDefinition {
@@ -544,7 +545,7 @@ mod tests {
         let gate = bench.gate();
         let mut tools = PluginTools::open(&bench.plugin.0, &bench.sdk.0, &gate).unwrap();
 
-        assert_eq!(tools.run(LIST_REFERENCE, &json!({})), ToolOutput::success("mp-forge/pictures.md\ndocs/overview.md"));
+        assert_eq!(tools.run(LIST_REFERENCE, &json!({})), ToolOutput::success("mp-forge/pictures.md\nmp-forge/online.md\ndocs/overview.md"));
         assert_eq!(tools.run(READ_REFERENCE, &json!({"path": "docs/overview.md"})), ToolOutput::success("How plugins work"));
         assert!(tools.run(READ_REFERENCE, &json!({"path": "tools/mpc_firmware.py"})).is_error);
     }

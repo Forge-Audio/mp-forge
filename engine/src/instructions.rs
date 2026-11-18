@@ -88,6 +88,17 @@ mod tests {
     }
 
     #[test]
+    fn the_instructions_keep_the_network_shut_but_for_mp_forges_own_stream() {
+        let instructions = for_making_plugins();
+
+        assert!(instructions.contains("Never start a program, use the network, start a thread"));
+        assert!(instructions.contains("read `mp-forge/online.md` in the reference library"));
+        assert!(instructions.contains("switched on \"Online plugins\" in MP Forge's settings"));
+        assert!(instructions.contains("Bring in a stream only when the musician asks for sound from the internet"));
+        assert!(!instructions.contains("stream_.read("), "the stream's calls are read from the library when they are needed");
+    }
+
+    #[test]
     fn the_instructions_say_how_to_put_pictures_on_the_screen() {
         let instructions = for_making_plugins();
 

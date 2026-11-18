@@ -25,7 +25,7 @@ use tauri::Manager;
 use tauri::path::PathResolver;
 use workbench_engine::carried_sdk::CarriedSdk;
 use workbench_engine::live_player::{self, PLAY_COMMAND};
-use workbench_engine::maker::SERVE_TOOLS_COMMAND;
+use workbench_engine::maker::{ONLINE_PLUGINS_FLAG, SERVE_TOOLS_COMMAND};
 use workbench_engine::picture_clock::{self, READ_CLOCK_COMMAND};
 use workbench_engine::plugin_tools;
 use workbench_engine::sdk::Sdk;
@@ -38,7 +38,8 @@ const PLUGINS_FOLDER_OF_AN_INSTALLED_COPY: &str = "MP Forge";
 fn main() -> ExitCode {
     let arguments: Vec<String> = env::args().skip(1).collect();
     match arguments.as_slice() {
-        [command, plugin_dir, _sdk_flag, sdk_dir] if command == SERVE_TOOLS_COMMAND => serve_tools(plugin_dir, sdk_dir),
+        [command, plugin_dir, _sdk_flag, sdk_dir] if command == SERVE_TOOLS_COMMAND => serve_tools(plugin_dir, sdk_dir, false),
+        [command, plugin_dir, _sdk_flag, sdk_dir, online] if command == SERVE_TOOLS_COMMAND && online == ONLINE_PLUGINS_FLAG => serve_tools(plugin_dir, sdk_dir, true),
         [command, plugin_library] if command == PLAY_COMMAND => play(plugin_library),
         [command, plugin_library, control] if command == READ_CLOCK_COMMAND => read_clock(plugin_library, control),
         _ => open_window(),
@@ -65,9 +66,9 @@ fn read_clock(plugin_library: &str, control: &str) -> ExitCode {
 }
 
 /// Standard output carries only protocol messages here, so nothing else may print to it.
-fn serve_tools(plugin_dir: &str, sdk_dir: &str) -> ExitCode {
+fn serve_tools(plugin_dir: &str, sdk_dir: &str, online_plugins: bool) -> ExitCode {
     let served = Sdk::at(sdk_dir).map_err(|not_found| not_found.to_string()).and_then(|sdk| {
-        plugin_tools::serve_on_standard_io(&sdk, Path::new(plugin_dir)).map_err(|error| error.to_string())
+        plugin_tools::serve_on_standard_io(&sdk, Path::new(plugin_dir), online_plugins).map_err(|error| error.to_string())
     });
     match served {
         Ok(()) => ExitCode::SUCCESS,
@@ -156,6 +157,7 @@ fn open_window() -> ExitCode {
             commands::keep_plugins_in,
             commands::delete_plugin,
             commands::export_plugin,
+            commands::allow_online_plugins,
             commands::guide_state,
             commands::make_guide,
             commands::choose_plugin_to_import,

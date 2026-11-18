@@ -13,3 +13,6 @@ Everything you offer has to be something real, so keep to this:
   the song or following how it is played. A bigger plugin can have a page where the musician chooses what
   moves what.
 - It can play sound files the musician adds, and it comes with a handful of presets.
+- It can bring in a stream of sound from the internet, such as a radio station, and play it or change it.
+  This is experimental: the musician first switches on "Online plugins" in MP Forge's settings, so say so
+  when you offer it. Nothing else of the internet is open to a plugin.

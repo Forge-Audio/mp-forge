@@ -18,6 +18,7 @@ use serde_json::{Value, json};
 use tauri::{AppHandle, Emitter};
 
 use workbench_engine::live_player::PLAY_COMMAND;
+use workbench_engine::online::STAYS_OFFLINE;
 use workbench_engine::process::command_for;
 
 const PLAYER_EVENT: &str = "player-event";
@@ -38,6 +39,12 @@ impl Drop for Running {
     }
 }
 
+/// A built plugin to play, and whether it may bring sound in from the internet while it plays here.
+pub struct Played<'a> {
+    pub plugin_library: &'a Path,
+    pub may_go_online: bool,
+}
+
 #[derive(Default)]
 pub struct LivePlayer {
     running: Mutex<Option<Running>>,
@@ -47,8 +54,8 @@ impl LivePlayer {
     /// Starts a player for one built plugin, in place of any that was running.
     /// `run` is the screen's own number for this start. It comes back on every event, so the screen can
     /// tell what this player says from what an earlier one said.
-    pub fn start(&self, run: u32, plugin_library: &Path, app: AppHandle) -> Result<(), String> {
-        let mut player = player_process(plugin_library).spawn().map_err(|error| format!("The player could not be started: {error}"))?;
+    pub fn start(&self, run: u32, played: &Played, app: AppHandle) -> Result<(), String> {
+        let mut player = player_process(played).spawn().map_err(|error| format!("The player could not be started: {error}"))?;
         let its_input = player.stdin.take().ok_or("The player could not be reached.")?;
         let answers = player.stdout.take().ok_or("The player could not be heard.")?;
         pass_on_what_it_says(answers, run, app);
@@ -96,10 +103,14 @@ fn write_each(waiting: Receiver<String>, mut its_input: impl Write) {
     }
 }
 
-fn player_process(plugin_library: &Path) -> Command {
+/// A plugin that may not go online is told so the way a check tells it, and its stream helper then gives silence.
+fn player_process(played: &Played) -> Command {
     let this_program = env::current_exe().unwrap_or_else(|_| "workbench-app".into());
     let mut command = command_for(this_program);
-    command.arg(PLAY_COMMAND).arg(plugin_library).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit());
+    command.arg(PLAY_COMMAND).arg(played.plugin_library).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::inherit());
+    if !played.may_go_online {
+        command.envs([STAYS_OFFLINE]);
+    }
     command
 }
 
@@ -116,6 +127,21 @@ fn pass_on_what_it_says(answers: ChildStdout, run: u32, app: AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn is_told_to_stay_offline(player: &Command) -> bool {
+        player.get_envs().any(|(name, value)| name == STAYS_OFFLINE.0 && value.is_some_and(|value| value == STAYS_OFFLINE.1))
+    }
+
+    #[test]
+    fn a_plugin_is_played_with_its_stream_kept_offline_unless_it_may_go_online() {
+        let plugin_library = Path::new("built-plugin.so");
+
+        let kept_offline = player_process(&Played { plugin_library, may_go_online: false });
+        let let_online = player_process(&Played { plugin_library, may_go_online: true });
+
+        assert!(is_told_to_stay_offline(&kept_offline));
+        assert!(!is_told_to_stay_offline(&let_online));
+    }
     use std::io;
     use std::sync::{Arc, Condvar};
 

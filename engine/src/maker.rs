@@ -50,6 +50,8 @@ const WAITING_SAMPLES_FOLDER: &str = ".waiting-samples";
 const WAITING_ATTACHMENTS_FOLDER: &str = ".waiting-attachments";
 /// The workbench command that serves the AI's tools to an outside agent program.
 pub const SERVE_TOOLS_COMMAND: &str = "serve-tools";
+/// Said to the tool server when the musician has switched online plugins on.
+pub const ONLINE_PLUGINS_FLAG: &str = "--online-plugins";
 
 const PREVIEW_SOUND_FILE: &str = "build/preview.wav";
 const PREVIEW_TIME_LIMIT: Duration = Duration::from_secs(60);
@@ -178,11 +180,21 @@ pub struct Maker {
     /// How many tokens the AI's conversation may reach before older material is dropped from it.
     compact_at: Option<u64>,
     stop: StopSignal,
+    /// Passed on to the tool server an agent program starts, so its safety check judges as this one does.
+    online_is_switched_on: bool,
 }
 
 impl Maker {
     pub fn new(sdk: Sdk, plugins_dir: impl Into<PathBuf>) -> Self {
-        Self { gate: Gate::new(sdk.clone()), sdk, plugins_dir: plugins_dir.into(), repair_rounds: DEFAULT_REPAIR_ROUNDS, compact_at: None, stop: StopSignal::default() }
+        Self { gate: Gate::new(sdk.clone()), sdk, plugins_dir: plugins_dir.into(), repair_rounds: DEFAULT_REPAIR_ROUNDS, compact_at: None, stop: StopSignal::default(), online_is_switched_on: false }
+    }
+
+    /// Lets plugins bring sound in from the internet through MP Forge's stream helper, which is experimental.
+    /// Without it, a plugin that lists streams is blocked by its safety check.
+    pub fn with_online_plugins(mut self, switched_on: bool) -> Self {
+        self.gate = self.gate.with_online_plugins(switched_on);
+        self.online_is_switched_on = switched_on;
+        self
     }
 
     pub fn with_repair_rounds(mut self, repair_rounds: usize) -> Self {
@@ -433,7 +445,10 @@ impl Maker {
     /// An agent program starts the tool server from the plugin's folder, so every path it is given is absolute.
     fn tool_server_for(&self, tool_server_program: &Path, plugin_dir: &Path) -> io::Result<ToolServer> {
         let absolute = |path: &Path| true_path_of(path).map(|path| path.to_string_lossy().into_owned());
-        let arguments = vec![SERVE_TOOLS_COMMAND.to_string(), absolute(plugin_dir)?, "--sdk".to_string(), absolute(self.sdk.root())?];
+        let mut arguments = vec![SERVE_TOOLS_COMMAND.to_string(), absolute(plugin_dir)?, "--sdk".to_string(), absolute(self.sdk.root())?];
+        if self.online_is_switched_on {
+            arguments.push(ONLINE_PLUGINS_FLAG.to_string());
+        }
         Ok(ToolServer { program: tool_server_program.to_path_buf(), arguments })
     }
 

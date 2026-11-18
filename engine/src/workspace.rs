@@ -10,13 +10,14 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::attachments::is_attachment;
 use crate::look::LOOK_FILE;
+use crate::online::{ONLINE_FILE, is_kept_for_the_helper};
 use crate::pictures::{DRAWING_EXTENSION, DRAWINGS_FOLDER, PICTURES_FILE};
 
 const LARGEST_FILE_IN_BYTES: usize = 512 * 1024;
 const PLUGIN_MANIFEST: &str = "plugin.json";
 /// `DESIGN.md` is where the AI keeps its plan for the sound and for the screen's look, so both stay whole from one
 /// request to the next.
-const FILES_THE_AI_WRITES: [&str; 4] = ["ui.json", "README.md", "DESIGN.md", PICTURES_FILE];
+const FILES_THE_AI_WRITES: [&str; 5] = ["ui.json", "README.md", "DESIGN.md", PICTURES_FILE, ONLINE_FILE];
 const SOURCE_FOLDER: &str = "src";
 const SOURCE_EXTENSIONS: [&str; 3] = ["cpp", "h", "hpp"];
 const REFERENCE_FOLDERS: [&str; 6] = ["docs", "framework", "examples", "templates", "schemas", "ui-kit"];
@@ -24,7 +25,10 @@ const REFERENCE_EXTENSIONS: [&str; 5] = ["md", "h", "hpp", "cpp", "json"];
 const BUILD_OUTPUT_FOLDER: &str = "build";
 /// MP Forge's own guides. They are built into the program and read like any other file of the library, so the AI
 /// is sent them only when its work calls for them.
-const OWN_GUIDES: [OwnGuide; 1] = [OwnGuide { path: "mp-forge/pictures.md", text: include_str!("../../directives/reference/pictures.md") }];
+const OWN_GUIDES: [OwnGuide; 2] = [
+    OwnGuide { path: "mp-forge/pictures.md", text: include_str!("../../directives/reference/pictures.md") },
+    OwnGuide { path: "mp-forge/online.md", text: include_str!("../../directives/reference/online.md") },
+];
 
 struct OwnGuide {
     path: &'static str,
@@ -176,8 +180,10 @@ fn may_read_in_plugin(relative: &Path) -> bool {
     fixed_file || may_write_in_plugin(relative) || is_attachment(relative)
 }
 
+/// A file of the plugin's own code. MP Forge's stream helper sits among the code and is not the AI's to read or write.
 fn is_source_file(relative: &Path) -> bool {
-    relative.starts_with(SOURCE_FOLDER) && has_extension(relative, &SOURCE_EXTENSIONS)
+    let own_code = relative.strip_prefix(SOURCE_FOLDER).is_ok_and(|in_the_code| !is_kept_for_the_helper(in_the_code));
+    own_code && has_extension(relative, &SOURCE_EXTENSIONS)
 }
 
 fn is_drawing(relative: &Path) -> bool {
@@ -345,6 +351,21 @@ mod tests {
     }
 
     #[test]
+    fn the_ai_lists_a_plugins_streams_but_cannot_touch_mp_forges_stream_helper() {
+        let (folder, plugin) = plugin_with_manifest();
+        fs::create_dir_all(folder.0.join("src/mp-forge-online")).unwrap();
+        fs::write(folder.0.join("src/mp_forge_stream.cpp"), "helper").unwrap();
+
+        plugin.write("online.json", "{\"streams\": []}").unwrap();
+
+        assert_eq!(plugin.read("online.json").unwrap(), "{\"streams\": []}");
+        for helpers in ["src/mp_forge_stream.h", "src/mp_forge_stream.cpp", "src/mp-forge-online/streams.inc", "src/mp-forge-online/small_sockets.h"] {
+            assert!(matches!(plugin.write(helpers, "x"), Err(FileError::NotAllowed(_))), "`{helpers}`");
+        }
+        assert!(matches!(plugin.read("src/mp_forge_stream.cpp"), Err(FileError::NotAllowed(_))));
+    }
+
+    #[test]
     fn the_ai_can_read_the_musicians_look_but_none_of_their_artwork() {
         let (folder, plugin) = plugin_with_manifest();
         fs::write(folder.0.join("look.json"), "{\"pages\": []}").unwrap();
@@ -425,7 +446,7 @@ mod tests {
         }
         let library = ReferenceLibrary::open(&sdk.0).unwrap();
 
-        assert_eq!(library.list().unwrap(), ["mp-forge/pictures.md", "docs/overview.md", "framework/mpc_plugin.h"]);
+        assert_eq!(library.list().unwrap(), ["mp-forge/pictures.md", "mp-forge/online.md", "docs/overview.md", "framework/mpc_plugin.h"]);
         assert_eq!(library.read("docs/overview.md").unwrap(), "text");
         assert!(library.read("tools/mpc_firmware.py").is_err());
         assert!(library.read("../anything.md").is_err());
@@ -442,5 +463,17 @@ mod tests {
         assert!(guide.contains("void turnPictureClock(const mpc::ProcessContext& ctx)"));
         assert!(guide.contains("a knob's dial is the circle centred at (x + 53, y + 53)"));
         assert!(library.read("mp-forge/another.md").is_err());
+    }
+
+    #[test]
+    fn the_reference_library_holds_mp_forges_own_guide_to_sound_from_the_internet() {
+        let sdk = TemporaryFolder::create("sdk-online-guide");
+        let library = ReferenceLibrary::open(&sdk.0).unwrap();
+
+        let guide = library.read("mp-forge/online.md").unwrap();
+
+        assert!(guide.contains("{ \"streams\": ["));
+        assert!(guide.contains("#include \"mp_forge_stream.h\"") && guide.contains("stream_.read("));
+        assert!(guide.contains("\"Online plugins\" in MP Forge's settings"));
     }
 }

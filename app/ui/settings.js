@@ -19,6 +19,10 @@
   const MODELS_OWN_LIMIT = "model";
   const COMPACT_AT = { key: "compactAt", choices: [[MODELS_OWN_LIMIT, "THE MODEL'S OWN LIMIT"], ["400000", "400K TOKENS"], ["200000", "200K TOKENS"], ["100000", "100K TOKENS"]] };
 
+  // Off until the musician switches it on. The app is told, because its safety check has to know.
+  const ONLINE_PLUGINS_OFF = "off";
+  const ONLINE_PLUGINS = { key: "onlinePlugins", choices: [[ONLINE_PLUGINS_OFF, "OFF"], ["on", "ON"]], whenPicked: tellTheAppAboutOnlinePlugins };
+
   let parts;
   let mpcHasPassword = false;
 
@@ -176,6 +180,14 @@
     parts.thisCopy.hidden = false;
   }
 
+  function onlinePluginsAreOn() {
+    return picked(ONLINE_PLUGINS) !== ONLINE_PLUGINS_OFF;
+  }
+
+  function tellTheAppAboutOnlinePlugins() {
+    return ask("allow_online_plugins", { allowed: onlinePluginsAreOn() });
+  }
+
   // --- Starting up ----------------------------------------------------------------------------
 
   function start(pageParts) {
@@ -185,6 +197,8 @@
     drawChoices(parts.versionsKept, VERSIONS_KEPT);
     drawChoices(parts.compactAt, COMPACT_AT);
     drawChoices(parts.motion, window.motion.SETTING);
+    drawChoices(parts.onlinePlugins, ONLINE_PLUGINS);
+    tellTheAppAboutOnlinePlugins();
     parts.mpcAddress.value = mpc().address;
     parts.mpcDrive.value = mpc().drive;
     parts.modeDark.addEventListener("click", () => useMode("dark"));
@@ -200,5 +214,5 @@
     sayWhichCopyThisIs();
   }
 
-  window.appSettings = { start, mpc, rememberMpcAddress, noteOpened, pluginToOpenFirst, mostVersionsKept, compactAt };
+  window.appSettings = { start, mpc, rememberMpcAddress, noteOpened, pluginToOpenFirst, mostVersionsKept, compactAt, onlinePluginsAreOn };
 })();

@@ -33,6 +33,7 @@ use workbench_engine::layers::layer_from;
 use workbench_engine::library;
 use workbench_engine::look::{look_from, look_of};
 use workbench_engine::lucky_find::{self, Find, Hunt};
+use workbench_engine::online;
 use workbench_engine::open_mpc;
 use workbench_engine::page_art;
 use workbench_engine::picture_clock;
@@ -52,7 +53,7 @@ use crate::accounts::{CODEX_ACCOUNT, MPC_ACCOUNT, has_key_for, key_for, service_
 use crate::chatgpt;
 use crate::key_store;
 use crate::payloads::{self, AiChoice, AiPicks, ChangeAsked, HuntAsked, IdeaAsked, MpcAsked, NewPlugin};
-use crate::player::LivePlayer;
+use crate::player::{LivePlayer, Played};
 use crate::upload::UploadedFile;
 use crate::workbench::Workbench;
 
@@ -111,6 +112,7 @@ pub fn open_plugin(name: String, workbench: State<Workbench>) -> Result<Value, S
         "arrangement": payloads::arrangement(&arranged_screen_of(&plugin_dir)),
         "look": look_of(&plugin_dir).unwrap_or_default().as_json(),
         "builtAt": built_screen_file(&plugin_dir).map(|screen_file| when_written(&screen_file)),
+        "streams": payloads::streams(&online::streams_of(&plugin_dir).unwrap_or_default()),
     }))
 }
 
@@ -484,6 +486,13 @@ pub fn rename_plugin(name: String, new_name: String, workbench: State<Workbench>
     workbench.maker()?.rename_plugin(&name, &new_name).map_err(explain)
 }
 
+/// Switches online plugins on or off: whether a plugin may bring sound in from the internet through MP Forge's
+/// stream helper. It is experimental, and off until the musician switches it on in the settings.
+#[tauri::command]
+pub fn allow_online_plugins(allowed: bool, workbench: State<Workbench>) {
+    workbench.allow_online_plugins(allowed);
+}
+
 /// Lets the musician choose where to save the plugin's project as one file, and packs it there. The file holds
 /// what makes the plugin and nothing of its builds, its earlier versions or its conversation.
 /// Answers with where it was saved, or with nothing when they chose nowhere.
@@ -609,7 +618,8 @@ pub fn fetch_what_is_missing(workbench: State<Workbench>) -> Result<(), String> 
 #[tauri::command]
 pub fn player_start(name: String, run: u32, app: AppHandle, workbench: State<Workbench>, player: State<LivePlayer>) -> Result<(), String> {
     let plugin_library = workbench.maker()?.built_library(&name).map_err(explain)?;
-    player.start(run, &plugin_library, app)
+    let played = Played { plugin_library: &plugin_library, may_go_online: workbench.online_plugins_are_allowed() };
+    player.start(run, &played, app)
 }
 
 /// Passes one request to the live player: turn a control, switch the sound, play a note, or feed an effect

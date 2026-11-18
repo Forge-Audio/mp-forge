@@ -17,6 +17,7 @@ use workbench_engine::control_parts::parts_as_json;
 use workbench_engine::gate::GateReport;
 use workbench_engine::library::{self, PluginSummary};
 use workbench_engine::lucky_find::{Find, Hunt, Roll};
+use workbench_engine::online::Stream;
 use workbench_engine::open_mpc::{self, Listed};
 use workbench_engine::maker::Delivery;
 use workbench_engine::pictures::{Motion, Picture, Placement};
@@ -198,6 +199,11 @@ pub fn picture(picture: &Picture, version: u64, plays_every: Option<f64>) -> Val
         "name": picture.name, "page": picture.page, "slots": block, "frames": picture.frames,
         "motion": motion, "follows": follows, "loopSeconds": plays_every, "version": version
     })
+}
+
+/// The addresses a plugin brings sound in from over the internet, each with the name the plugin knows it by.
+pub fn streams(listed: &[Stream]) -> Value {
+    json!(listed.iter().map(|stream| json!({ "name": stream.name, "address": stream.address() })).collect::<Vec<Value>>())
 }
 
 /// The screen as it will be shown, page by page: where each control, heading and picture sits, in MPC pixels.

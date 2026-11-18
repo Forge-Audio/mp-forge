@@ -489,6 +489,7 @@
       },
       delete_plugin: ({ name }) => { plugins.splice(plugins.findIndex((plugin) => plugin.name === name), 1); },
       export_plugin: ({ name }) => `/Users/you/Desktop/${name}.mpforge`,
+      allow_online_plugins: () => {},
       // The demo keeps no guide's words until one has been made, and takes a moment to pretend the AI is writing.
       guide_state: ({ name }) => ({ built: true, written: guidesWritten.has(name) }),
       make_guide: ({ name, writeAgain }) => {

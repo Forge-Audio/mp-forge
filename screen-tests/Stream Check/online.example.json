@@ -1,0 +1,4 @@
+{ "streams": [
+    { "name": "First", "address": "http://stream.example.com/first.mp3" },
+    { "name": "Second", "address": "http://stream.example.com/second.mp3" }
+] }

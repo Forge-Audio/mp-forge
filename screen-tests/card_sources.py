@@ -9,6 +9,8 @@ SharedPlugin = namedtuple("SharedPlugin", "header shared_class parameters")
 KNOBS_THAT_HOLD_A_VALUE = SharedPlugin("test_card_plugin.h", "TestCardPlugin", 16)
 PICTURES_THAT_MOVE = SharedPlugin("live_card_plugin.h", "LiveCardPlugin", 28)
 PICTURES_AT_FOUR_SPEEDS = SharedPlugin("fast_card_plugin.h", "FastCardPlugin", 6)
+REACHES_THE_INTERNET = SharedPlugin("net_card_plugin.h", "NetCardPlugin", 7)
+PLAYS_A_STATION = SharedPlugin("radio_card_plugin.h", "RadioCardPlugin", 11)
 
 SOURCE = """// {name} - a screen test card for the MPC, by Workbench Tests.
 //

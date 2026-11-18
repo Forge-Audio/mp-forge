@@ -16,7 +16,8 @@ import shutil
 from collections import namedtuple
 
 import test_pictures
-from card_sources import KNOBS_THAT_HOLD_A_VALUE, PICTURES_AT_FOUR_SPEEDS, PICTURES_THAT_MOVE, write_readme, write_source
+from card_sources import (KNOBS_THAT_HOLD_A_VALUE, PICTURES_AT_FOUR_SPEEDS, PICTURES_THAT_MOVE, PLAYS_A_STATION, REACHES_THE_INTERNET,
+                          write_readme, write_source)
 from skin_parts import (ACCENT, CENTRED, KNOB_OVERLAY, NAME_HEIGHT, VALUE_HEIGHT, WHITE, FilmStrip, Page, bounds_of, box,
                         colour_block, control, display, entry, fixed_words, font, kit_strip, knob_component,
                         knob_overlay_component, live_words, named_knob_component, obj, parameter, picture, picture_data,
@@ -398,6 +399,46 @@ def fast_page():
     return TestPage("FAST", rows + own_speed, turned_by_knobs=[FAST_OWN_SPEED])
 
 
+# Net Check's parameters, in the order shared/net_card_plugin.h declares them, each with what its number says.
+NET_READINGS = [
+    "1  how far the last try got",
+    "2  the web server's answer (200 means it answered)",
+    "3  tries made, one every ten seconds",
+    "4  tries that were answered",
+    "5  how long the last try took, in ms",
+    "6  counts up while the card's own thread runs",
+]
+# Radio Check's parameters, in the order shared/radio_card_plugin.h declares them.
+RADIO_READINGS = [
+    "1  how far it has got with the station",
+    "2  the station's answer (200 means here it is)",
+    "3  seconds of the station played",
+    "4  times the sound ran out and waited",
+    "5  how full the store of waiting sound is",
+    "6  the station's sample rate (the MPC's is 44100)",
+    "7  frames the MPC asked for in the last second",
+    "8  calls it asked for them in",
+    "9  fewest frames in one call",
+    "10  most frames in one call",
+]
+# On both cards the readings follow Volume, which is parameter 0.
+FIRST_READING = 1
+READING_ROWS_TOP, READING_ROWS_HEIGHT, TALLEST_READING_ROW = 30, 570, 90
+
+
+def reading_row(row, caption, row_height):
+    top = READING_ROWS_TOP + row * row_height
+    lettering = text_style(font(height=min(40.0, row_height * 0.6)))
+    reading = live_words("Value", lettering, parameter(FIRST_READING + row))
+    return [Note(caption, 40, top + row_height // 2 - 12), shown("reading %d" % (row + 1), "Label", reading, box(720, top, 500, row_height))]
+
+
+def readings_page(name, captions):
+    """A page that shows what a card found out, one numbered reading to a row. The rows share the page's height."""
+    row_height = min(TALLEST_READING_ROW, READING_ROWS_HEIGHT // len(captions))
+    return TestPage(name, [part for row, caption in enumerate(captions) for part in reading_row(row, caption, row_height)])
+
+
 CARDS = [
     Card("Test Card", [place_page(), text_page(), fonts_page(), groups_page("GROUPS", GROUP_BOXES), groups_page("NO BOX", []),
                        more_page()], ships_font=True),
@@ -408,6 +449,8 @@ CARDS = [
     Card("Draw Extras", [halo_page(), xy_page(), meter_page()]),
     Card("Draw Live", [live_page()], shared_plugin=PICTURES_THAT_MOVE),
     Card("Draw Fast", [fast_page()], shared_plugin=PICTURES_AT_FOUR_SPEEDS),
+    Card("Net Check", [readings_page("ONLINE", NET_READINGS)], shared_plugin=REACHES_THE_INTERNET),
+    Card("Radio Check", [readings_page("RADIO", RADIO_READINGS)], shared_plugin=PLAYS_A_STATION),
 ]
 
 

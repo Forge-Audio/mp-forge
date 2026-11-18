@@ -1,0 +1,7 @@
+# MP Forge writes its stream helper into the plugin afresh before every check.
+src/mp_forge_stream.h
+src/mp_forge_stream.cpp
+src/mp-forge-online/
+
+# The stations it is tried with are the tester's own. online.example.json shows the form.
+online.json

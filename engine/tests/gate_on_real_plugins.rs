@@ -16,6 +16,7 @@ use workbench_engine::gate::{
 };
 use workbench_engine::hosted_plugin::{HostedPlugin, LARGEST_BLOCK, Note, moves_made_by_the_plugin};
 use workbench_engine::library::built_parameters;
+use workbench_engine::online::{ONLINE_FILE, ONLINE_IS_SWITCHED_OFF};
 use workbench_engine::live_player::Rig;
 use workbench_engine::picture_clock::{CLOCK_CONTROL, turn_seconds_of};
 use workbench_engine::picture_review::HOW_TO_READ_THE_PICTURES;
@@ -362,6 +363,62 @@ fn a_plugin_whose_knobs_the_musician_chose_is_let_through_with_them_in_its_built
     assert_eq!(turned_by(9), built_control_number(&plugin.0, "Feedback"));
     assert_eq!(turned_by(16), built_control_number(&plugin.0, "Low Cut"));
     assert_eq!(turned_by(13), built_control_number(&plugin.0, "Sync"));
+}
+
+const ONE_STREAM: &str = r#"{ "streams": [{ "name": "Jazz", "address": "http://stream.example.com/jazz.mp3" }] }"#;
+const FIRST_INCLUDE_OF_THE_DELAY: &str = "#include \"mpc_plugin.h\"";
+/// What a plugin's code writes to hear a stream: MP Forge's helper, started and opened, and its sound read.
+const HEARS_THE_STREAM: &str = "        static mpforge::AudioStream fromTheInternet;\n        float heard[2][512];\n        fromTheInternet.start(ctx.sampleRate);\n        fromTheInternet.open(0);\n        fromTheInternet.read(heard[0], heard[1], ctx.numFrames < 512 ? ctx.numFrames : 512);";
+
+impl CopiedExample {
+    /// A delay that lists one stream and reads it through MP Forge's helper.
+    fn of_the_delay_with_a_stream(label: &str) -> Self {
+        let delay = Self::of_the_delay(label).with_the_delay_changed(&[
+            (FIRST_INCLUDE_OF_THE_DELAY, format!("{FIRST_INCLUDE_OF_THE_DELAY}\n#include \"mp_forge_stream.h\"")),
+            (START_OF_PROCESS, format!("{START_OF_PROCESS}\n{HEARS_THE_STREAM}")),
+        ]);
+        fs::write(delay.0.join(ONLINE_FILE), ONE_STREAM).unwrap();
+        delay
+    }
+}
+
+#[test]
+fn a_plugin_that_reads_a_stream_through_mp_forges_helper_is_let_through_once_online_plugins_are_switched_on() {
+    let plugin = CopiedExample::of_the_delay_with_a_stream("stream-on");
+
+    let report = gate().with_online_plugins(true).inspect(&plugin.0);
+
+    assert!(report.may_be_sent(), "{report:#?}");
+    assert!(plugin.0.join("src/mp_forge_stream.cpp").is_file() && plugin.0.join("src/mp-forge-online/streams.inc").is_file());
+    assert!(native_library_of(&plugin.0).is_some());
+}
+
+#[test]
+fn the_same_plugin_is_blocked_before_it_is_built_while_online_plugins_are_switched_off() {
+    let plugin = CopiedExample::of_the_delay_with_a_stream("stream-off");
+
+    let report = gate().inspect(&plugin.0);
+
+    assert_eq!(blocking_details(&report, SOURCE_CHECK), ONLINE_IS_SWITCHED_OFF);
+    assert_eq!(report.outcome_of(BUILD_CHECK), Some(&Outcome::NotRun));
+    assert!(!plugin.0.join("src/mp_forge_stream.cpp").exists() && !plugin.0.join("build").exists());
+}
+
+#[test]
+fn a_plugins_own_code_still_may_not_go_online_or_reach_into_the_helper_with_online_plugins_on() {
+    let goes_online_itself = CopiedExample::of_the_delay_with_a_stream("stream-own-socket").with_source("Sneak.cpp", "#include <sys/socket.h>\nint sneak() { return socket(2, 1, 0); }\n");
+    let reaches_in = CopiedExample::of_the_delay_with_a_stream("stream-reach-in")
+        .with_source("Reach.cpp", "#include \"mp-forge-online/small_sockets.h\"\nint reach() { return mp_forge_net::socketThatDoesNotWait(1); }\n");
+    let changes_the_helper = CopiedExample::of_the_delay_with_a_stream("stream-changed-helper").with_source("mp_forge_stream.cpp", "#include <sys/socket.h>\nint anywhere() { return socket(2, 1, 0); }\n");
+
+    let online = gate().with_online_plugins(true);
+    let (went_online, reached_in, changed) = (online.inspect(&goes_online_itself.0), online.inspect(&reaches_in.0), online.inspect(&changes_the_helper.0));
+
+    assert!(blocking_details(&went_online, SOURCE_CHECK).contains("Sneak.cpp") && blocking_details(&went_online, SOURCE_CHECK).contains("uses the network"));
+    assert!(blocking_details(&reached_in, SOURCE_CHECK).contains("reaches into MP Forge's stream helper"));
+    assert_eq!(went_online.outcome_of(BUILD_CHECK), Some(&Outcome::NotRun));
+    assert!(changed.may_be_sent(), "a helper that was changed is written over with MP Forge's own, so the plugin is the honest one again: {changed:#?}");
+    assert!(!fs::read_to_string(changes_the_helper.0.join("src/mp_forge_stream.cpp")).unwrap().contains("anywhere"));
 }
 
 /// A folder of plugins on its own, removed when the test ends.
