@@ -50,9 +50,12 @@ conversation then says which drive it went onto.
 
 ## Find it on the MPC
 
-The plugin shows in the MPC's plugin list once the MPC's app has been restarted. It is listed under
-**External Plugins** in the plugin browser. An instrument is used as a plugin program. An effect is used as
-an insert.
+The plugin shows on the MPC once the MPC's app has been restarted. It is listed under **External Plugins**,
+in one of two lists:
+
+- **An instrument** is in the list of instruments. Make a plugin track and open its list.
+- **An effect** is in the list of effects. Tap an insert on any track to open it. An effect is never in the
+  list of instruments, so it can look as if it is missing.
 
 ## Settings for your MPC
 

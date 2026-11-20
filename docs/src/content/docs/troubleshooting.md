@@ -138,7 +138,9 @@ computer**.
 - **Enable Enhancements** and **External Plugin Support** both have to be on, under Preferences →
   Enhancements (Beta).
 - The MPC has to run MPC OS 3.10.1 or later.
-- Look under **External Plugins** in the plugin browser.
+- Look under **External Plugins** in the right list. An instrument is in the list of instruments, which a
+  plugin track opens. An effect is only in the list of effects, which opens when you tap an insert on a
+  track.
 
 ## If you built MP Forge yourself
 

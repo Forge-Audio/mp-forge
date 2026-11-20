@@ -203,8 +203,16 @@ impl Facts {
 
     /// Where a musician finds the plugin once it is on their MPC.
     pub(crate) fn where_it_is_on_the_mpc(&self) -> String {
-        let where_it_goes = if self.is_effect { "It is an effect, so it goes on an insert." } else { "It is an instrument, so it goes on a plugin track." };
-        format!("On the MPC, open the list of plugins. It is under External Plugins, by {}. {where_it_goes}", self.maker)
+        format!("{} It is under External Plugins, by {}.", self.which_list_it_is_in(), self.maker)
+    }
+
+    /// The MPC keeps instruments and effects in two lists, and a plugin is only ever in the one for its kind.
+    fn which_list_it_is_in(&self) -> &'static str {
+        if self.is_effect {
+            "It is an effect, so it is not in the list of instruments. On the MPC, tap an insert on any track to open the list of effects."
+        } else {
+            "It is an instrument. On the MPC, make a plugin track and open its list of instruments."
+        }
     }
 }
 
@@ -514,7 +522,23 @@ mod tests {
         assert!(page.contains("<tr><th scope=\"row\">SPEED</th><td>Sets how far apart the echoes fall.</td><td>320 ms</td><td class=\"knob\">13</td></tr>"), "{page}");
         assert!(page.contains("Picks how worn the tape is.<div class=\"settings\">Settings: Clean, Worn</div>"));
         assert!(page.contains("<li><b>Seasick</b> Deep, slow wobble.</li>") && page.contains("<li>Switch Mode to Clean on drums.</li>"));
-        assert!(page.contains("It is an effect, so it goes on an insert.") && !page.contains("Wobble") && !page.contains("{{"));
+        assert!(!page.contains("Wobble") && !page.contains("{{"));
+    }
+
+    #[test]
+    fn an_effect_is_looked_for_on_an_insert_and_an_instrument_on_a_plugin_track() {
+        let effect = dusty_tape();
+        let instrument = Facts { is_effect: false, ..dusty_tape() };
+
+        assert_eq!(
+            effect.where_it_is_on_the_mpc(),
+            "It is an effect, so it is not in the list of instruments. On the MPC, tap an insert on any track to open the list of effects. It is under External Plugins, by Forge Tests."
+        );
+        assert_eq!(
+            instrument.where_it_is_on_the_mpc(),
+            "It is an instrument. On the MPC, make a plugin track and open its list of instruments. It is under External Plugins, by Forge Tests."
+        );
+        assert!(page_of(&effect, &words_on(&written())).contains("tap an insert on any track"));
     }
 
     #[test]

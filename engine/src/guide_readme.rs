@@ -152,7 +152,7 @@ mod tests {
         assert!(readme.contains("| **Time** | How long before the sound comes back. | 350 ms | 1 |"));
         assert!(readme.contains("| **Mode** | Settings: Clean, Worn. | Clean | 2 |"));
         assert!(readme.contains("## The MORE page\n\n## Presets\n\n- **Default** How the plugin starts.\n\n## Things to try\n\n1. Turn Time up slowly.\n\n## Put it on your MPC\n\n1. Download the zip from the [latest release](https://github.com/somebody/tape-echo/releases/latest) and unzip it. It holds one folder, `Somebody - VST - Tape Echo`.\n"));
-        assert!(readme.contains("4. On the MPC, open the list of plugins.") && !readme.contains("way out to it"));
+        assert!(readme.contains("4. It is an effect, so it is not in the list of instruments. On the MPC, tap an insert on any track") && !readme.contains("way out to it"));
         assert!(readme.ends_with("Made with [MP Forge](https://forge-audio.github.io/mp-forge/).\n"));
     }
 
