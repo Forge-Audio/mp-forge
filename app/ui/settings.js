@@ -1,5 +1,6 @@
-// The settings page: the colour mode, whether the app moves, what the app opens when it starts, how many versions
-// are kept, when the AI's context is compacted, where the musician's MPC is, and their accounts with AI services.
+// The settings page: the colour mode, the font the app is written in, whether the app moves, what the app opens
+// when it starts, how many versions are kept, when the AI's context is compacted, where the musician's MPC is, and
+// their accounts with AI services.
 
 (function () {
   "use strict";
@@ -197,6 +198,7 @@
     drawChoices(parts.versionsKept, VERSIONS_KEPT);
     drawChoices(parts.compactAt, COMPACT_AT);
     drawChoices(parts.motion, window.motion.SETTING);
+    drawChoices(parts.letters, window.letters.SETTING);
     drawChoices(parts.onlinePlugins, ONLINE_PLUGINS);
     tellTheAppAboutOnlinePlugins();
     parts.mpcAddress.value = mpc().address;

@@ -1960,7 +1960,7 @@
     const part = (id) => document.getElementById(id);
     return {
       sheet: page.appSheet, modeDark: part("mode-dark"), modeLight: part("mode-light"), startsNew: part("starts-new"), startsLast: part("starts-last"),
-      versionsKept: part("versions-kept"), compactAt: part("compact-at"), motion: part("motion"), onlinePlugins: part("online-plugins"), thisCopy: part("this-copy"),
+      versionsKept: part("versions-kept"), compactAt: part("compact-at"), motion: part("motion"), letters: part("letters"), onlinePlugins: part("online-plugins"), thisCopy: part("this-copy"),
       mpcAddress: part("mpc-address"), mpcDrive: part("mpc-drive"), mpcPasswordState: part("mpc-password-state"), mpcPassword: part("mpc-password"),
       accounts: part("ai-accounts"),
     };
@@ -2022,6 +2022,7 @@
   async function start() {
     await aiAccounts.start(page.appSheet);
     appSettings.start(settingsParts());
+    window.settingsGroups.start(document.getElementById("settings-groups"), document.getElementById("settings-shown"));
     window.pluginsFolder.start(pluginsFolderParts(), pluginsAreKeptElsewhere);
     tabStrip.start({ strip: page.tabs, earlier: document.getElementById("tabs-earlier"), later: document.getElementById("tabs-later") }, drawTabs);
     page.newPluginTab.addEventListener("click", () => openFromItsTab(NEW_PLUGIN));

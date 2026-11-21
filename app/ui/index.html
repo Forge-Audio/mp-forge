@@ -207,79 +207,105 @@
       <button type="button" id="settings-done" class="titlebar-button">DONE</button>
     </div>
     <div class="window-body settings-body">
-      <div class="setting">
-        <div class="field-label">Colour mode</div>
-        <div class="mode" role="group" aria-label="Colour mode">
-          <button type="button" id="mode-dark" class="mode-button">DARK</button>
-          <button type="button" id="mode-light" class="mode-button">LIGHT</button>
-        </div>
-      </div>
-      <div class="setting">
-        <div class="field-label">Animations</div>
-        <div class="soft small">The conversation sliding aside, the blacksmith at work and the like. If motion on screen bothers you, choose AS MY COMPUTER SAYS: MP Forge then keeps still whenever your computer is set to show less motion, as on Windows with Animation effects off, or on a Mac with Reduce motion on.</div>
-        <div id="motion" class="mode" role="group" aria-label="When MP Forge animates"></div>
-      </div>
-      <div class="setting">
-        <div class="field-label">Online plugins <span class="experimental">EXPERIMENTAL</span></div>
-        <div class="soft small">Lets a plugin bring in sound from the internet, such as a radio station. A plugin's own code still never goes online: it lists the addresses it wants, and MP Forge's own helper fetches sound from those and from nowhere else. Such a plugin is marked ONLINE, with its addresses. While this is off, a plugin like that is not built or sent, and it stays silent when you play it here. Sound from the internet is decoded inside your MPC's app, which can never be as safe as staying offline, so leave this off unless you want such a plugin. On Windows a stream is silent in MP Forge and plays on the MPC.</div>
-        <div id="online-plugins" class="mode" role="group" aria-label="Whether plugins may go online"></div>
-      </div>
-      <div class="setting">
-        <div class="field-label">New here?</div>
-        <button type="button" id="show-guide" class="item-button">SHOW ME ROUND</button>
-      </div>
-      <div class="setting">
-        <div class="field-label">When the app starts, open</div>
-        <div class="mode" role="group" aria-label="What the app opens when it starts">
-          <button type="button" id="starts-new" class="mode-button">A NEW PLUGIN</button>
-          <button type="button" id="starts-last" class="mode-button">THE PLUGIN I HAD OPEN</button>
-        </div>
-      </div>
-      <div class="setting">
-        <div class="field-label">Where your plugins are kept</div>
-        <div class="soft small">Each plugin is a folder of its own on this computer, holding its code, its screen, its versions and your conversation about it. You can keep them in any folder you like, for instance one that gets backed up.</div>
-        <div id="plugins-folder-path" class="folder-path"></div>
-        <div id="plugins-folder-state" class="soft small"></div>
-        <div class="folder-answers">
-          <button type="button" id="plugins-folder-show" class="item-button">SHOW THE FOLDER</button>
-          <button type="button" id="plugins-folder-choose" class="item-button">CHOOSE ANOTHER FOLDER</button>
-        </div>
-        <div id="plugins-folder-asking" class="folder-asking" hidden></div>
-        <div id="plugins-folder-said" class="sheet-problem" role="status" hidden></div>
-      </div>
-      <div class="setting">
-        <div class="field-label">Versions kept of each plugin</div>
-        <div class="soft small">A version is kept before every change, so you can always go back. With a limit, a plugin's oldest versions are thrown away for good once it has more than that. You can also delete single versions from VERSIONS.</div>
-        <div id="versions-kept" class="mode" role="group" aria-label="Versions kept of each plugin"></div>
-      </div>
-      <div class="setting">
-        <div class="field-label">AI context</div>
-        <div class="soft small">The context is everything the AI is holding in mind while it works on one request: your words, the files it has read, the pictures it was shown. It is counted in tokens and shown at the top of the conversation. Past the limit you set here, what the AI read longest ago is dropped to make room (compaction). It can read anything again when it needs to. A lower limit costs less and keeps the AI focused. A higher one lets it hold more at once.</div>
-        <div id="compact-at" class="mode" role="group" aria-label="Compact the AI's context at"></div>
-      </div>
-      <div class="setting">
-        <div class="field-label">What MP Forge needs on this computer</div>
-        <div class="soft small">MP Forge builds and checks every plugin on this computer, with Akai's own tools. This is what those tools need, and whether it is here.</div>
-        <div id="needs-list" class="needs"></div>
-        <div class="setting-field"><button type="button" id="needs-check" class="item-button">CHECK AGAIN</button><button type="button" id="needs-fetch" class="item-button" hidden>GET WHAT IS MISSING</button></div>
-        <div id="needs-said" class="soft small" role="status" hidden></div>
-      </div>
-      <div class="setting">
-        <div class="field-label">Your MPC</div>
-        <div class="soft small">Used when you send a plugin to it. The MPC shows its address under its Wi-Fi settings, and has to have developer mode on. A plugin only ever goes on a USB drive or SD card in the MPC, never on its built-in storage.</div>
-        <label class="setting-field"><span>Address</span><input id="mpc-address" type="text" class="item-input" maxlength="253" placeholder="192.168.1.50" autocomplete="off" spellcheck="false"></label>
-        <label class="setting-field"><span>Removable drive, if it has several</span><input id="mpc-drive" type="text" class="item-input" maxlength="64" placeholder="Its name or number" autocomplete="off" spellcheck="false"></label>
-        <div class="setting-field"><span>Password, if it asks for one</span><span id="mpc-password-state" class="soft"></span><button type="button" id="mpc-password" class="item-button"></button></div>
-      </div>
-      <div class="setting">
-        <div class="field-label">AI accounts</div>
-        <div class="soft small">A key is kept in this computer's own store for secrets: the keychain on a Mac, the Credential Manager on Windows, the keyring on Linux. It is never written into a plugin's files and the AI is never shown it. Claude works without a key, through Claude Code's own sign-in.</div>
-        <div id="ai-accounts" class="accounts"></div>
-      </div>
-      <div class="setting">
-        <div class="field-label">About MP Forge</div>
-        <div id="this-copy" class="soft small" hidden></div>
-        <div class="soft small">MP Forge is an independent tool for making plugins for Akai MPC hardware. It is not affiliated with, sponsored by or endorsed by Akai Professional or inMusic Brands. MPC and Akai are trademarks of their owners.</div>
+      <nav id="settings-groups" class="settings-groups" aria-label="Groups of settings"></nav>
+      <div id="settings-shown" class="settings-shown">
+        <section class="settings-group">
+          <h2 class="group-heading">GENERAL</h2>
+          <div class="setting">
+            <div class="field-label">Colour mode</div>
+            <div class="mode" role="group" aria-label="Colour mode">
+              <button type="button" id="mode-dark" class="mode-button">DARK</button>
+              <button type="button" id="mode-light" class="mode-button">LIGHT</button>
+            </div>
+          </div>
+          <div class="setting">
+            <div class="field-label">Font</div>
+            <div class="soft small">MP Forge is written in pixel letters. If they are hard to read, choose PLAIN: MP Forge then uses your computer's own font. A plugin's screen is not changed by this.</div>
+            <div id="letters" class="mode" role="group" aria-label="The font MP Forge is written in"></div>
+          </div>
+          <div class="setting">
+            <div class="field-label">Animations</div>
+            <div class="soft small">The conversation sliding aside, the blacksmith at work and the like. If motion on screen bothers you, choose AS MY COMPUTER SAYS: MP Forge then keeps still whenever your computer is set to show less motion, as on Windows with Animation effects off, or on a Mac with Reduce motion on.</div>
+            <div id="motion" class="mode" role="group" aria-label="When MP Forge animates"></div>
+          </div>
+          <div class="setting">
+            <div class="field-label">When the app starts, open</div>
+            <div class="mode" role="group" aria-label="What the app opens when it starts">
+              <button type="button" id="starts-new" class="mode-button">A NEW PLUGIN</button>
+              <button type="button" id="starts-last" class="mode-button">THE PLUGIN I HAD OPEN</button>
+            </div>
+          </div>
+        </section>
+        <section class="settings-group">
+          <h2 class="group-heading">PLUGINS</h2>
+          <div class="setting">
+            <div class="field-label">Where your plugins are kept</div>
+            <div class="soft small">Each plugin is a folder of its own on this computer, holding its code, its screen, its versions and your conversation about it. You can keep them in any folder you like, for instance one that gets backed up.</div>
+            <div id="plugins-folder-path" class="folder-path"></div>
+            <div id="plugins-folder-state" class="soft small"></div>
+            <div class="folder-answers">
+              <button type="button" id="plugins-folder-show" class="item-button">SHOW THE FOLDER</button>
+              <button type="button" id="plugins-folder-choose" class="item-button">CHOOSE ANOTHER FOLDER</button>
+            </div>
+            <div id="plugins-folder-asking" class="folder-asking" hidden></div>
+            <div id="plugins-folder-said" class="sheet-problem" role="status" hidden></div>
+          </div>
+          <div class="setting">
+            <div class="field-label">Versions kept of each plugin</div>
+            <div class="soft small">A version is kept before every change, so you can always go back. With a limit, a plugin's oldest versions are thrown away for good once it has more than that. You can also delete single versions from VERSIONS.</div>
+            <div id="versions-kept" class="mode" role="group" aria-label="Versions kept of each plugin"></div>
+          </div>
+          <div class="setting">
+            <div class="field-label">Online plugins <span class="experimental">EXPERIMENTAL</span></div>
+            <div class="soft small">Lets a plugin bring in sound from the internet, such as a radio station. A plugin's own code still never goes online: it lists the addresses it wants, and MP Forge's own helper fetches sound from those and from nowhere else. Such a plugin is marked ONLINE, with its addresses. While this is off, a plugin like that is not built or sent, and it stays silent when you play it here. Sound from the internet is decoded inside your MPC's app, which can never be as safe as staying offline, so leave this off unless you want such a plugin. On Windows a stream is silent in MP Forge and plays on the MPC.</div>
+            <div id="online-plugins" class="mode" role="group" aria-label="Whether plugins may go online"></div>
+          </div>
+        </section>
+        <section class="settings-group">
+          <h2 class="group-heading">SEND SETTINGS</h2>
+          <div class="setting">
+            <div class="field-label">Your MPC</div>
+            <div class="soft small">Used when you send a plugin to it. The MPC shows its address under its Wi-Fi settings, and has to have developer mode on. A plugin only ever goes on a USB drive or SD card in the MPC, never on its built-in storage.</div>
+            <label class="setting-field"><span>Address</span><input id="mpc-address" type="text" class="item-input" maxlength="253" placeholder="192.168.1.50" autocomplete="off" spellcheck="false"></label>
+            <label class="setting-field"><span>Removable drive, if it has several</span><input id="mpc-drive" type="text" class="item-input" maxlength="64" placeholder="Its name or number" autocomplete="off" spellcheck="false"></label>
+            <div class="setting-field"><span>Password, if it asks for one</span><span id="mpc-password-state" class="soft"></span><button type="button" id="mpc-password" class="item-button"></button></div>
+          </div>
+        </section>
+        <section class="settings-group">
+          <h2 class="group-heading">AI</h2>
+          <div class="setting">
+            <div class="field-label">AI accounts</div>
+            <div class="soft small">A key is kept in this computer's own store for secrets: the keychain on a Mac, the Credential Manager on Windows, the keyring on Linux. It is never written into a plugin's files and the AI is never shown it. Claude works without a key, through Claude Code's own sign-in.</div>
+            <div id="ai-accounts" class="accounts"></div>
+          </div>
+          <div class="setting">
+            <div class="field-label">AI context</div>
+            <div class="soft small">The context is everything the AI is holding in mind while it works on one request: your words, the files it has read, the pictures it was shown. It is counted in tokens and shown at the top of the conversation. Past the limit you set here, what the AI read longest ago is dropped to make room (compaction). It can read anything again when it needs to. A lower limit costs less and keeps the AI focused. A higher one lets it hold more at once.</div>
+            <div id="compact-at" class="mode" role="group" aria-label="Compact the AI's context at"></div>
+          </div>
+        </section>
+        <section class="settings-group">
+          <h2 class="group-heading">BUILD TOOLS</h2>
+          <div class="setting">
+            <div class="field-label">What MP Forge needs on this computer</div>
+            <div class="soft small">MP Forge builds and checks every plugin on this computer, with Akai's own tools. This is what those tools need, and whether it is here.</div>
+            <div id="needs-list" class="needs"></div>
+            <div class="setting-field"><button type="button" id="needs-check" class="item-button">CHECK AGAIN</button><button type="button" id="needs-fetch" class="item-button" hidden>GET WHAT IS MISSING</button></div>
+            <div id="needs-said" class="soft small" role="status" hidden></div>
+          </div>
+        </section>
+        <section class="settings-group">
+          <h2 class="group-heading">ABOUT</h2>
+          <div class="setting">
+            <div class="field-label">New here?</div>
+            <button type="button" id="show-guide" class="item-button">SHOW ME ROUND</button>
+          </div>
+          <div class="setting">
+            <div class="field-label">About MP Forge</div>
+            <div id="this-copy" class="soft small" hidden></div>
+            <div class="soft small">MP Forge is an independent tool for making plugins for Akai MPC hardware. It is not affiliated with, sponsored by or endorsed by Akai Professional or inMusic Brands. MPC and Akai are trademarks of their owners.</div>
+          </div>
+        </section>
       </div>
     </div>
   </section>
@@ -354,6 +380,7 @@
 
 <script src="helpers.js"></script>
 <script src="motion.js"></script>
+<script src="letters.js"></script>
 <script src="plain-typing.js"></script>
 <script src="hover-names.js"></script>
 <script src="popup.js"></script>
@@ -397,6 +424,7 @@
 <script src="remix.js"></script>
 <script src="guide-example.js"></script>
 <script src="guide.js"></script>
+<script src="settings-groups.js"></script>
 <script src="settings.js"></script>
 <script src="plugins-folder.js"></script>
 <script src="needs.js"></script>
