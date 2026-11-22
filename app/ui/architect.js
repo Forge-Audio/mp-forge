@@ -92,7 +92,7 @@
 
     const buttons = element("div", "architect-buttons");
     buttons.append(back, next, build, more, startOver);
-    made.append(element("div", "field-label", "Plugin architect"), whichOne, ...blocks.map((made) => made.block), buttons);
+    made.append(element("div", "field-label", listeners.called), whichOne, ...blocks.map((made) => made.block), buttons);
     show(0);
     return { made, answers: () => blocks.map((block) => block.answer()).filter((given) => given.answer) };
   }

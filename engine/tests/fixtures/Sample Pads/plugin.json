@@ -1,0 +1,7 @@
+{
+  "name": "Sample Pads",
+  "manufacturer": "Workbench Tests",
+  "version": "1.0.0",
+  "kind": "sample-app",
+  "description": "The musician's own sound files, one to a pad, for the MPC Sample."
+}

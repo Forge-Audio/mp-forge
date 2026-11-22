@@ -1,12 +1,16 @@
 //! The Open MPC catalog: the community's own list of open plugins for the MPC, read so that the musician can
-//! pick one to remix.
+//! pick one to remix, or to take in as it is.
 //!
 //! The list is read, and for a plugin the musician picks, what its makers wrote about it (its README) and the
-//! picture of its screen. None of its plugins is downloaded, opened or run, none of their code is read, and
-//! nothing about the musician or their plugins is sent when asking.
+//! picture of its screen. For a remix that is all: none of the plugin's code is read. Only when the musician
+//! asks to take a plugin in as it is, is its source fetched, as one packed file. Nothing fetched is opened or
+//! run here, and nothing about the musician or their plugins is sent when asking.
+
+use std::io::Read;
 
 use serde_json::Value;
 
+use crate::license_terms;
 use crate::maker::name_made_usable;
 use crate::model_http::{self, HTTP_OK};
 use crate::sdk::PluginKind;
@@ -16,12 +20,19 @@ const CATALOG_ADDRESS: &str = "https://open-mpc.github.io/catalog.json";
 const WHERE_SOURCE_IS_KEPT: &str = "https://github.com";
 /// Where the files of a project kept there can be read one at a time. HEAD is whichever branch it works on.
 const WHERE_FILES_ARE_READ: &str = "https://raw.githubusercontent.com";
+/// Where the whole source of a project kept there is handed over as one packed file.
+const WHERE_SOURCE_IS_PACKED: &str = "https://codeload.github.com";
+/// A plugin's project is small, but its makers may keep a great deal beside it: builds, sounds, other plugins.
+/// All of it has to be read past to reach the project, and none of it is kept.
+const LARGEST_SOURCE: u64 = 1024 * 1024 * 1024;
+const MANIFEST: &str = "plugin.json";
 const README_NAMES: [&str; 2] = ["README.md", "readme.md"];
 const LARGEST_README: u64 = 512 * 1024;
 /// As much of a README as the builder is given: the start, where a project says what it is.
 const LONGEST_README_USED: usize = 6_000;
 const LARGEST_SCREENSHOT: u64 = 8 * 1024 * 1024;
 const HTTP_NOT_FOUND: u16 = 404;
+const NOT_A_PAGE_OF_THE_CATALOG: &str = "That is not a page the Open MPC catalog names.";
 /// The catalog is a few megabytes and grows with every plugin added to it.
 const LARGEST_CATALOG: u64 = 64 * 1024 * 1024;
 const LONGEST_NAME: usize = 60;
@@ -57,6 +68,13 @@ impl Listed {
             Some(usable) if self.name.starts_with(|first: char| first.is_ascii_alphabetic()) => format!("{usable} Remix"),
             _ => name_made_usable(&format!("Remix {}", self.name), LONGEST_NAME_TO_REMIX).unwrap_or_else(|| "Remix".to_string()),
         }
+    }
+
+    /// What the plugin's licence asks of a musician who takes it in as it is. None when it cannot be taken in:
+    /// the catalog does not say where its source is, or its licence is not one that gives everybody leave.
+    pub fn terms_for_taking_it_in(&self) -> Option<String> {
+        self.source.as_ref()?;
+        license_terms::in_plain_words(self.license.as_deref()?)
     }
 
     /// What the builder is told of the original. What the musician wants different is added by them.
@@ -113,9 +131,9 @@ pub fn catalog() -> Result<Vec<Listed>, String> {
 /// What a plugin's makers wrote about it on the page its source is kept on, made plain and cut to a length
 /// the builder can take in. None when the project has no README.
 pub fn readme_of(source: &str) -> Result<Option<String>, String> {
-    let project = project_kept_at(source).ok_or("That is not a page the Open MPC catalog names.")?;
+    let project = project_kept_at(source).ok_or(NOT_A_PAGE_OF_THE_CATALOG)?;
     for name in README_NAMES {
-        if let Some(written) = text_at(&format!("{WHERE_FILES_ARE_READ}/{project}/HEAD/{name}"))? {
+        if let Some(written) = text_at(&format!("{WHERE_FILES_ARE_READ}/{project}/HEAD/{name}"), "README")? {
             return Ok(readme_made_plain(&written));
         }
     }
@@ -136,15 +154,34 @@ pub fn screenshot_at(address: &str) -> Result<Vec<u8>, String> {
     }
 }
 
+/// The manifest at the top of a plugin's source, which a project written with Akai's SDK keeps there. None
+/// when there is none, which is known without fetching the source itself.
+pub fn manifest_of(source: &str) -> Result<Option<String>, String> {
+    let project = project_kept_at(source).ok_or(NOT_A_PAGE_OF_THE_CATALOG)?;
+    text_at(&format!("{WHERE_FILES_ARE_READ}/{project}/HEAD/{MANIFEST}"), MANIFEST)
+}
+
+/// A plugin's source as its makers keep it, packed, to be read as it arrives. Nothing is opened or run here.
+pub fn packed_source_of(source: &str) -> Result<impl Read + use<>, String> {
+    let project = project_kept_at(source).ok_or(NOT_A_PAGE_OF_THE_CATALOG)?;
+    let unreachable = |problem: &dyn std::fmt::Display| format!("The plugin's source could not be fetched: {problem}.");
+    let response = model_http::download_client().get(&format!("{WHERE_SOURCE_IS_PACKED}/{project}/tar.gz/HEAD")).call().map_err(|problem| unreachable(&problem))?;
+    match response.status().as_u16() {
+        HTTP_OK => Ok(response.into_body().into_with_config().limit(LARGEST_SOURCE).reader()),
+        HTTP_NOT_FOUND => Err("The plugin's source is not where the catalog says it is kept.".to_string()),
+        status => Err(unreachable(&format!("its site answered {status}"))),
+    }
+}
+
 /// The address of a picture, when it is kept beside a project's source. A picture kept anywhere else is neither
 /// shown nor fetched, so choosing from the catalog never asks a site of the catalog's choosing for anything.
 fn kept_beside_source(address: &str) -> Option<String> {
     secure_web_address(address).filter(|secure| secure.starts_with(&format!("{WHERE_FILES_ARE_READ}/")))
 }
 
-/// The text of a file on the web, or none when there is no such file.
-fn text_at(address: &str) -> Result<Option<String>, String> {
-    let unreachable = |problem: &dyn std::fmt::Display| format!("The plugin's README could not be fetched: {problem}.");
+/// The text of a file on the web, or none when there is no such file. `called` is what the file is to the musician.
+fn text_at(address: &str, called: &str) -> Result<Option<String>, String> {
+    let unreachable = |problem: &dyn std::fmt::Display| format!("The plugin's {called} could not be fetched: {problem}.");
     let response = model_http::quick_client().get(address).call().map_err(|problem| unreachable(&problem))?;
     match response.status().as_u16() {
         HTTP_OK => response.into_body().into_with_config().limit(LARGEST_README).read_to_string().map(Some).map_err(|problem| unreachable(&problem)),
@@ -344,6 +381,26 @@ mod tests {
         assert!(listed.len() > 100);
         assert!(listed.iter().any(|plugin| plugin.kind == PluginKind::Effect) && listed.iter().any(|plugin| plugin.kind == PluginKind::Instrument));
         assert!(listed.iter().all(|plugin| crate::maker::is_usable_name(&plugin.name_for_a_remix())));
+    }
+
+    #[test]
+    fn a_plugin_can_be_taken_in_when_its_source_is_named_and_its_licence_gives_leave() {
+        let listed_as = |entry: Value| listed_in(&catalog_with(json!([entry])))[0].terms_for_taking_it_in();
+        let mut restricted = tape_echo();
+        restricted["license"] = json!("PolyForm-Noncommercial-1.0.0");
+        let mut kept_nowhere = tape_echo();
+        kept_nowhere["repo"] = json!(null);
+
+        assert!(listed_as(tape_echo()).unwrap().starts_with("MIT: you can use it and change it."));
+        assert_eq!(listed_as(restricted), None);
+        assert_eq!(listed_as(kept_nowhere), None);
+    }
+
+    #[test]
+    fn source_is_only_fetched_from_a_page_the_catalog_could_have_named() {
+        assert!(packed_source_of("https://example.org/somebody/mpc-tape-echo").is_err());
+        assert!(packed_source_of("https://github.com/somebody/mpc-tape-echo/../../other").is_err());
+        assert!(manifest_of("https://example.org/somebody/mpc-tape-echo").is_err());
     }
 
     #[test]

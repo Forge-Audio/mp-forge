@@ -36,6 +36,7 @@ use workbench_engine::lucky_find::{self, Find, Hunt};
 use workbench_engine::online;
 use workbench_engine::open_mpc;
 use workbench_engine::open_mpc_listing::NotListed;
+use workbench_engine::origin::Origin;
 use workbench_engine::page_art;
 use workbench_engine::picture_clock;
 use workbench_engine::pictures::Picture;
@@ -55,6 +56,7 @@ use crate::chatgpt;
 use crate::key_store;
 use crate::payloads::{self, AiChoice, AiPicks, ChangeAsked, HuntAsked, IdeaAsked, ListingAsked, MpcAsked, NewPlugin};
 use crate::player::{LivePlayer, Played};
+use crate::sample_player::SamplePlayer;
 use crate::upload::UploadedFile;
 use crate::workbench::Workbench;
 
@@ -73,11 +75,14 @@ const CLIPBOARD_READERS: &[ClipboardReader] = if cfg!(target_os = "macos") {
 };
 const CLIPBOARD_NOT_READ: &str = "The clipboard could not be read on this computer.";
 const CHOOSE_A_PLUGINS_FOLDER: &str = "Choose the folder to keep your plugins in";
+const CHOOSE_A_SOUND_FOR_THE_APP: &str = "Choose a sound file for the app, as from the MPC Sample's SD card";
 const CHOOSE_A_TEST_SOUND: &str = "Choose a sound to play through the effect";
 const SAVE_THE_PLUGIN_AS: &str = "Save this plugin to hand to somebody else";
 const CHOOSE_A_PLUGIN_TO_IMPORT: &str = "Choose the plugin to bring in";
 const CHOOSE_WHERE_THE_LISTING_GOES: &str = "Choose where to put the folder for Open MPC";
 const PACKED_PLUGINS: &str = "MP Forge plugin";
+const NOT_OF_THE_CATALOG: &str = "That is not a plugin of the Open MPC catalog.";
+const ONLY_SDK_PLUGINS_ARE_TAKEN_IN: &str = "Only a plugin written with Akai's SDK, kept at the top of its repository, can be taken in as it is. You can still remix it.";
 /// The program that shows a folder in the computer's own file manager.
 #[cfg(target_os = "macos")]
 const OPENS_FOLDERS: &str = "open";
@@ -455,13 +460,17 @@ pub fn choose_plugins_folder(app: AppHandle, workbench: State<Workbench>) -> Res
     Ok(Some(payloads::plugins_folder(&folder)))
 }
 
+/// A chooser for one WAV or MP3 file, under the title that says what the file is for.
+fn sound_file_chooser(app: &AppHandle, title: &str) -> tauri_plugin_dialog::FileDialogBuilder<tauri::Wry> {
+    app.dialog().file().set_title(title).add_filter("WAV or MP3 sound", &["wav", "WAV", "mp3", "MP3"])
+}
+
 /// Lets the musician pick a sound file of their own to hear an effect work on. Only where the file is comes
 /// back: the live player reads it when it is asked to play it, and it is never copied into a plugin.
 /// None when they picked nothing.
 #[tauri::command(async)]
 pub fn choose_test_sound(app: AppHandle) -> Result<Option<Value>, String> {
-    let chooser = app.dialog().file().set_title(CHOOSE_A_TEST_SOUND).add_filter("WAV or MP3 sound", &["wav", "WAV", "mp3", "MP3"]);
-    let Some(picked) = chooser.blocking_pick_file() else { return Ok(None) };
+    let Some(picked) = sound_file_chooser(&app, CHOOSE_A_TEST_SOUND).blocking_pick_file() else { return Ok(None) };
     let file = picked.into_path().map_err(|problem| format!("That file cannot be used: {problem}."))?;
     let name = file.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
     Ok(Some(json!({ "path": file, "name": name })))
@@ -555,6 +564,26 @@ pub fn import_plugin(from: PathBuf, named: Option<String>, workbench: State<Work
     match workbench.maker()?.import_project(&from, named.as_deref()) {
         Ok(name) => Ok(json!({ "name": name })),
         Err(NotTakenIn::NameTaken(name)) => Ok(json!({ "nameTaken": name })),
+        Err(not_taken_in) => Err(not_taken_in.to_string()),
+    }
+}
+
+/// Whether a catalog plugin's source has a project at its top, which is the only kind MP Forge can take in.
+/// One small file is asked for, so the musician knows before they try.
+#[tauri::command(async)]
+pub fn open_mpc_source_holds_a_project(source: String) -> Result<bool, String> {
+    Ok(open_mpc::manifest_of(&source)?.is_some())
+}
+
+/// Takes in a plugin of the Open MPC catalog as its makers wrote it, under `named` when a name is given. Its
+/// source is fetched and nothing of it is run. Answers as `import_plugin` does.
+#[tauri::command(async)]
+pub fn import_from_open_mpc(original: Value, named: Option<String>, workbench: State<Workbench>) -> Result<Value, String> {
+    let origin = Origin::said_in(&original).ok_or(NOT_OF_THE_CATALOG)?;
+    match workbench.maker()?.import_from_open_mpc(&origin, named.as_deref()) {
+        Ok(name) => Ok(json!({ "name": name, "credit": origin.credit() })),
+        Err(NotTakenIn::NameTaken(name)) => Ok(json!({ "nameTaken": name })),
+        Err(NotTakenIn::NotAProject(why)) => Err(format!("MP Forge cannot build {} from its source: {why} {ONLY_SDK_PLUGINS_ARE_TAKEN_IN}", origin.name)),
         Err(not_taken_in) => Err(not_taken_in.to_string()),
     }
 }
@@ -663,6 +692,48 @@ pub fn player_tell(request: Value, player: State<LivePlayer>) -> Result<(), Stri
 
 #[tauri::command]
 pub fn player_stop(player: State<LivePlayer>) {
+    player.stop();
+}
+
+/// Builds a Sample app for this computer from its code as it stands, and starts it in a player of its own
+/// with the sound files the musician has added to it.
+#[tauri::command(async)]
+pub fn sample_app_start(name: String, workbench: State<Workbench>, player: State<SamplePlayer>) -> Result<(), String> {
+    let app_dir = workbench.maker()?.build_sample_app(&name).map_err(explain)?;
+    player.start(&name, &app_dir)
+}
+
+/// Shows the blacksmith on the drawing of the MPC Sample, and on a real one that is linked, in place of an app
+/// that is out of reach while it is written, built or checked.
+#[tauri::command]
+pub fn sample_smith_start(name: String, keeps_still: bool, player: State<SamplePlayer>) -> Result<(), String> {
+    player.show_the_smith(&name, keeps_still)
+}
+
+/// Lets the musician pick a sound file on the computer for an app that has opened its page for picking one
+/// from the SD card, which a computer has not got. The app's player is told which file, and reads it, or that
+/// they picked none. Where the file is never passes through the screen.
+#[tauri::command(async)]
+pub fn sample_app_pick_sound(name: String, app: AppHandle, player: State<SamplePlayer>) -> Result<(), String> {
+    let picked = sound_file_chooser(&app, CHOOSE_A_SOUND_FOR_THE_APP).blocking_pick_file().and_then(|picked| picked.into_path().ok());
+    player.tell(&name, &json!({ "picked": picked }))
+}
+
+/// Passes on one thing the musician touched on the drawing of the MPC Sample.
+#[tauri::command]
+pub fn sample_app_tell(name: String, input: Value, player: State<SamplePlayer>) -> Result<(), String> {
+    player.tell(&name, &input)
+}
+
+/// What the Sample app has shown since the screen last asked: its picture and its lights, as bytes. Nothing at
+/// all when that has not changed.
+#[tauri::command]
+pub fn sample_app_shown(name: String, player: State<SamplePlayer>) -> Result<Response, String> {
+    Ok(Response::new(player.newly_shown(&name)?.unwrap_or_default()))
+}
+
+#[tauri::command]
+pub fn sample_app_stop(player: State<SamplePlayer>) {
     player.stop();
 }
 

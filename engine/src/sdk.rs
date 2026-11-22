@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use crate::built_screen::SizedArt;
 use crate::online::STAYS_OFFLINE;
+use crate::sample_app;
 use crate::own_python::OwnPython;
 use crate::process::{Finished, RunError, command_for, run_with_time_limit};
 use crate::simulation::Session;
@@ -24,6 +25,8 @@ const NEW_PLUGIN_SCRIPT: &str = "tools/new_plugin.py";
 const VALIDATE_SCRIPT: &str = "tools/validate.py";
 const TOOLS_FOLDER: &str = "tools";
 const KEPT_TOOLS_FOLDER: &str = ".sdk-tools";
+/// The compiler comes as a package of the Python that Akai's script sets up beside its tools.
+const PYTHON_OF_THE_COMPILER: &str = if cfg!(windows) { "zigenv/Scripts/python.exe" } else { "zigenv/bin/python" };
 const BUILD_FOLDER: &str = "build";
 const BUILT_PARAMETERS: &str = "build/params.json";
 const SCREEN_LAYOUT: &str = "ui.json";
@@ -41,6 +44,8 @@ const NATIVE_LIBRARY_EXTENSIONS: [&str; 3] = ["dylib", "so", "dll"];
 pub enum PluginKind {
     Effect,
     Instrument,
+    /// Not a plugin for the MPCs with a touch screen, but an app that takes over the whole of an MPC Sample.
+    SampleApp,
 }
 
 impl PluginKind {
@@ -48,6 +53,7 @@ impl PluginKind {
         match word {
             "effect" => Some(PluginKind::Effect),
             "instrument" => Some(PluginKind::Instrument),
+            sample_app::KIND => Some(PluginKind::SampleApp),
             _ => None,
         }
     }
@@ -56,6 +62,7 @@ impl PluginKind {
         match self {
             PluginKind::Effect => "effect",
             PluginKind::Instrument => "instrument",
+            PluginKind::SampleApp => sample_app::KIND,
         }
     }
 }
@@ -112,6 +119,17 @@ impl Sdk {
         let mut python = if own.is_there() { command_for(own.program()) } else { command_for(PYTHON_OF_THE_COMPUTER) };
         python.envs(WRITES_EVERY_LETTER).envs([STAYS_OFFLINE]);
         python
+    }
+
+    /// The compiler Akai's build script fetched for itself, to build what that script does not: an app for the
+    /// MPC Sample. None until the script has run once and fetched it.
+    pub(crate) fn compiler(&self) -> Option<Command> {
+        let its_python = self.kept_tools_folder().join(PYTHON_OF_THE_COMPILER);
+        its_python.is_file().then(|| {
+            let mut compiler = command_for(&its_python);
+            compiler.args(["-m", "ziglang"]);
+            compiler
+        })
     }
 
     pub(crate) fn own_python(&self) -> OwnPython {

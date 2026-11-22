@@ -13,6 +13,8 @@ use crate::built_screen::SizedArt;
 use crate::picture_clock::{self, CLOCK_CONTROL};
 use crate::pictures::pictures_of;
 use crate::process::{Finished, RunError};
+use crate::sample_app;
+use crate::sample_trial;
 use crate::screen_layout::ScreenLayout;
 use crate::sdk::{Sdk, native_library_of};
 use crate::simulation::{Session, SimulationReport};
@@ -24,6 +26,9 @@ pub const PICTURES_CHECK: &str = "Pictures can be drawn";
 pub const BUILD_CHECK: &str = "Builds for every MPC";
 pub const SCREEN_CHECK: &str = "Screen loads with its pictures";
 pub const MOVING_PICTURES_CHECK: &str = "Moving pictures move";
+pub const APP_SOURCE_CHECK: &str = "Code stays inside the app";
+pub const APP_BUILD_CHECK: &str = "Builds";
+pub const APP_TRIAL_CHECK: &str = "Stands up to being played";
 
 const BUILD_LOG_LINES_SHOWN: usize = 15;
 const NO_COPY_TO_TEST: &str = "The build left no copy of the plugin to test.";
@@ -170,6 +175,9 @@ impl Gate {
     }
 
     pub fn inspect(&self, plugin: &Path) -> GateReport {
+        if sample_app::is_one(plugin) {
+            return self.inspect_sample_app(plugin);
+        }
         let mut report = GateReport::default();
         report.record(SOURCE_CHECK, || check_source(plugin, self.online_is_switched_on));
         report.record(PICTURES_CHECK, || check_pictures(plugin));
@@ -180,6 +188,42 @@ impl Gate {
             report.record(simulation_check_name(session), || self.check_session(plugin, session));
         }
         report
+    }
+
+    /// A Sample app has no pages, pictures or simulator of Akai's. Its code is read, then built for this
+    /// computer, then played through everything on the device by a program of its own.
+    fn inspect_sample_app(&self, app: &Path) -> GateReport {
+        let mut report = GateReport::default();
+        report.record(APP_SOURCE_CHECK, || check_source_of_app(app));
+        report.record(APP_BUILD_CHECK, || self.check_app_builds(app));
+        report.record(APP_TRIAL_CHECK, || self.check_app_stands_up(app));
+        report
+    }
+
+    /// Plays a Sample app as `touches` say, once its code has been read and built, and says how it went. Why it
+    /// was not played, otherwise.
+    pub fn try_sample_app(&self, app: &Path, touches: &serde_json::Value) -> Result<sample_trial::Trial, Vec<String>> {
+        let unless_blocked = |outcome: Outcome| if let Outcome::Blocked(why) = outcome { Err(why) } else { Ok(()) };
+        unless_blocked(check_source_of_app(app))?;
+        unless_blocked(self.check_app_builds(app))?;
+        sample_trial::held_by(&self.plugin_host, app, touches, self.limits.simulation).map_err(|stopped| vec![stopped])
+    }
+
+    fn check_app_builds(&self, app: &Path) -> Outcome {
+        match sample_app::build_for_this_computer(&self.sdk, app, self.limits.build) {
+            Ok(_) => Outcome::Passed,
+            Err(not_built) => Outcome::Blocked(vec![last_lines(&not_built.to_string(), BUILD_LOG_LINES_SHOWN)]),
+        }
+    }
+
+    fn check_app_stands_up(&self, app: &Path) -> Outcome {
+        let with_everything_on_the_device = serde_json::json!([]);
+        match sample_trial::held_by(&self.plugin_host, app, &with_everything_on_the_device, self.limits.simulation) {
+            Ok(trial) if !trial.problems().is_empty() => Outcome::Blocked(trial.problems()),
+            Ok(trial) if !trial.warnings().is_empty() => Outcome::PassedWithWarnings(trial.warnings()),
+            Ok(_) => Outcome::Passed,
+            Err(stopped) => Outcome::Blocked(vec![stopped]),
+        }
     }
 
     fn check_build(&self, plugin: &Path) -> Outcome {
@@ -265,10 +309,23 @@ fn check_source(plugin: &Path, online_is_switched_on: bool) -> Outcome {
     if let Err(problems) = online::make_ready(plugin, online_is_switched_on) {
         return Outcome::Blocked(problems);
     }
+    outcome_of_reading_the_code(plugin)
+}
+
+/// An app's code is read with MP Forge's kit written into it afresh, so the kit that is read is the kit that
+/// is built with.
+fn check_source_of_app(app: &Path) -> Outcome {
+    match sample_app::put_kit_into(app) {
+        Ok(()) => outcome_of_reading_the_code(app),
+        Err(error) => Outcome::Blocked(vec![format!("MP Forge's kit could not be written into the app: {error}")]),
+    }
+}
+
+fn outcome_of_reading_the_code(plugin: &Path) -> Outcome {
     match scan_plugin(plugin) {
         Ok(violations) if violations.is_empty() => Outcome::Passed,
         Ok(violations) => Outcome::Blocked(violations.iter().map(Violation::describe).collect()),
-        Err(error) => Outcome::Blocked(vec![format!("The plugin's source could not be read: {error}")]),
+        Err(error) => Outcome::Blocked(vec![format!("The source could not be read: {error}")]),
     }
 }
 

@@ -81,6 +81,20 @@ fn next_piece_of<'decoder>(reader: &mut dyn FormatReader, decoder: &'decoder mut
     }
 }
 
+/// What starts every piece of a 44.1 kHz, 128 kbit MP3 file. The last byte says stereo or mono.
+const STEREO_PIECE: [u8; 4] = [0xFF, 0xFB, 0x90, 0x00];
+const MONO_PIECE: [u8; 4] = [0xFF, 0xFB, 0x90, 0xC0];
+const BYTES_IN_A_PIECE: usize = 417;
+
+/// A real MP3 file of silence, built by hand: a piece with nothing after its start decodes as silence. Each
+/// piece is a fortieth of a second or so.
+pub fn silent_mp3(channels: u16, pieces: usize) -> Vec<u8> {
+    let start = if channels == 1 { MONO_PIECE } else { STEREO_PIECE };
+    let mut piece = start.to_vec();
+    piece.resize(BYTES_IN_A_PIECE, 0);
+    piece.repeat(pieces)
+}
+
 impl Decoded {
     fn take_in(&mut self, piece: AudioBufferRef<'_>) {
         let said = *piece.spec();
@@ -103,19 +117,9 @@ impl Decoded {
 
 #[cfg(test)]
 pub mod test_support {
-    const FRAMES_IN_A_PIECE: usize = 1_152;
-    /// What starts every piece of a 44.1 kHz, 128 kbit MP3 file. The last byte says stereo or mono.
-    const STEREO_PIECE: [u8; 4] = [0xFF, 0xFB, 0x90, 0x00];
-    const MONO_PIECE: [u8; 4] = [0xFF, 0xFB, 0x90, 0xC0];
-    const BYTES_IN_A_PIECE: usize = 417;
+    pub use super::silent_mp3;
 
-    /// A real MP3 file of silence, built by hand: a piece with nothing after its start decodes as silence.
-    pub fn silent_mp3(channels: u16, pieces: usize) -> Vec<u8> {
-        let start = if channels == 1 { MONO_PIECE } else { STEREO_PIECE };
-        let mut piece = start.to_vec();
-        piece.resize(BYTES_IN_A_PIECE, 0);
-        piece.repeat(pieces)
-    }
+    const FRAMES_IN_A_PIECE: usize = 1_152;
 
     pub fn frames_in(pieces: usize) -> usize {
         pieces * FRAMES_IN_A_PIECE

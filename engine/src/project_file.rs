@@ -22,14 +22,20 @@ use serde_json::{Value, json};
 
 use crate::art_shelf::is_art_file_name;
 use crate::maker::is_usable_name;
+use crate::origin::{ORIGIN_FILE, Origin};
 use crate::plugin_name;
 
 /// What a packed project's file name ends with.
 pub const PROJECT_FILE_ENDING: &str = "mpforge";
 
 const MANIFEST: &str = "plugin.json";
-/// The last two are the words of the plugin's guide and the addresses it brings sound in from, when it has them.
-const OTHER_FILES_AT_THE_TOP: [&str; 7] = ["ui.json", "README.md", "DESIGN.md", "pictures.json", "look.json", "guide.json", "online.json"];
+/// The words of the plugin's guide and the addresses it brings sound in from are among them, when it has them.
+/// So are the licence it is shared under, by any of the names such a file goes by, and the note of where it
+/// came from: both have to stay with somebody else's work wherever it goes.
+const OTHER_FILES_AT_THE_TOP: [&str; 12] =
+    ["ui.json", "README.md", "DESIGN.md", "pictures.json", "look.json", "guide.json", "online.json", ORIGIN_FILE, "LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING"];
+/// The names a project's licence goes by, each of them carried.
+pub(crate) const LICENSE_FILES: [&str; 4] = ["LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING"];
 const CODE_FOLDER: &str = "src";
 const CODE_FILE_ENDING: &str = "cpp";
 const ARTWORK_FOLDER: &str = "artwork";
@@ -40,6 +46,20 @@ const MOST_FILES: usize = 400;
 const MOST_BYTES: u64 = 160 * MEGABYTE;
 /// A packed project is read no further than this many entries, however many it claims to hold.
 const MOST_ENTRIES_READ: usize = 4000;
+/// A repository holds far more than a plugin's project, and its plugin's files can come last of all.
+const MOST_ENTRIES_READ_OF_A_REPOSITORY: usize = 400_000;
+
+/// A packed project as it arrives: how far it is read, and what is said when it cannot be read.
+struct Packed {
+    most_entries: usize,
+    unreadable: &'static str,
+}
+
+const PACKED_BY_MP_FORGE: Packed = Packed { most_entries: MOST_ENTRIES_READ, unreadable: "the file is not a plugin packed by MP Forge." };
+const PACKED_BY_ITS_MAKERS: Packed = Packed {
+    most_entries: MOST_ENTRIES_READ_OF_A_REPOSITORY,
+    unreadable: "its source could not be read to the end. The connection may have dropped, or it is bigger than MP Forge fetches.",
+};
 const LONGEST_FILE_NAME: usize = 64;
 const PUNCTUATION_IN_FILE_NAMES: &str = " -_.";
 /// Where a project is put together until it is whole. It holds no manifest until the end, so it is never taken for a plugin.
@@ -71,6 +91,8 @@ pub enum NotTakenIn {
     /// There is already a plugin of this name. The musician can take the project in under another.
     NameTaken(String),
     UnusableName(String),
+    /// Its source could not be fetched from where it is kept, for this reason.
+    NotFetched(String),
     Io(io::Error),
 }
 
@@ -80,6 +102,7 @@ impl fmt::Display for NotTakenIn {
             NotTakenIn::NotAProject(why) => write!(formatter, "This is not a plugin MP Forge can take in: {why}"),
             NotTakenIn::NameTaken(name) => write!(formatter, "There is already a plugin called `{name}`. Pick another name."),
             NotTakenIn::UnusableName(name) => write!(formatter, "`{name}` cannot be used as a plugin's name. Names start with a letter and use only letters, digits, spaces and hyphens."),
+            NotTakenIn::NotFetched(why) => write!(formatter, "{why}"),
             NotTakenIn::Io(cause) => write!(formatter, "The plugin could not be taken in: {cause}"),
         }
     }
@@ -109,22 +132,20 @@ pub fn pack(plugin_dir: &Path, into: &Path) -> io::Result<()> {
 /// Takes a project in from a packed file or from a folder, as a new plugin in `plugins_dir`, and returns the
 /// plugin's name. `named` gives it another name than its own. A plugin that is already there is never replaced.
 pub fn take_in(from: &Path, plugins_dir: &Path, named: Option<&str>) -> Result<String, NotTakenIn> {
-    fs::create_dir_all(plugins_dir)?;
     let mut arriving = Arriving::begin_in(plugins_dir)?;
-    if from.is_dir() { arriving.take_folder(from)? } else { arriving.take_packed(from)? }
-    let own_name = arriving.write_manifest_afresh()?;
-    let name = named.unwrap_or(&own_name);
-    if !is_usable_name(name) {
-        return Err(NotTakenIn::UnusableName(name.to_string()));
-    }
-    if plugins_dir.join(name).exists() {
-        return Err(NotTakenIn::NameTaken(name.to_string()));
-    }
-    if name != own_name {
-        plugin_name::rename_where_it_is_written(&arriving.folder, &own_name, name)?;
-    }
-    fs::rename(&arriving.folder, plugins_dir.join(name))?;
-    Ok(name.to_string())
+    if from.is_dir() { arriving.take_folder(from)? } else { arriving.take_packed(File::open(from)?, &PACKED_BY_MP_FORGE)? }
+    arriving.land_among(plugins_dir, named)
+}
+
+/// Takes in somebody else's plugin from its source, packed as its makers keep it, and notes where it came from.
+/// The source is read as it arrives and only a project's own files are written, so however much else the
+/// makers keep beside their plugin, none of it lands here. The note replaces any the project brought along,
+/// so it always names where this copy was fetched from.
+pub fn take_in_from(origin: &Origin, packed_source: impl Read, plugins_dir: &Path, named: Option<&str>) -> Result<String, NotTakenIn> {
+    let mut arriving = Arriving::begin_in(plugins_dir)?;
+    arriving.take_packed(packed_source, &PACKED_BY_ITS_MAKERS)?;
+    origin.write_into(&arriving.folder)?;
+    arriving.land_among(plugins_dir, named)
 }
 
 /// Every file of the project in this folder that is carried, by its path inside the folder.
@@ -204,11 +225,29 @@ impl Arriving {
         Ok(())
     }
 
+    /// The project that arrived becomes a plugin among the others, under `named` or its own name. A plugin that
+    /// is already there is never replaced.
+    fn land_among(self, plugins_dir: &Path, named: Option<&str>) -> Result<String, NotTakenIn> {
+        let own_name = self.write_manifest_afresh()?;
+        let name = named.unwrap_or(&own_name);
+        if !is_usable_name(name) {
+            return Err(NotTakenIn::UnusableName(name.to_string()));
+        }
+        if plugins_dir.join(name).exists() {
+            return Err(NotTakenIn::NameTaken(name.to_string()));
+        }
+        if name != own_name {
+            plugin_name::rename_where_it_is_written(&self.folder, &own_name, name)?;
+        }
+        fs::rename(&self.folder, plugins_dir.join(name))?;
+        Ok(name.to_string())
+    }
+
     /// Reads a packed project. Its files sit in one folder, whose name is left behind.
-    fn take_packed(&mut self, packed_file: &Path) -> Result<(), NotTakenIn> {
-        let unreadable = |_| not_a_project("the file is not a plugin packed by MP Forge.");
-        let mut packed = tar::Archive::new(GzDecoder::new(File::open(packed_file)?));
-        for entry in packed.entries().map_err(unreadable)?.take(MOST_ENTRIES_READ) {
+    fn take_packed(&mut self, packed_project: impl Read, as_packed: &Packed) -> Result<(), NotTakenIn> {
+        let unreadable = |_| not_a_project(as_packed.unreadable);
+        let mut packed = tar::Archive::new(GzDecoder::new(packed_project));
+        for entry in packed.entries().map_err(unreadable)?.take(as_packed.most_entries) {
             let mut entry = entry.map_err(unreadable)?;
             let path = entry.path().map_err(unreadable)?.into_owned();
             let inside_the_project: PathBuf = path.components().skip(1).collect();
@@ -409,6 +448,23 @@ mod tests {
         ]);
         assert_eq!(fs::read_to_string(elsewhere.0.join("Dusty Tape/src/DustyTape.cpp")).unwrap(), CODE);
         assert!(!elsewhere.0.join(FOLDER_WHILE_ARRIVING).exists());
+    }
+
+    #[test]
+    fn somebody_elses_plugin_arrives_with_its_licence_and_a_note_of_where_it_came_from() {
+        let (plugins, plugin) = plugins_with_dusty_tape("project-with-origin");
+        let elsewhere = TemporaryFolder::create("project-with-origin-elsewhere");
+        let packed = plugins.0.join("as-its-makers-keep-it.tar.gz");
+        let origin = Origin { name: "Dusty Tape".to_string(), author: "somebody".to_string(), source: "https://github.com/somebody/dusty-tape".to_string(), license: "GPL-3.0-only".to_string() };
+        fs::write(plugin.join("LICENSE"), "The licence its makers chose.").unwrap();
+        fs::write(plugin.join(ORIGIN_FILE), "a note from further back").unwrap();
+
+        pack(&plugin, &packed).unwrap();
+        let name = take_in_from(&origin, File::open(&packed).unwrap(), &elsewhere.0, None).unwrap();
+
+        let taken_in = elsewhere.0.join(name);
+        assert_eq!(fs::read_to_string(taken_in.join("LICENSE")).unwrap(), "The licence its makers chose.");
+        assert_eq!(Origin::of_plugin(&taken_in), Some(origin));
     }
 
     #[test]

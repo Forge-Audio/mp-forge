@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use serde_json::Value;
 
-use crate::agent::{Agent, AgentError, Event, Model, ModelError, Worker};
+use crate::agent::{Agent, AgentError, Event, Model, ModelError, Toolbox, Worker};
 use crate::ai_settings::AiSettings;
 use crate::arranged_screen::ArrangedPage;
 use crate::art_shelf::{ArtError, ArtShelf};
@@ -25,14 +25,19 @@ use crate::history::{self, Version};
 use crate::instructions;
 use crate::kept_look::{self, NotKept};
 use crate::look::{self, Look};
+use crate::license_terms;
+use crate::open_mpc;
 use crate::open_mpc_listing::{self, AsItWouldBeListed, Listing, NotListed};
+use crate::origin::Origin;
 use crate::other_looks::note_on_other_looks;
 use crate::plugin_name;
 use crate::project_file::{self, NotTakenIn};
 use crate::plugin_tools::PluginTools;
+use crate::sample_app_tools::SampleAppTools;
 use crate::process::RunError;
+use crate::sample_app::{self, NotBuilt};
 use crate::samples::{Sample, SampleError, SampleShelf};
-use crate::sdk::{PluginIdentity, Sdk, native_library_of};
+use crate::sdk::{PluginIdentity, PluginKind, Sdk, native_library_of};
 use crate::stop_signal::StopSignal;
 use crate::simulation::Session;
 use crate::workspace::true_path_of;
@@ -45,6 +50,7 @@ const PORTS_WINDOWS_NUMBERS: [&str; 2] = ["COM", "LPT"];
 const LONGEST_VERSION_NOTE: usize = 80;
 const STARTER_TIME_LIMIT: Duration = Duration::from_secs(60);
 const PLUGIN_MANIFEST: &str = "plugin.json";
+const NO_PROJECT_AT_THE_TOP: &str = "it has no plugin.json at the top of its repository.";
 /// Where sound files wait for a plugin that has not been made yet. Its name keeps it out of the list of plugins.
 const WAITING_SAMPLES_FOLDER: &str = ".waiting-samples";
 /// Where pictures for the AI wait in the same way.
@@ -56,6 +62,7 @@ pub const ONLINE_PLUGINS_FLAG: &str = "--online-plugins";
 
 const PREVIEW_SOUND_FILE: &str = "build/preview.wav";
 const PREVIEW_TIME_LIMIT: Duration = Duration::from_secs(60);
+const SAMPLE_APP_BUILD_TIME_LIMIT: Duration = Duration::from_secs(120);
 
 pub struct PluginRequest {
     pub identity: PluginIdentity,
@@ -119,6 +126,8 @@ pub enum MakeError {
     NotDeleted(String),
     NotSent(DeliveryError),
     NotListed(NotListed),
+    /// A Sample app could not be built for this computer, for this reason.
+    SampleAppNotBuilt(NotBuilt),
     Io(io::Error),
 }
 
@@ -147,6 +156,7 @@ impl fmt::Display for MakeError {
             MakeError::NotDeleted(cause) => write!(formatter, "The plugin could not be moved to the Trash, so nothing was deleted: {cause}"),
             MakeError::NotSent(problem) => write!(formatter, "{problem}"),
             MakeError::NotListed(problem) => write!(formatter, "{problem}"),
+            MakeError::SampleAppNotBuilt(problem) => write!(formatter, "{problem}"),
             MakeError::Io(cause) => write!(formatter, "A file could not be used: {cause}"),
         }
     }
@@ -213,6 +223,13 @@ impl Maker {
         self
     }
 
+    /// The program that runs what was made in a process of its own, for the safety check. It is this program
+    /// itself unless another is named.
+    pub fn hosting_plugins_with(mut self, program: impl Into<PathBuf>) -> Self {
+        self.gate = self.gate.hosting_plugins_with(program);
+        self
+    }
+
     pub fn with_repair_rounds(mut self, repair_rounds: usize) -> Self {
         self.repair_rounds = repair_rounds;
         self
@@ -240,7 +257,7 @@ impl Maker {
         let plugin_shelf = SampleShelf::of_plugin(&plugin_dir);
         self.waiting_shelf(&request.identity.name).move_all_to(&plugin_shelf)?;
         self.waiting_attachments(&request.identity.name).move_all_to(&AttachmentShelf::of_plugin(&plugin_dir))?;
-        let first_message = opening_message(request) + &sound_files_note(&plugin_shelf.list()) + &note_on_other_looks(&self.plugins_dir, &request.identity.name);
+        let first_message = self.first_message_about(request, &plugin_shelf);
         let outcome = self.work_and_judge(plugin_dir.clone(), &first_message, connection, observer);
         if matches!(outcome, Err(MakeError::NotSignedIn(_))) {
             discard_untouched_starter(&plugin_dir);
@@ -252,8 +269,22 @@ impl Maker {
     pub fn revise(&self, plugin_name: &str, change: &str, connection: Connection, observer: impl FnMut(Event)) -> Result<Delivery, MakeError> {
         let plugin_dir = self.existing_plugin(plugin_name)?;
         history::keep_version(&plugin_dir, &format!("the change \u{201c}{}\u{201d}", opening_words_of(change)))?;
-        let first_message = revision_message(plugin_name, change) + &sound_files_note(&SampleShelf::of_plugin(&plugin_dir).list());
+        let sound_files = SampleShelf::of_plugin(&plugin_dir).list();
+        let first_message = if sample_app::is_one(&plugin_dir) {
+            revision_message_for_an_app(plugin_name, change) + &sound_files_note_for_an_app(&sound_files)
+        } else {
+            revision_message(plugin_name, change) + &sound_files_note(&sound_files)
+        };
         self.work_and_judge(plugin_dir, &first_message, connection, observer)
+    }
+
+    /// What the AI is told first about something new, and the sound files it has been given. A plugin's message
+    /// goes on to how the musician's other plugins look, which a Sample app has nothing to do with.
+    fn first_message_about(&self, request: &PluginRequest, plugin_shelf: &SampleShelf) -> String {
+        if request.identity.kind == PluginKind::SampleApp {
+            return opening_message_for_an_app(request) + &sound_files_note_for_an_app(&plugin_shelf.list());
+        }
+        opening_message(request) + &sound_files_note(&plugin_shelf.list()) + &note_on_other_looks(&self.plugins_dir, &request.identity.name)
     }
 
     /// Keeps a sound file for the plugin to play. For a plugin that is not made yet, the file waits until it is.
@@ -419,6 +450,30 @@ impl Maker {
         project_file::take_in(from, &self.plugins_dir, named)
     }
 
+    /// Takes in a plugin of the Open MPC catalog as its makers wrote it, and returns the plugin's name. Its
+    /// source is fetched and taken in the way a project from a folder is, with a note of where it came from.
+    /// Nothing of it is run, and only a licence that gives everybody leave is acted on.
+    pub fn import_from_open_mpc(&self, origin: &Origin, named: Option<&str>) -> Result<String, NotTakenIn> {
+        if license_terms::terms_of(&origin.license).is_none() {
+            return Err(NotTakenIn::NotFetched(format!("{} is shared under {}, which does not give leave to take it in as it is.", origin.name, origin.license)));
+        }
+        let manifest = open_mpc::manifest_of(&origin.source).map_err(NotTakenIn::NotFetched)?;
+        let manifest = manifest.ok_or_else(|| NotTakenIn::NotAProject(NO_PROJECT_AT_THE_TOP.to_string()))?;
+        if let Some(taken) = self.name_already_taken(&manifest, named) {
+            return Err(NotTakenIn::NameTaken(taken));
+        }
+        let packed_source = open_mpc::packed_source_of(&origin.source).map_err(NotTakenIn::NotFetched)?;
+        project_file::take_in_from(origin, packed_source, &self.plugins_dir, named)
+    }
+
+    /// The name a project would come in under, when a plugin of that name is here already. It is read from
+    /// the project's manifest alone, so the musician is asked for another name before the source is fetched.
+    fn name_already_taken(&self, manifest: &str, named: Option<&str>) -> Option<String> {
+        let manifest: Value = serde_json::from_str(manifest).ok()?;
+        let name = named.or(manifest["name"].as_str())?;
+        (is_usable_name(name) && self.plugins_dir.join(name).exists()).then(|| name.to_string())
+    }
+
     /// Gives a plugin another name. Its build is thrown away, so it needs its safety check again.
     pub fn rename_plugin(&self, plugin_name: &str, new_name: &str) -> Result<(), MakeError> {
         self.existing_plugin(plugin_name)?;
@@ -441,6 +496,14 @@ impl Maker {
         Ok(AttachmentShelf::of_plugin(&self.existing_plugin(plugin_name)?).read(file_name))
     }
 
+    /// Builds a Sample app for this computer, from its code as it stands, and returns the folder its player
+    /// plays it from.
+    pub fn build_sample_app(&self, app_name: &str) -> Result<PathBuf, MakeError> {
+        let app_dir = self.existing_plugin(app_name)?;
+        sample_app::build_for_this_computer(&self.sdk, &app_dir, SAMPLE_APP_BUILD_TIME_LIMIT).map_err(MakeError::SampleAppNotBuilt)?;
+        Ok(app_dir)
+    }
+
     /// The plugin as built for this computer, which is what the live player loads.
     pub fn built_library(&self, plugin_name: &str) -> Result<PathBuf, MakeError> {
         let plugin_dir = self.existing_plugin(plugin_name)?;
@@ -458,11 +521,11 @@ impl Maker {
     }
 
     fn work_and_judge(&self, plugin_dir: PathBuf, first_message: &str, connection: Connection, observer: impl FnMut(Event)) -> Result<Delivery, MakeError> {
-        let instructions = instructions::for_making_plugins();
+        let instructions = if sample_app::is_one(&plugin_dir) { instructions::for_making_sample_apps() } else { instructions::for_making_plugins() };
         match connection {
             Connection::Model(model) => {
-                let mut tools = PluginTools::open(&plugin_dir, self.sdk.root(), &self.gate)?;
-                let mut agent = Agent::new(model, &mut tools, &instructions).compacting_at(self.compact_at).stopped_by(self.stop.clone()).watched_by(observer);
+                let mut tools = self.tools_for(&plugin_dir)?;
+                let mut agent = Agent::new(model, tools.as_mut(), &instructions).compacting_at(self.compact_at).stopped_by(self.stop.clone()).watched_by(observer);
                 self.deliver(plugin_dir, &mut agent, first_message)
             }
             Connection::ClaudeCode { tool_server_program, settings } => {
@@ -477,6 +540,14 @@ impl Maker {
                 self.deliver(plugin_dir, &mut codex, first_message)
             }
         }
+    }
+
+    /// The tools the AI is given depend on what it is making: a plugin, or an app for the MPC Sample.
+    fn tools_for(&self, plugin_dir: &Path) -> io::Result<Box<dyn Toolbox + '_>> {
+        if sample_app::is_one(plugin_dir) {
+            return Ok(Box::new(SampleAppTools::open(plugin_dir, &self.gate)?));
+        }
+        Ok(Box::new(PluginTools::open(plugin_dir, self.sdk.root(), &self.gate)?))
     }
 
     /// An agent program starts the tool server from the plugin's folder, so every path it is given is absolute.
@@ -522,6 +593,9 @@ impl Maker {
             return Err(MakeError::AlreadyExists(plugin_dir));
         }
         fs::create_dir_all(&self.plugins_dir)?;
+        if identity.kind == PluginKind::SampleApp {
+            return Ok(sample_app::create_starter(&self.plugins_dir, identity)?);
+        }
         let created = self.sdk.create_plugin(identity, &self.plugins_dir, STARTER_TIME_LIMIT).map_err(describe_run_error)?;
         if created.succeeded() && plugin_dir.join(PLUGIN_MANIFEST).is_file() {
             Ok(plugin_dir)
@@ -590,6 +664,14 @@ fn opening_message(request: &PluginRequest) -> String {
     )
 }
 
+fn opening_message_for_an_app(request: &PluginRequest) -> String {
+    let PluginIdentity { name, maker, .. } = &request.identity;
+    format!(
+        "The app is called \"{name}\", made by \"{maker}\". It is an app for the MPC Sample.\n\nWhat the musician asked for:\n\n{description}",
+        description = request.description.trim(),
+    )
+}
+
 /// The first line of what was asked, cut short, to remember a version by.
 fn opening_words_of(change: &str) -> String {
     let first_line = change.trim().lines().next().unwrap_or_default().trim();
@@ -607,6 +689,15 @@ fn revision_message(plugin_name: &str, change: &str) -> String {
     )
 }
 
+fn revision_message_for_an_app(app_name: &str, change: &str) -> String {
+    format!(
+        "The musician wants a change to \"{app_name}\", an app for the MPC Sample that already exists:\n\n{change}\n\n\
+         Read the app's current files before you change anything. Keep everything they did not ask to change: \
+         a control keeps doing what it did, and the screen keeps its look.",
+        change = change.trim(),
+    )
+}
+
 /// Tells the AI which sound files the musician has added. Says nothing when there are none.
 fn sound_files_note(samples: &[Sample]) -> String {
     if samples.is_empty() {
@@ -614,6 +705,19 @@ fn sound_files_note(samples: &[Sample]) -> String {
     }
     let listed: Vec<String> = samples.iter().map(|sample| format!("- {sample}")).collect();
     format!("\n\nSound files the musician has added for this plugin to use:\n\n{}", listed.join("\n"))
+}
+
+/// Tells the AI which sound files the musician has added to an app, by the names the app finds them under,
+/// and that there are none when there are none: an app has to be good to play either way.
+fn sound_files_note_for_an_app(samples: &[Sample]) -> String {
+    if samples.is_empty() {
+        return "\n\nThe musician has added no sound files to this app, so `samples().count()` is 0 when it runs.".to_string();
+    }
+    let listed: Vec<String> = samples.iter().map(|sample| format!("- {}", sample.as_an_app_finds_it())).collect();
+    format!(
+        "\n\nSound files the musician has added for this app to play. They reach it as `samples()`, numbered from 0 in this order:\n\n{}",
+        listed.join("\n")
+    )
 }
 
 fn repair_message(report: &GateReport) -> String {
@@ -625,6 +729,17 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn the_ai_is_told_which_sound_files_an_app_has_by_the_names_the_app_finds_them_under() {
+        let kick = Sample { file_name: "Kick 1.wav".to_string(), seconds: 0.5, channels: 1, sample_rate: 44_100 };
+
+        let with_one = sound_files_note_for_an_app(&[kick]);
+        let with_none = sound_files_note_for_an_app(&[]);
+
+        assert!(with_one.contains("numbered from 0 in this order:\n\n- `Kick 1` (0.5 s, mono)"), "{with_one}");
+        assert!(with_none.contains("has added no sound files to this app"), "{with_none}");
+    }
     use crate::agent::Entry;
     use crate::agent::test_support::{ScriptedModel, calls, says};
     use crate::samples::test_support::wav_of;

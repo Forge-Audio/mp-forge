@@ -69,22 +69,29 @@
 
       <form id="composer" class="composer">
         <fieldset id="new-plugin-fields" class="new-plugin-fields">
-          <legend class="field-label">New plugin</legend>
+          <legend class="field-label"><span class="for-mpcs">New plugin</span><span class="for-the-sample">New app</span></legend>
+          <div class="made-for" role="radiogroup" aria-label="What it is made for">
+            <label><input type="radio" name="made-for" value="mpc" checked> <span>TOUCH-SCREEN MPCS</span></label>
+            <label><input type="radio" name="made-for" value="sample"> <span>MPC SAMPLE</span></label>
+          </div>
+          <div class="soft small for-mpcs">A plugin for the MPCs with a touch screen, such as the Live, One, X and Key: an effect or an instrument.</div>
+          <div class="soft small for-the-sample">An app is your own OS for the MPC Sample. It takes over the whole device: the screen, 16 pads, 3 knobs, fader, dial and buttons, and all the sound.</div>
+          <div class="soft small for-the-sample">It makes its sound in code, and can play sound files you add with + or pick from the SD card. For now it runs here on a drawing of the device: saving, and putting it on your MPC Sample, are still to come.</div>
           <label class="field-label" for="plugin-name">Its name</label>
           <input id="plugin-name" type="text" maxlength="32" placeholder="Dusty Tape" autocomplete="off">
           <label class="field-label" for="maker-name">Your name, shown as its maker</label>
           <input id="maker-name" type="text" maxlength="32" placeholder="Your name or brand" autocomplete="off">
-          <div class="kind-choice" role="radiogroup" aria-label="Kind of plugin">
+          <div class="kind-choice for-mpcs" role="radiogroup" aria-label="Kind of plugin">
             <label><input type="radio" name="kind" value="effect" checked> Effect</label>
             <label><input type="radio" name="kind" value="instrument"> Instrument</label>
           </div>
-          <label class="architect-choice" title="Before anything is built, the plugin architect asks you a few questions about your idea and offers choices for each, so the plugin comes out more your own.">
-            <input type="checkbox" id="architect"> <span>Plugin architect: asks you a few questions first</span>
+          <label class="architect-choice" title="Before anything is built, the architect asks you a few questions about your idea and offers choices for each, so what is built comes out more your own.">
+            <input type="checkbox" id="architect"> <span><span class="for-mpcs">Plugin architect</span><span class="for-the-sample">OS architect</span>: asks you a few questions first</span>
           </label>
         </fieldset>
         <div class="attached">
           <div id="picture-list" class="sample-list" aria-label="Pictures to send with this message"></div>
-          <div id="sample-list" class="sample-list" aria-label="Sound files for this plugin"></div>
+          <div id="sample-list" class="sample-list" aria-label="Sound files it plays"></div>
         </div>
         <div id="remix-of" class="remix-of" hidden>
           <span id="remix-of-words"></span>
@@ -102,9 +109,13 @@
           <button type="submit" id="send" class="send-button">DO IT</button>
         </div>
         <div id="starters" class="starters">
-          <button type="button" id="feel-lucky" class="item-button" title="Rolls the dice for a theme, looks for something new and interesting in it, and builds a plugin from what it finds.">I'M FEELING LUCKY</button>
-          <button type="button" id="remix" class="item-button" title="Pick a plugin from the Open MPC catalog and build your own version of it.">REMIX A PLUGIN</button>
-          <button type="button" id="import-plugin" class="item-button" title="Bring in a plugin somebody handed you: a file saved with Export, or the folder of a plugin's project.">IMPORT A PLUGIN</button>
+          <button type="button" id="feel-lucky" class="item-button for-mpcs" title="Rolls the dice for a theme, looks for something new and interesting in it, and builds a plugin from what it finds.">I'M FEELING LUCKY</button>
+          <button type="button" id="remix" class="item-button for-mpcs" title="Pick a plugin from the Open MPC catalog: build your own version of it, or bring it in as its makers wrote it.">REMIX A PLUGIN</button>
+          <button type="button" id="import-plugin" class="item-button for-mpcs" title="Bring in a plugin somebody handed you: a file saved with Export, or the folder of a plugin's project.">IMPORT A PLUGIN</button>
+          <button type="button" class="item-button for-the-sample" title="Puts an idea in the box for you to change" data-idea="A drum machine. Each pad is a drum made in code: kicks, snares, hats and toms. PLAY runs a 16-step pattern, and I write it by holding SEQ and hitting pads. K1 tunes the drums, K2 sets how long they ring, K3 adds drive, and the fader sets the tempo.">DRUM MACHINE</button>
+          <button type="button" class="item-button for-the-sample" title="Puts an idea in the box for you to change" data-idea="A pad synth. The 16 pads play the notes of a scale, and held pads make chords. K1 opens a filter, K2 sets how slowly notes fade in and out, K3 adds a chorus, the dial picks the scale, and the fader is the volume.">PAD SYNTH</button>
+          <button type="button" class="item-button for-the-sample" title="Puts an idea in the box for you to change" data-idea="A sampler for my own sounds. Each pad plays one of the sound files I add, and the screen names the file on each pad and draws its shape. The dial picks a pad to work on: K1 tunes it, K2 moves where it starts, K3 sets how long it plays, and the fader sets how loud it is. LOOP makes the picked pad go round, and MUTE silences it.">SAMPLER</button>
+          <button type="button" class="item-button for-the-sample" title="Puts an idea in the box for you to change" data-idea="A drone box. Each pad switches a long, slowly changing tone on or off, and all of them are tuned to sound good together. The knobs move the whole sound: brightness, movement and grit. The screen shows which tones are on as slowly moving bars.">DRONE BOX</button>
         </div>
         <div class="composer-notes">
           <div id="plan-note" class="plan-note" hidden>
@@ -120,7 +131,7 @@
   </aside>
 
   <main class="window mirror">
-    <div class="titlebar">HOW IT LOOKS ON YOUR MPC</div>
+    <div class="titlebar"><span class="for-mpcs">HOW IT LOOKS ON YOUR MPC</span><span class="for-the-sample">HOW IT LOOKS ON YOUR MPC SAMPLE</span></div>
     <div class="window-body">
       <div class="mirror-heading">
         <div class="mirror-title">
@@ -164,6 +175,18 @@
         <span class="field-label">Volume</span>
         <div id="output-volume" class="output-volume"></div>
       </div>
+      </div>
+      <div class="sample-view">
+        <div id="sample-problem" class="sheet-problem" role="status" hidden></div>
+        <div id="sample-being-written" class="soft small" role="status" hidden>This app is being worked on. It starts on the device when the work is done.</div>
+        <div class="sample-row">
+          <div id="sample-device" class="sample-holder"></div>
+          <div class="sample-hints soft small">
+            <div>Play the pads with the keys shown on them.</div>
+            <div>Drag the knobs, the fader and the dial.</div>
+            <div>Click the screen to zoom in.</div>
+          </div>
+        </div>
       </div>
       <div class="mirror-row">
         <div class="mpc-screen-frame">
@@ -390,6 +413,10 @@
 <script src="following.js"></script>
 <script src="time-taken.js"></script>
 <script src="tab-strip.js"></script>
+<script src="pixel-letters.js"></script>
+<script src="sample-surface.js"></script>
+<script src="demo-sample-app.js"></script>
+<script src="demo-sample-smith.js"></script>
 <script src="backend.js"></script>
 <script src="images.js"></script>
 <script src="stage.js"></script>
@@ -410,6 +437,9 @@
 <script src="editor-comment.js"></script>
 <script src="editor.js"></script>
 <script src="player.js"></script>
+<script src="sample-art.js"></script>
+<script src="sample-device.js"></script>
+<script src="sample-player.js"></script>
 <script src="piano.js"></script>
 <script src="test-sound.js"></script>
 <script src="effect-switch.js"></script>

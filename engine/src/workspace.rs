@@ -30,6 +30,15 @@ const OWN_GUIDES: [OwnGuide; 2] = [
     OwnGuide { path: "mp-forge/online.md", text: include_str!("../../directives/reference/online.md") },
 ];
 
+/// What there is to read for a Sample app: what the device has and how an app for it is written, and two whole
+/// apps to learn from, one that makes its sound in code and one that plays the musician's own sound files.
+const GUIDES_TO_THE_SAMPLE: [OwnGuide; 4] = [
+    OwnGuide { path: "mp-forge/mpc-sample.md", text: include_str!("../../directives/reference/mpc-sample.md") },
+    OwnGuide { path: "mp-forge/examples/PocketPads.cpp", text: include_str!("../tests/fixtures/Pocket Pads/src/PocketPads.cpp") },
+    OwnGuide { path: "mp-forge/examples/SamplePads.cpp", text: include_str!("../tests/fixtures/Sample Pads/src/SamplePads.cpp") },
+    OwnGuide { path: "mp-forge/examples/SampleEcho.cpp", text: include_str!("../tests/fixtures/Sample Echo/src/SampleEcho.cpp") },
+];
+
 struct OwnGuide {
     path: &'static str,
     text: &'static str,
@@ -137,32 +146,45 @@ impl PluginWorkspace {
     }
 }
 
-/// MP Forge's own guides, and Akai's documentation, framework headers and example plugins. Read-only.
+/// MP Forge's own guides, and for a plugin Akai's documentation, framework headers and example plugins too.
+/// Read-only.
 pub struct ReferenceLibrary {
-    root: PathBuf,
+    /// Akai's part of the library, which a Sample app has no use for and is not shown.
+    akais: Option<PathBuf>,
+    own_guides: &'static [OwnGuide],
 }
 
 impl ReferenceLibrary {
     pub fn open(sdk_root: &Path) -> io::Result<Self> {
-        Ok(Self { root: true_path_of(sdk_root)? })
+        Ok(Self { akais: Some(true_path_of(sdk_root)?), own_guides: &OWN_GUIDES })
+    }
+
+    pub fn for_sample_apps() -> Self {
+        Self { akais: None, own_guides: &GUIDES_TO_THE_SAMPLE }
     }
 
     pub fn list(&self) -> io::Result<Vec<String>> {
-        let mut listed: Vec<String> = OWN_GUIDES.iter().map(|guide| guide.path.to_string()).collect();
+        let mut listed: Vec<String> = self.own_guides.iter().map(|guide| guide.path.to_string()).collect();
         for folder in REFERENCE_FOLDERS {
-            let within_folder = relative_files_under(&self.root.join(folder))?;
-            listed.extend(within_folder.into_iter().map(|path| format!("{folder}/{path}")));
+            listed.extend(self.akais_files_in(folder)?);
         }
-        Ok(listed.into_iter().filter(|path| own_guide_at(path).is_some() || is_reference(Path::new(path))).collect())
+        Ok(listed)
+    }
+
+    fn akais_files_in(&self, folder: &str) -> io::Result<Vec<String>> {
+        let Some(root) = &self.akais else { return Ok(Vec::new()) };
+        let within_folder = relative_files_under(&root.join(folder))?;
+        Ok(within_folder.into_iter().map(|path| format!("{folder}/{path}")).filter(|path| is_reference(Path::new(path))).collect())
     }
 
     pub fn read(&self, relative: &str) -> Result<String, FileError> {
-        if let Some(guide) = own_guide_at(relative) {
+        let not_in_the_library = || FileError::NotAllowed(format!("`{relative}` is not in the reference library."));
+        if let Some(guide) = self.own_guides.iter().find(|guide| guide.path == relative) {
             return Ok(guide.text.to_string());
         }
-        let path = contained_path(&self.root, relative)?;
+        let path = contained_path(self.akais.as_ref().ok_or_else(not_in_the_library)?, relative)?;
         if !is_reference(Path::new(relative)) {
-            return Err(FileError::NotAllowed(format!("`{relative}` is not in the reference library.")));
+            return Err(not_in_the_library());
         }
         Ok(fs::read_to_string(path)?)
     }
@@ -188,10 +210,6 @@ fn is_source_file(relative: &Path) -> bool {
 
 fn is_drawing(relative: &Path) -> bool {
     relative.parent() == Some(Path::new(DRAWINGS_FOLDER)) && has_extension(relative, &[DRAWING_EXTENSION])
-}
-
-fn own_guide_at(path: &str) -> Option<&'static OwnGuide> {
-    OWN_GUIDES.iter().find(|guide| guide.path == path)
 }
 
 fn is_reference(relative: &Path) -> bool {

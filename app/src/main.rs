@@ -13,6 +13,7 @@ mod commands;
 mod key_store;
 mod payloads;
 mod player;
+mod sample_player;
 mod upload;
 mod workbench;
 
@@ -25,12 +26,16 @@ use tauri::Manager;
 use tauri::path::PathResolver;
 use workbench_engine::carried_sdk::CarriedSdk;
 use workbench_engine::live_player::{self, PLAY_COMMAND};
+use workbench_engine::sample_player::{self as sample_app_player, PLAY_SAMPLE_APP_COMMAND};
+use workbench_engine::sample_smith::{self, KEEPS_STILL, SHOW_SMITH_COMMAND};
 use workbench_engine::maker::{ONLINE_PLUGINS_FLAG, SERVE_TOOLS_COMMAND};
 use workbench_engine::picture_clock::{self, READ_CLOCK_COMMAND};
+use workbench_engine::sample_trial::{self, TRY_SAMPLE_APP_COMMAND};
 use workbench_engine::plugin_tools;
 use workbench_engine::sdk::Sdk;
 
 use player::LivePlayer;
+use sample_player::SamplePlayer;
 use workbench::Workbench;
 
 const PLUGINS_FOLDER_OF_AN_INSTALLED_COPY: &str = "MP Forge";
@@ -41,8 +46,20 @@ fn main() -> ExitCode {
         [command, plugin_dir, _sdk_flag, sdk_dir] if command == SERVE_TOOLS_COMMAND => serve_tools(plugin_dir, sdk_dir, false),
         [command, plugin_dir, _sdk_flag, sdk_dir, online] if command == SERVE_TOOLS_COMMAND && online == ONLINE_PLUGINS_FLAG => serve_tools(plugin_dir, sdk_dir, true),
         [command, plugin_library] if command == PLAY_COMMAND => play(plugin_library),
+        [command, app_dir] if command == PLAY_SAMPLE_APP_COMMAND => play_sample_app(app_dir),
+        [command] if command == SHOW_SMITH_COMMAND => show_smith_on_sample(false),
+        [command, still] if command == SHOW_SMITH_COMMAND && still == KEEPS_STILL => show_smith_on_sample(true),
         [command, plugin_library, control] if command == READ_CLOCK_COMMAND => read_clock(plugin_library, control),
+        [command, app_dir, touches_file, picture_file] if command == TRY_SAMPLE_APP_COMMAND => try_sample_app(app_dir, touches_file, picture_file),
         _ => open_window(),
+    }
+}
+
+/// The blacksmith shown on the MPC Sample is the one the window shows over a plugin's view.
+fn show_smith_on_sample(keeps_still: bool) -> ExitCode {
+    match sample_smith::show_on_standard_io(include_bytes!("../ui/blacksmith.png"), keeps_still) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(_) => ExitCode::FAILURE,
     }
 }
 
@@ -51,6 +68,28 @@ fn play(plugin_library: &str) -> ExitCode {
     match live_player::play_on_standard_io(Path::new(plugin_library)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(_) => ExitCode::FAILURE,
+    }
+}
+
+/// Standard output carries only what the Sample app shows here, so why it could not be played goes to the other.
+fn play_sample_app(app_dir: &str) -> ExitCode {
+    match sample_app_player::play_on_standard_io(Path::new(app_dir)) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(problem) => {
+            eprintln!("{problem}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Plays a built Sample app with nobody at it and prints how it stood up to that, for the safety check.
+fn try_sample_app(app_dir: &str, touches_file: &str, picture_file: &str) -> ExitCode {
+    match sample_trial::hold_and_print(Path::new(app_dir), Path::new(touches_file), Path::new(picture_file)) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(explanation) => {
+            eprintln!("{explanation}");
+            ExitCode::FAILURE
+        }
     }
 }
 
@@ -112,6 +151,7 @@ fn open_window() -> ExitCode {
             Ok(())
         })
         .manage(LivePlayer::default())
+        .manage(SamplePlayer::default())
         .invoke_handler(tauri::generate_handler![
             commands::library,
             commands::open_plugin,
@@ -164,6 +204,14 @@ fn open_window() -> ExitCode {
             commands::make_guide,
             commands::choose_plugin_to_import,
             commands::import_plugin,
+            commands::import_from_open_mpc,
+            commands::open_mpc_source_holds_a_project,
+            commands::sample_app_start,
+            commands::sample_app_pick_sound,
+            commands::sample_app_tell,
+            commands::sample_app_shown,
+            commands::sample_app_stop,
+            commands::sample_smith_start,
             commands::begin_editing,
             commands::keep_look,
             commands::add_artwork,

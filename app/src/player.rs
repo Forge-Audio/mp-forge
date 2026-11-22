@@ -79,7 +79,7 @@ impl LivePlayer {
     }
 }
 
-fn why_not_taken(refused: &mpsc::TrySendError<String>) -> &'static str {
+pub(crate) fn why_not_taken(refused: &mpsc::TrySendError<String>) -> &'static str {
     match refused {
         mpsc::TrySendError::Full(_) => NOT_ANSWERING,
         mpsc::TrySendError::Disconnected(_) => NOT_RUNNING,
@@ -88,7 +88,7 @@ fn why_not_taken(refused: &mpsc::TrySendError<String>) -> &'static str {
 
 /// Starts the writer that passes requests on to the player, and returns the way to hand it one. It ends when
 /// the player is stopped or no longer takes what is written.
-fn writer_to(its_input: ChildStdin) -> SyncSender<String> {
+pub(crate) fn writer_to(its_input: ChildStdin) -> SyncSender<String> {
     let (requests, waiting) = mpsc::sync_channel(MOST_REQUESTS_WAITING);
     thread::spawn(move || write_each(waiting, its_input));
     requests

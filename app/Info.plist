@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  What macOS is told about MP Forge beyond what the build already says.
+
+  macOS asks the musician before an app may use the microphone, and shows them these words when it does.
+-->
+<plist version="1.0">
+<dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>MP Forge feeds this computer's sound input to an MPC Sample app you are trying, while that app listens for sound coming in. The sound goes to the app and nowhere else.</string>
+</dict>
+</plist>

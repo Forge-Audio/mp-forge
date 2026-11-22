@@ -26,6 +26,8 @@ pub struct AsShared<'a> {
     /// The page the built plugin is downloaded from.
     pub releases_page: &'a str,
     pub goes_online: bool,
+    /// Whose work the plugin is based on, in a sentence, when it is somebody else's.
+    pub based_on: Option<&'a str>,
 }
 
 pub fn readme_of(facts: &Facts, words: &Words, shared: &AsShared) -> String {
@@ -33,6 +35,7 @@ pub fn readme_of(facts: &Facts, words: &Words, shared: &AsShared) -> String {
     let pages = facts.pages.iter().enumerate().map(|(index, page)| page_section(facts, page, index + 1, words));
     let sections = [
         format!("# {}\n\n{}.\n\n{}", plain(&facts.name), plain(&facts.what_it_is()), plain(said_about)),
+        shared.based_on.map(plain).unwrap_or_default(),
         pages.collect::<Vec<String>>().join("\n\n"),
         presets_section(facts, words),
         things_to_try_section(words),
@@ -131,7 +134,7 @@ mod tests {
     }
 
     fn shared(about: &str) -> AsShared<'_> {
-        AsShared { about, releases_page: "https://github.com/somebody/tape-echo/releases/latest", goes_online: false }
+        AsShared { about, releases_page: "https://github.com/somebody/tape-echo/releases/latest", goes_online: false, based_on: None }
     }
 
     fn its_words() -> Words {
@@ -142,6 +145,15 @@ mod tests {
             presets: vec![said("Default", "How the plugin starts.")],
             to_try: vec!["Turn Time up slowly.".to_string()],
         }
+    }
+
+    #[test]
+    fn a_plugin_based_on_somebody_elses_says_so_right_under_what_it_is() {
+        let based_on = AsShared { based_on: Some("Based on Tape Echo by somebody (https://github.com/somebody/tape-echo), which is shared under MIT."), ..shared("An echo.") };
+
+        let readme = readme_of(&tape_echo(), &its_words(), &based_on);
+
+        assert!(readme.contains("A worn tape echo.\n\nBased on Tape Echo by somebody (https://github.com/somebody/tape-echo), which is shared under MIT.\n\n## The MAIN page"), "{readme}");
     }
 
     #[test]

@@ -13,7 +13,7 @@
   const ABOUT_RESTARTING = "Restart the MPC's app afterwards, so the plugin shows up. Anything unsaved on the MPC is lost.";
   const ABOUT_RENAMING = "The name is shown on the MPC. A plugin already sent to your MPC stays there under its old name until it is removed. Once renamed, the plugin is built and safety-checked again.";
   const ABOUT_ANOTHER_NAME = "The name is shown on the MPC. To the MPC a plugin is known by a hidden four-letter id, which stays the same, so if both are copies of one plugin the MPC will take them for the same one.";
-  const ABOUT_IMPORTING = "Bring in a plugin somebody handed you: a file saved with Export, or the folder of a plugin's project, such as one written with Akai's SDK. It comes in as a new plugin. None of yours is replaced.";
+  const ABOUT_IMPORTING = "Bring in a plugin somebody handed you: a file saved with Export, or the folder of a plugin's project, such as one written with Akai's SDK. It comes in as a new plugin. None of yours is replaced. For a plugin from the Open MPC catalog, use REMIX A PLUGIN on a new plugin and choose IMPORT AS IT IS.";
   const ONLY_FROM_PEOPLE_YOU_TRUST = "Only bring in plugins from people you trust. A plugin is a program: its safety check builds its code and runs it on this computer. The check reads the code first and stops what it knows to be harmful, but it cannot catch everything.";
   const ABOUT_THE_GUIDE = "One page on how to use this plugin, to keep or to hand to others: a picture of its screen, what every control does, where it starts and which hardware knob turns it, its presets, and things to try. It is saved in the plugin's folder and opens in your browser, where it can be printed or saved as a PDF.";
   const GUIDE_ASKS_THE_AI = "Its words have not been written yet. Your AI is asked for them once, which uses a little of your AI credit and takes a minute or so. They are then kept with the plugin.";
@@ -24,6 +24,7 @@
   const ABOUT_LISTING = "Open MPC is the community's catalog of open plugins for the MPC. This makes a folder with everything a listing there needs: the plugin's source for your GitHub repository, with a page made from its guide; the built plugin as a zip for a release; and the file that asks for the listing. Nothing is sent anywhere. The steps on GitHub are yours, and are written out in the folder.";
   const LISTING_MAKES_IT_PUBLIC = "The catalog lists open plugins only. Listing a plugin makes its code public, for anyone to read, change and share.";
   const ABOUT_THE_LICENCES = "MIT lets anyone do anything with it, as long as your name stays on it. GPL lets anyone change and share it, as long as what they share stays open the same way. A remix of somebody else's plugin has to keep that plugin's licence.";
+  const HAS_TO_BE_LISTED_BY_HAND = "A listing made here is under MIT or GPL-3.0-only, and the original's licence allows neither. This plugin has to be listed by hand.";
   const ABOUT_LISTING_UNCHECKED = "The safety check runs once more first, and only a plugin that passes is got ready.";
   const NO_GUIDE_YET = "This plugin has no guide yet, so its page will show its screen and controls without saying what each one does. For a fuller page, make its guide first: ⋯, then Guide….";
   const ABOUT_DELETING = "Its folder is moved to the Trash on this computer, with its sound, its screen, its pictures and its conversation. A copy already on your MPC is not touched.";
@@ -98,17 +99,32 @@
     const summary = textBox("One line for its card in the catalog", LONGEST_SUMMARY);
     summary.value = listed.summary;
     summary.placeholder = "What it sounds like or does, in one line";
-    const licence = eitherOf(...LICENCES);
+    const licence = licenceFor(listed.owed);
     const holds = [
       element("div", "", ABOUT_LISTING),
       element("div", "sheet-problem", `${LISTING_MAKES_IT_PUBLIC} ${pluginName} would be listed as made by ${listed.author}.`),
       element("div", "field-label", "Your repository on GitHub"), repository,
       element("div", "field-label", "One line for its card"), summary,
-      element("div", "field-label", "Licence"), licence.row, element("div", "soft small", ABOUT_THE_LICENCES),
+      element("div", "field-label", "Licence"), ...licence.shown,
       element("div", "soft small", listed.guideWritten ? ABOUT_LISTING_UNCHECKED : `${NO_GUIDE_YET} ${ABOUT_LISTING_UNCHECKED}`),
     ];
-    const details = { title: "LIST ON OPEN MPC", confirmWords: "CHOOSE A FOLDER…", holds, wide: true, focusOn: repository };
-    return asked(sheet, details, () => ({ repository: repository.value.trim(), license: LICENCES[Number(licence.isSecond())], summary: summary.value.trim() }));
+    const details = {
+      title: "LIST ON OPEN MPC", confirmWords: "CHOOSE A FOLDER…", holds, wide: true, focusOn: repository,
+      onMade: (confirm) => { confirm.disabled = !licence.canBeListed; },
+    };
+    return asked(sheet, details, () => ({ repository: repository.value.trim(), license: licence.chosen(), summary: summary.value.trim() }));
+  }
+
+  // The licence of a listing: the musician's to choose for a plugin of their own. A version of somebody else's
+  // plugin carries the licence the original's allows, so there is nothing to choose, and with none it cannot be
+  // listed from here. `owed` is what is owed to the original's makers, when there are any.
+  function licenceFor(owed) {
+    if (!owed) {
+      const either = eitherOf(...LICENCES);
+      return { shown: [either.row, element("div", "soft small", ABOUT_THE_LICENCES)], chosen: () => LICENCES[Number(either.isSecond())], canBeListed: true };
+    }
+    const itCarries = owed.license ? `So it is listed under ${owed.license}, and credits them on its page.` : HAS_TO_BE_LISTED_BY_HAND;
+    return { shown: [element("div", owed.license ? "" : "sheet-problem", `${owed.credit} ${itCarries}`)], chosen: () => owed.license, canBeListed: Boolean(owed.license) };
   }
 
   // Answers true only when the musician pressed DELETE.

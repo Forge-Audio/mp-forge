@@ -4,6 +4,7 @@
 //! `workbench make` has Claude build a plugin from a description, then runs the safety check on it.
 //! `workbench serve-tools` is started by Claude Code, never by a person: it serves the six plugin tools.
 //! `workbench play` is started by the app, never by a person: it plays one built plugin live.
+//! `workbench link-for-mpc-sample` writes the folder that puts MP Forge Link on an MPC Sample's card.
 //!
 //! Exit code 0: safe to send. 1: not safe to send. 2: could not run at all.
 
@@ -11,15 +12,18 @@ use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::time::Duration;
 
 use workbench_engine::agent::Event;
 use workbench_engine::ai_settings::AiSettings;
 use workbench_engine::claude::Claude;
 use workbench_engine::gate::Gate;
+use workbench_engine::link_program;
 use workbench_engine::live_player::{self, PLAY_COMMAND};
 use workbench_engine::maker::{Connection, Delivery, MakeError, Maker, ONLINE_PLUGINS_FLAG, PluginRequest, SERVE_TOOLS_COMMAND};
 use workbench_engine::open_mpc_listing::{self, License, Listing};
 use workbench_engine::picture_clock::{self, READ_CLOCK_COMMAND};
+use workbench_engine::sample_trial::{self, TRY_SAMPLE_APP_COMMAND};
 use workbench_engine::plugin_tools;
 use workbench_engine::sdk::{PluginIdentity, PluginKind, Sdk};
 
@@ -33,6 +37,7 @@ usage:
                  [--effort low|medium|high|xhigh|max] [--web on|off]
                  [--plugins <folder>] [--sdk <folder>]
                  <what you want, in your own words>
+  workbench link-for-mpc-sample <folder to write it in> [--sdk <folder>]
 
   --with api          Talk to Claude directly. Needs an `ant auth login` sign-in or ANTHROPIC_API_KEY. (default)
   --with claude-code  Use the Claude Code you already have, signed in however you signed it in.";
@@ -41,6 +46,7 @@ const DEFAULT_PLUGINS_DIR: &str = "plugins";
 const SDK_DIR_VARIABLE: &str = "MPC_SDK_DIR";
 const NOT_SAFE_TO_SEND: u8 = 1;
 const COULD_NOT_RUN: u8 = 2;
+const TIME_TO_BUILD_THE_LINK: Duration = Duration::from_secs(300);
 
 /// The command line, split into `--option value` pairs and everything else.
 struct Arguments {
@@ -94,12 +100,18 @@ fn run(arguments: Arguments) -> Result<ExitCode, String> {
     {
         return picture_clock::print_watched(Path::new(plugin_library), control).map(|()| ExitCode::SUCCESS);
     }
+    if let [command, app_dir, touches_file, picture_file] = arguments.words.as_slice()
+        && command == TRY_SAMPLE_APP_COMMAND
+    {
+        return sample_trial::hold_and_print(Path::new(app_dir), Path::new(touches_file), Path::new(picture_file)).map(|()| ExitCode::SUCCESS);
+    }
     let sdk = Sdk::at(arguments.sdk_dir()).map_err(|not_found| not_found.to_string())?;
     match arguments.words.split_first() {
         Some((command, [plugin_dir])) if command == "gate" => Ok(run_gate(sdk, plugin_dir, arguments.online_plugins)),
         Some((command, [plugin_dir])) if command == SERVE_TOOLS_COMMAND => serve_tools(sdk, plugin_dir, arguments.online_plugins),
         Some((command, [plugin_dir])) if command == "list-on-open-mpc" => list_on_open_mpc(sdk, plugin_dir, &arguments),
         Some((command, [description])) if command == "make" => run_make(sdk, &arguments, description),
+        Some((command, [into])) if command == "link-for-mpc-sample" => write_link_for_the_card(&sdk, into),
         _ => Err(USAGE.to_string()),
     }
 }
@@ -111,6 +123,12 @@ fn run_gate(sdk: Sdk, plugin_dir: &str, online_plugins: bool) -> ExitCode {
 }
 
 /// Makes what a listing in the Open MPC catalog needs, once the gate has passed the plugin, and says where it is.
+fn write_link_for_the_card(sdk: &Sdk, into: &str) -> Result<ExitCode, String> {
+    let folder = link_program::write_folder_for_the_boot_menu(sdk, Path::new(into), TIME_TO_BUILD_THE_LINK);
+    println!("{}", folder.map_err(|not_built| format!("MP Forge Link was not made. {not_built}"))?.display());
+    Ok(ExitCode::SUCCESS)
+}
+
 fn list_on_open_mpc(sdk: Sdk, plugin_dir: &str, arguments: &Arguments) -> Result<ExitCode, String> {
     let listing = listing_asked_for(arguments)?;
     let report = Gate::new(sdk).with_online_plugins(arguments.online_plugins).inspect(Path::new(plugin_dir));

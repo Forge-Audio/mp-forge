@@ -12,6 +12,8 @@ const REQUEST_TIME_LIMIT: Duration = Duration::from_secs(20 * 60);
 const WAITS_BEFORE_RETRYING: [Duration; 2] = [Duration::from_secs(2), Duration::from_secs(8)];
 /// A question with a short answer, such as which models a service offers, is not waited on for long.
 const QUICK_TIME_LIMIT: Duration = Duration::from_secs(30);
+/// Long enough to fetch a few hundred megabytes over an ordinary line, and no longer.
+const DOWNLOAD_TIME_LIMIT: Duration = Duration::from_secs(10 * 60);
 pub const HTTP_OK: u16 = 200;
 const HTTP_TOO_MANY_REQUESTS: u16 = 429;
 
@@ -22,6 +24,10 @@ pub fn client() -> ureq::Agent {
 
 pub fn quick_client() -> ureq::Agent {
     client_waiting(QUICK_TIME_LIMIT)
+}
+
+pub fn download_client() -> ureq::Agent {
+    client_waiting(DOWNLOAD_TIME_LIMIT)
 }
 
 fn client_waiting(limit: Duration) -> ureq::Agent {

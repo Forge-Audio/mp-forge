@@ -36,7 +36,8 @@ fn sound_in_mp3(mp3: Vec<u8>, sample_rate: u32) -> Result<Vec<[f32; 2]>, String>
     }
 }
 
-fn sound_in(wav: &[u8], sample_rate: u32) -> Result<Vec<[f32; 2]>, String> {
+/// The sound a WAV file holds, as frames of left and right at `sample_rate`.
+pub(crate) fn sound_in(wav: &[u8], sample_rate: u32) -> Result<Vec<[f32; 2]>, String> {
     let header = WavHeader::read(wav).map_err(|problem| problem.to_string())?;
     Ok(at_rate(&frames_of(&header, wav), header.sample_rate, sample_rate))
 }
@@ -64,7 +65,7 @@ fn number_from(written: &[u8], is_floating_point: bool) -> f32 {
 
 /// The sound at another rate, each new frame read off the line between the two old frames it falls between.
 /// That is plenty for hearing an effect at work.
-fn at_rate(frames: &[[f32; 2]], recorded_at: u32, played_at: u32) -> Vec<[f32; 2]> {
+pub(crate) fn at_rate(frames: &[[f32; 2]], recorded_at: u32, played_at: u32) -> Vec<[f32; 2]> {
     if recorded_at == played_at || frames.is_empty() {
         return frames.to_vec();
     }

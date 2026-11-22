@@ -1,0 +1,7 @@
+{
+  "name": "Sample Echo",
+  "manufacturer": "Workbench Tests",
+  "version": "1.0.0",
+  "kind": "sample-app",
+  "description": "An echo on whatever comes in at the inputs of the MPC Sample."
+}

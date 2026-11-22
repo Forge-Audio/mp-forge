@@ -1,9 +1,11 @@
-// Picking a plugin to remix from the Open MPC catalog, the community's list of open plugins for the MPC.
+// Picking a plugin from the Open MPC catalog, the community's list of open plugins for the MPC, to remix it
+// or to take it in as it is.
 //
 // Each plugin is a tile with a small picture of its screen, and the whole catalog can be scrolled through.
 // For the one picked, what its makers wrote about it (its README) and the picture of its screen are fetched
-// to go along with the request. None of its code is fetched: the remix is built anew from what is said and
-// shown of the original and what the musician wants different.
+// to go along with the request. For a remix none of its code is fetched: it is built anew from what is said
+// and shown of the original and what the musician wants different. Taking a plugin in as it is fetches its
+// makers' own code, with no AI, when its licence gives everybody leave to.
 
 (function () {
   "use strict";
@@ -16,7 +18,13 @@
   const NEAR_THE_LIST = "160px";
   const FETCHING = "Fetching the Open MPC catalog…";
   const FETCHING_ITS_README = "Fetching its README…";
-  const ABOUT_REMIXING = "MP Forge builds your own version from what the original's makers say of it and how its screen looks. None of its code is copied or installed.";
+  const ABOUT_THE_TWO_WAYS = "Pick a plugin, then REMIX THIS to have the AI build your own version of it, or IMPORT AS IT IS to bring in its makers' own code with no AI.";
+  const NOTHING_PICKED_YET = "Pick a plugin from the list to see what it is.";
+  const COMES_IN_UNRUN = "Its makers' code comes in as a new plugin. Nothing of it runs until you run its safety check.";
+  const CHECKING_ITS_SOURCE = "Checking its source…";
+  const NOTHING_TO_BUILD = "Its makers do not keep it as a project MP Forge can build, so it can only be remixed.";
+  const ONLY_TO_REMIX = "Its licence, or where its source is kept, does not let MP Forge take it in, so it can only be remixed.";
+  const ABOUT_A_REMIX = "The AI builds your own version from what its makers say of it and how its screen looks. None of its code is copied.";
   const CREDIT_THE_ORIGINAL = "Credit the original if you share your remix.";
   const NO_PICTURE = "No picture";
   const NOTHING_FOUND = "Nothing in the catalog by those words.";
@@ -25,6 +33,7 @@
   // The catalog is asked for once while the app is open. A try that failed is forgotten, so the next one asks again.
   let catalog;
   const materialAskedFor = new Map();
+  const projectAskedFor = new Map();
 
   function listedPlugins() {
     if (!catalog) {
@@ -53,6 +62,21 @@
       materialAskedFor.set(plugin.id, both.then(([readme, screenshot]) => ({ readme, screenshot })));
     }
     return materialAskedFor.get(plugin.id);
+  }
+
+  // Whether the plugin's source holds a project MP Forge can build, asked once for each plugin. When that
+  // cannot be found out, the import is still offered, and says for itself why it did not go through.
+  function holdsAProject(plugin) {
+    if (!projectAskedFor.has(plugin.id)) projectAskedFor.set(plugin.id, ask("open_mpc_source_holds_a_project", { source: plugin.source }).catch(() => true));
+    return projectAskedFor.get(plugin.id);
+  }
+
+  // Whether the plugin can be taken in as it is, and the line that says so or says why not. Its licence has to
+  // give everybody leave, and its source has to hold a project.
+  function takingItIn(plugin) {
+    if (!plugin.termsForTakingItIn) return Promise.resolve({ can: false, says: ONLY_TO_REMIX });
+    const asItIs = { can: true, says: `${COMES_IN_UNRUN} ${plugin.termsForTakingItIn}` };
+    return holdsAProject(plugin).then((holdsOne) => (holdsOne ? asItIs : { can: false, says: NOTHING_TO_BUILD }));
   }
 
   // --- The tiles -------------------------------------------------------------------------------
@@ -119,34 +143,61 @@
     return picture;
   }
 
-  function licenceLine(plugin) {
-    return plugin.license ? `Shared under ${plugin.license}. ${CREDIT_THE_ORIGINAL}` : CREDIT_THE_ORIGINAL;
+  // One thing worth knowing about the plugin: what it is about in a word, then what is to be known.
+  function fact(about, known) {
+    const row = element("div", "remix-fact");
+    row.append(element("span", "remix-fact-about", about), known);
+    return row;
   }
 
-  // What the makers wrote, shown once it has been fetched. A plugin with no README shows nothing here.
+  // Whether the plugin can be taken in as it is: a mark that says yes or no at a glance, and why.
+  function onTakingItIn(plugin) {
+    const mark = element("span", "remix-mark is-unknown", "…");
+    const why = element("span", "", CHECKING_ITS_SOURCE);
+    const known = element("span", "remix-fact-known");
+    known.append(mark, why);
+    takingItIn(plugin).then(({ can, says }) => {
+      mark.textContent = can ? "YES" : "NO";
+      mark.className = `remix-mark ${can ? "is-yes" : "is-no"}`;
+      why.textContent = says;
+    });
+    return known;
+  }
+
+  // What the makers wrote, folded away until it is asked for. A plugin with no README shows nothing here.
   function readmeBox(plugin) {
-    const box = element("div", "remix-readme soft small", FETCHING_ITS_README);
-    const show = (readme) => box.replaceChildren(element("div", "field-label", "From its README"), readme.shown);
+    const box = element("details", "remix-readme soft small");
+    box.append(element("summary", "", FETCHING_ITS_README));
+    const show = (readme) => box.replaceChildren(element("summary", "", "What its makers wrote about it"), element("div", "remix-readme-words", readme.shown));
     materialOf(plugin).then(({ readme }) => (readme ? show(readme) : box.remove()));
     return box;
   }
 
   function aboutPicked(plugin) {
-    const words = element("div", "remix-words");
-    words.append(element("div", "remix-summary", plugin.summary), element("div", "soft small", licenceLine(plugin)), readmeBox(plugin));
-    return plugin.screenshot ? [largePictureOf(plugin), words] : [words];
+    const heading = element("div", "remix-heading");
+    heading.append(element("div", "remix-picked-name", plugin.name), element("div", "soft small", inAWord(plugin)));
+    const facts = [
+      fact("Licence", element("span", "remix-fact-known", plugin.license || "Not said")),
+      fact("Remix", element("span", "remix-fact-known", `${ABOUT_A_REMIX} ${CREDIT_THE_ORIGINAL}`)),
+      fact("Import as it is", onTakingItIn(plugin)),
+    ];
+    const picture = plugin.screenshot ? [largePictureOf(plugin)] : [];
+    return [heading, ...picture, element("div", "remix-summary", plugin.summary), ...facts, readmeBox(plugin)];
   }
 
   // --- The sheet -------------------------------------------------------------------------------
 
-  // Shows the catalog on a sheet. Answers with the plugin picked, or with nothing.
+  // Shows the catalog on a sheet. Answers with the plugin picked as `original` and whether it is to be taken in
+  // `asItIs` and not remixed, or with nothing.
   function pick(sheet) {
     const search = element("input", "item-input");
     const count = element("div", "soft small");
     const list = element("div", "remix-list");
     const about = element("div", "remix-about");
+    const finding = element("div", "remix-finding");
+    const columns = element("div", "remix-columns");
     const moreToCome = element("div", "remix-note");
-    const picking = { plugins: [], found: [], tiles: new Map(), picked: null, confirm: null };
+    const picking = { plugins: [], found: [], tiles: new Map(), picked: null, confirm: null, takeIn: null };
     const thumbnails = fetchingWhenNear(list);
     const reachingTheEnd = new IntersectionObserver((seen) => seen.some((end) => end.isIntersecting) && showMore(), { root: list, rootMargin: NEAR_THE_LIST });
     search.type = "search";
@@ -165,6 +216,8 @@
     function choose(plugin) {
       picking.picked = plugin;
       picking.confirm.disabled = false;
+      picking.takeIn.disabled = true;
+      takingItIn(plugin).then(({ can }) => { if (picking.picked === plugin) picking.takeIn.disabled = !can; });
       about.replaceChildren(...aboutPicked(plugin));
       markThePicked();
     }
@@ -192,18 +245,26 @@
       showMore();
     }
 
+    about.replaceChildren(element("div", "remix-note soft", NOTHING_PICKED_YET));
+    finding.append(search, count, list);
+    columns.append(finding, about);
     list.replaceChildren(element("div", "remix-note soft", FETCHING));
     search.addEventListener("input", draw);
     listedPlugins().then(
       (plugins) => { picking.plugins = plugins; draw(); },
       (problem) => list.replaceChildren(element("div", "remix-note sheet-problem", String(problem))),
     );
+    const takenAsItIs = {
+      words: "IMPORT AS IT IS", answerOf: () => ({ original: picking.picked, asItIs: true }),
+      onMade: (takeIn) => { picking.takeIn = takeIn; takeIn.disabled = true; },
+    };
     const details = {
-      title: "REMIX A PLUGIN FROM OPEN MPC", confirmWords: "REMIX THIS", wide: true, focusOn: search,
-      holds: [element("div", "soft small", ABOUT_REMIXING), search, count, list, about],
+      title: "A PLUGIN FROM OPEN MPC", confirmWords: "REMIX THIS", roomy: true, focusOn: search,
+      holds: [element("div", "soft small", ABOUT_THE_TWO_WAYS), columns],
+      alsoOffers: [takenAsItIs],
       onMade: (confirm) => { picking.confirm = confirm; confirm.disabled = true; },
     };
-    return asked(sheet, details, () => picking.picked);
+    return asked(sheet, details, () => ({ original: picking.picked, asItIs: false }));
   }
 
   // --- What the builder is asked for -----------------------------------------------------------

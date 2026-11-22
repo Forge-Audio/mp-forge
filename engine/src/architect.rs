@@ -1,5 +1,6 @@
-//! The plugin architect: before anything is built, it asks the musician a few questions about their idea and
-//! offers choices for each, so the plugin that gets built is more their own.
+//! The architect: before anything is built, it asks the musician a few questions about their idea and offers
+//! choices for each, so what gets built is more their own. For a plugin it is the plugin architect. For the
+//! MPC Sample, where what is made takes over the whole device, it is the OS architect and asks about that.
 //!
 //! The architect can only ask. Reached through a model the workbench talks to, its one tool is the form it
 //! writes its questions on. Reached through Claude Code, it has no tools at all and writes the same form as its
@@ -17,6 +18,7 @@ use crate::shown_words::{form_written_in, one_line, shortened};
 use crate::stop_signal::StopSignal;
 
 const HOW_TO_BE_THE_ARCHITECT: &str = concat!(include_str!("../../directives/plugin-architect.md"), "\n", include_str!("../../directives/what-mp-forge-can-build.md"));
+const HOW_TO_BE_THE_OS_ARCHITECT: &str = include_str!("../../directives/sample-architect.md");
 const FORM: &str = "offer_questions";
 const ABOUT_THE_FORM: &str = "Hands your questions to the musician. This is the only thing you can do, so always use it.";
 /// Claude Code is given no form to fill in, so it is told to write one out.
@@ -64,7 +66,7 @@ impl fmt::Display for ArchitectError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ArchitectError::Ai(error) => error.fmt(formatter),
-            ArchitectError::NothingToAsk => write!(formatter, "The architect did not come back with any questions. Ask it again, or build the plugin without it."),
+            ArchitectError::NothingToAsk => write!(formatter, "The architect did not come back with any questions. Ask it again, or build without it."),
         }
     }
 }
@@ -85,7 +87,7 @@ impl From<ModelError> for ArchitectError {
 pub fn ask_model(model: &mut dyn Model, idea: &Idea) -> Result<Vec<Question>, ArchitectError> {
     let form = [ToolDefinition { name: FORM, description: ABOUT_THE_FORM, input_schema: shape_of_the_form() }];
     let said = [Entry::User(what_the_musician_said(idea))];
-    let turn = model.next_turn(&Brief { instructions: HOW_TO_BE_THE_ARCHITECT, tools: &form, history: &said })?;
+    let turn = model.next_turn(&Brief { instructions: how_to_be_the_architect_of(idea), tools: &form, history: &said })?;
     let filled_in = turn.tool_calls.iter().find(|call| call.name == FORM).and_then(|call| match &call.input {
         ToolInput::Valid(form) => Some(questions_on(form)),
         ToolInput::Unparseable(_) => None,
@@ -95,14 +97,25 @@ pub fn ask_model(model: &mut dyn Model, idea: &Idea) -> Result<Vec<Question>, Ar
 
 /// Asks through the musician's own Claude Code, which is given no tools at all for this.
 pub fn ask_claude_code(idea: &Idea, settings: AiSettings, stop: &StopSignal) -> Result<Vec<Question>, ArchitectError> {
-    let instructions = format!("{HOW_TO_BE_THE_ARCHITECT}{WRITE_THE_FORM_OUT}");
+    let instructions = format!("{}{WRITE_THE_FORM_OUT}", how_to_be_the_architect_of(idea));
     let answer = claude_code::answer_once(&instructions, &what_the_musician_said(idea), settings, stop)?;
     worth_asking(questions_written_in(&answer))
 }
 
+fn how_to_be_the_architect_of(idea: &Idea) -> &'static str {
+    if idea.kind == PluginKind::SampleApp { HOW_TO_BE_THE_OS_ARCHITECT } else { HOW_TO_BE_THE_ARCHITECT }
+}
+
+fn what_is_being_made(idea: &Idea) -> String {
+    if idea.kind == PluginKind::SampleApp {
+        return format!("It is called \"{}\". It is for the MPC Sample.", idea.name);
+    }
+    format!("The plugin is called \"{}\". It is an {}.", idea.name, idea.kind.as_word())
+}
+
 /// The idea with what was asked and answered in earlier rounds, worded for the architect.
 fn what_the_musician_said(idea: &Idea) -> String {
-    let opening = format!("The plugin is called \"{}\". It is an {}.\n\nThe musician's idea:\n\n{}", idea.name, idea.kind.as_word(), idea.description.trim());
+    let opening = format!("{}\n\nThe musician's idea:\n\n{}", what_is_being_made(idea), idea.description.trim());
     if idea.answered.is_empty() {
         return opening;
     }
@@ -148,6 +161,16 @@ fn worth_asking(questions: Vec<Question>) -> Result<Vec<Question>, ArchitectErro
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_idea_for_the_mpc_sample_goes_to_the_os_architect_who_asks_about_the_whole_device() {
+        let idea = Idea { name: "Night Bus".to_string(), kind: PluginKind::SampleApp, description: "dusty chords".to_string(), answered: Vec::new() };
+
+        assert!(how_to_be_the_architect_of(&idea).starts_with("# The OS architect"));
+        assert!(how_to_be_the_architect_of(&idea).contains("what the pads do and how they are laid out"));
+        assert!(!how_to_be_the_architect_of(&idea).contains("touch screen of pages"));
+        assert!(what_the_musician_said(&idea).starts_with("It is called \"Night Bus\". It is for the MPC Sample.\n\nThe musician's idea:\n\ndusty chords"));
+    }
     use crate::agent::test_support::{ScriptedModel, calls, says};
 
     fn idea() -> Idea {

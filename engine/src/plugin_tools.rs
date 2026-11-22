@@ -9,7 +9,6 @@
 //! the screen whenever it wants one, with close-ups, small edits and searches that make a second and a
 //! third try cheap, and the list of fonts it can letter artwork in.
 
-use std::fmt::Display;
 use std::io;
 use std::path::Path;
 
@@ -19,7 +18,10 @@ use crate::agent::{Illustration, ToolDefinition, ToolOutput, Toolbox};
 use crate::arranged_screen::arranged_screen_of;
 use crate::artwork;
 use crate::attachments::is_attachment;
-use crate::file_text::{lines_holding, with_passage_replaced};
+use crate::file_tools::{
+    EDIT_PLUGIN_FILE, FileTools, LIST_PLUGIN_FILES, LIST_REFERENCE, READ_PLUGIN_FILE, READ_REFERENCE, SEARCH_FILES, WRITE_PLUGIN_FILE, explain, in_words,
+    input_of_a_search, input_of_a_write, input_of_an_edit, no_input, path_input,
+};
 use crate::fonts;
 use crate::gate::{Gate, GateReport, Outcome, PICTURES_CHECK, SCREEN_CHECK};
 use crate::kept_look::keep_if_it_fits;
@@ -27,19 +29,14 @@ use crate::look::{Look, look_of};
 use crate::mcp_server;
 use crate::page_art;
 use crate::page_view::{CloseUp, close_up};
+use crate::sample_app;
+use crate::sample_app_tools::SampleAppTools;
 use crate::picture_review::{HOW_TO_READ_THE_PAGES, HOW_TO_READ_THE_PICTURES, PictureReview};
 use crate::screen_layout::Area;
 use crate::sdk::Sdk;
 use crate::styling;
 use crate::workspace::{PluginWorkspace, ReferenceLibrary};
 
-const LIST_REFERENCE: &str = "list_reference";
-const READ_REFERENCE: &str = "read_reference";
-const LIST_PLUGIN_FILES: &str = "list_plugin_files";
-const READ_PLUGIN_FILE: &str = "read_plugin_file";
-const WRITE_PLUGIN_FILE: &str = "write_plugin_file";
-const EDIT_PLUGIN_FILE: &str = "edit_plugin_file";
-const SEARCH_FILES: &str = "search_files";
 const STYLE_SCREEN: &str = "style_screen";
 const LOOK_AT_SCREEN: &str = "look_at_screen";
 const LIST_FONTS: &str = "list_fonts";
@@ -60,70 +57,35 @@ pub const TOOL_NAMES: [&str; 11] = [
     CHECK_PLUGIN,
 ];
 
-const SEARCH_THE_PLUGIN: &str = "plugin";
-const SEARCH_THE_REFERENCE: &str = "reference";
 const MOST_FONTS_LISTED: usize = 400;
 const A_QUICK_LOOK: &str = "This is a quick look. Nothing was built or tested, so run check_plugin before you finish. A control     the plugin has not been built with yet is drawn at a stand-in setting, and the lettering is in a stand-in font.";
 const NOTHING_TO_LOOK_AT: &str = "There is no such page to look at. Give a page name from ui.json, or leave `page` out to see them all.";
 const A_CLOSE_UP_NEEDS_ITS_PAGE: &str = "Name the `page` to look closer at.";
 
 pub struct PluginTools<'a> {
-    plugin: PluginWorkspace,
-    reference: ReferenceLibrary,
+    files: FileTools,
     gate: &'a Gate,
     review: PictureReview,
 }
 
 impl<'a> PluginTools<'a> {
     pub fn open(plugin_dir: &Path, sdk_root: &Path, gate: &'a Gate) -> io::Result<Self> {
-        Ok(Self { plugin: PluginWorkspace::open(plugin_dir)?, reference: ReferenceLibrary::open(sdk_root)?, gate, review: PictureReview::default() })
+        let files = FileTools { plugin: PluginWorkspace::open(plugin_dir)?, reference: ReferenceLibrary::open(sdk_root)? };
+        Ok(Self { files, gate, review: PictureReview::default() })
     }
 
     fn attempt(&self, tool_name: &str, input: &Value) -> Result<String, String> {
         match tool_name {
-            LIST_REFERENCE => self.reference.list().map(as_lines).map_err(explain),
-            READ_REFERENCE => self.reference.read(text_field(input, "path")?).map_err(explain),
-            LIST_PLUGIN_FILES => self.plugin.list().map(as_lines).map_err(explain),
-            READ_PLUGIN_FILE => self.plugin.read(text_field(input, "path")?).map_err(explain),
-            WRITE_PLUGIN_FILE => self.write_plugin_file(input),
-            EDIT_PLUGIN_FILE => self.edit_plugin_file(input),
-            SEARCH_FILES => self.search_files(input),
             STYLE_SCREEN => self.style_screen(input),
             LIST_FONTS => Ok(fonts_on_this_computer()),
-            unknown => Err(format!("There is no tool called `{unknown}`.")),
-        }
-    }
-
-    fn write_plugin_file(&self, input: &Value) -> Result<String, String> {
-        let path = text_field(input, "path")?;
-        let contents = text_field(input, "contents")?;
-        self.plugin.write(path, contents).map_err(explain)?;
-        Ok(format!("Wrote {path} ({} bytes).", contents.len()))
-    }
-
-    /// Swaps one passage of a file for another, under the same rules as writing the whole file.
-    fn edit_plugin_file(&self, input: &Value) -> Result<String, String> {
-        let path = text_field(input, "path")?;
-        let everywhere = input["everywhere"].as_bool().unwrap_or(false);
-        let before = self.plugin.read(path).map_err(explain)?;
-        let (after, places) = with_passage_replaced(&before, text_field(input, "find")?, text_field(input, "replace")?, everywhere)?;
-        self.plugin.write(path, &after).map_err(explain)?;
-        Ok(format!("Changed {path} in {places} {}.", if places == 1 { "place" } else { "places" }))
-    }
-
-    fn search_files(&self, input: &Value) -> Result<String, String> {
-        let wanted = text_field(input, "text")?;
-        match text_field(input, "in")? {
-            SEARCH_THE_PLUGIN => Ok(lines_holding(wanted, texts_of(self.plugin.list().map_err(explain)?, |path| self.plugin.read(path).ok()))),
-            SEARCH_THE_REFERENCE => Ok(lines_holding(wanted, texts_of(self.reference.list().map_err(explain)?, |path| self.reference.read(path).ok()))),
-            _ => Err(format!("`in` is \"{SEARCH_THE_PLUGIN}\" or \"{SEARCH_THE_REFERENCE}\".")),
+            for_a_file => self.files.attempt(for_a_file, input),
         }
     }
 
     /// Draws the pictures and the pages as they stand and shows them, without building or testing anything.
     /// With a part of one page named, that part is shown enlarged instead.
     fn look_at_screen(&mut self, input: &Value) -> ToolOutput {
-        let plugin = self.plugin.root().to_path_buf();
+        let plugin = self.files.root().to_path_buf();
         if let Err(problems) = artwork::draw_pictures(&plugin) {
             return ToolOutput::failure(problems.join(" "));
         }
@@ -139,7 +101,7 @@ impl<'a> PluginTools<'a> {
     /// the screen or could not be drawn. Either way the answer says where everything now sits.
     fn style_screen(&self, input: &Value) -> Result<String, String> {
         let changes = input.get("changes").and_then(Value::as_array).ok_or("This tool needs `changes` as a list. An empty list just shows where everything is.")?;
-        let plugin = self.plugin.root();
+        let plugin = self.files.root();
         let look_before = look_of(plugin)?;
         if changes.is_empty() {
             return Ok(styling::described(&arranged_screen_of(plugin), &look_before));
@@ -150,31 +112,15 @@ impl<'a> PluginTools<'a> {
         Ok(format!("Kept. The screen is now arranged like this. Run check_plugin to see it.\n\n{}", styling::described(&screen, &look)))
     }
 
-    /// A picture the musician attached is handed back as a picture to look at, not as text.
-    fn show_attachment(&self, path: &str) -> ToolOutput {
-        match self.plugin.read_attachment(path) {
-            Ok(png) => {
-                let picture = Illustration { caption: format!("{path}, attached by the musician."), png };
-                ToolOutput::success(format!("{path} is a picture. It follows.")).illustrated_with(vec![picture])
-            }
-            Err(problem) => ToolOutput::failure(explain(problem)),
-        }
-    }
-
     /// The safety check's report, with the pages and pictures the AI has not yet seen as they are now.
     fn check_plugin(&mut self) -> ToolOutput {
-        let report = self.gate.inspect(self.plugin.root());
-        let pages = if passed(&report, SCREEN_CHECK) { self.review.show_changed_pages(self.plugin.root()) } else { Vec::new() };
-        let pictures = if passed(&report, PICTURES_CHECK) { self.review.show_what_changed(self.plugin.root()) } else { Vec::new() };
+        let report = self.gate.inspect(self.files.root());
+        let pages = if passed(&report, SCREEN_CHECK) { self.review.show_changed_pages(self.files.root()) } else { Vec::new() };
+        let pictures = if passed(&report, PICTURES_CHECK) { self.review.show_what_changed(self.files.root()) } else { Vec::new() };
         let how_to_read = [(!pages.is_empty()).then_some(HOW_TO_READ_THE_PAGES), (!pictures.is_empty()).then_some(HOW_TO_READ_THE_PICTURES)];
         let words: Vec<String> = std::iter::once(report.to_string()).chain(how_to_read.into_iter().flatten().map(str::to_string)).collect();
         ToolOutput::success(words.join("\n\n")).illustrated_with(pages.into_iter().chain(pictures).collect())
     }
-}
-
-/// The files that can be read as text, each with its text. A picture or anything else unreadable is passed over.
-fn texts_of(paths: Vec<String>, read: impl Fn(&str) -> Option<String>) -> impl Iterator<Item = (String, String)> {
-    paths.into_iter().filter_map(move |path| read(&path).map(|text| (path, text)))
 }
 
 fn fonts_on_this_computer() -> String {
@@ -240,11 +186,14 @@ fn how_many_changes(input: &Value) -> String {
     }
 }
 
-/// Serves the tools for one plugin on standard input and output until the caller hangs up.
+/// Serves the tools for one plugin, or one Sample app, on standard input and output until the caller hangs up.
 /// This is what an outside agent program, such as Claude Code, starts to reach the tools.
 /// `online_plugins` says whether the musician has switched those on, which the safety check has to know.
 pub fn serve_on_standard_io(sdk: &Sdk, plugin_dir: &Path, online_plugins: bool) -> io::Result<()> {
     let gate = Gate::new(sdk.clone()).with_online_plugins(online_plugins);
+    if sample_app::is_one(plugin_dir) {
+        return mcp_server::serve(&mut SampleAppTools::open(plugin_dir, &gate)?, io::stdin().lock(), io::stdout().lock());
+    }
     let mut tools = PluginTools::open(plugin_dir, sdk.root(), &gate)?;
     mcp_server::serve(&mut tools, io::stdin().lock(), io::stdout().lock())
 }
@@ -283,15 +232,7 @@ impl Toolbox for PluginTools<'_> {
                     You can write ui.json, pictures.json, README.md, DESIGN.md, .cpp, .h or .hpp files inside src/, and .svg \
                     drawings inside pictures/. plugin.json is fixed and nothing outside the plugin can be written. \
                     To change a small part of a file that is already there, use edit_plugin_file instead.",
-                input_schema: json!({
-                    "type": "object",
-                    "properties": {
-                        "path": { "type": "string", "description": "Where to write, relative to the plugin folder" },
-                        "contents": { "type": "string", "description": "The complete new contents of the file" }
-                    },
-                    "required": ["path", "contents"],
-                    "additionalProperties": false
-                }),
+                input_schema: input_of_a_write(),
             },
             ToolDefinition {
                 name: EDIT_PLUGIN_FILE,
@@ -299,32 +240,14 @@ impl Toolbox for PluginTools<'_> {
                     drawing, one line of code, one control in ui.json. Quicker and safer than writing the whole file again. \
                     Give the passage exactly as it stands in the file. It has to be there only once, unless you set \
                     `everywhere` to change every place it is found. The same files can be changed as can be written.",
-                input_schema: json!({
-                    "type": "object",
-                    "properties": {
-                        "path": { "type": "string", "description": "The file to change, relative to the plugin folder" },
-                        "find": { "type": "string", "description": "The passage as it stands now, copied exactly" },
-                        "replace": { "type": "string", "description": "What to put in its place" },
-                        "everywhere": { "type": "boolean", "description": "True to change every place the passage is found" }
-                    },
-                    "required": ["path", "find", "replace"],
-                    "additionalProperties": false
-                }),
+                input_schema: input_of_an_edit(),
             },
             ToolDefinition {
                 name: SEARCH_FILES,
                 description: "Finds every line that holds some words, in the plugin's own files or in the reference library, \
                     whatever their capitals. Use it to find where something is set without reading every file, and to see how \
                     Akai's example plugins did something. The answer names each file and line.",
-                input_schema: json!({
-                    "type": "object",
-                    "properties": {
-                        "text": { "type": "string", "description": "The words to look for, such as a parameter's name or a function" },
-                        "in": { "type": "string", "enum": [SEARCH_THE_PLUGIN, SEARCH_THE_REFERENCE], "description": "Where to look" }
-                    },
-                    "required": ["text", "in"],
-                    "additionalProperties": false
-                }),
+                input_schema: input_of_a_search(),
             },
             ToolDefinition {
                 name: STYLE_SCREEN,
@@ -389,7 +312,7 @@ impl Toolbox for PluginTools<'_> {
         match tool_name {
             CHECK_PLUGIN => self.check_plugin(),
             LOOK_AT_SCREEN => self.look_at_screen(input),
-            READ_PLUGIN_FILE if is_attachment(Path::new(path)) => self.show_attachment(path),
+            READ_PLUGIN_FILE if is_attachment(Path::new(path)) => self.files.show_attachment(path),
             _ => in_words(self.attempt(tool_name, input)),
         }
     }
@@ -424,38 +347,6 @@ const HOW_TO_STYLE_THE_SCREEN: &str = "Styles the plugin's screen the way the mu
     (6) {\"change\":\"restack_artwork\",\"page\":..,\"id\":..,\"to\":\"front\"|\"back\"}. \
     Artwork always sits behind the controls and behind your own pictures. You cannot bring in a picture file this way: draw pictures with pictures.json. \
     Putting a control on a page or taking one off is still done in ui.json.";
-
-fn in_words(outcome: Result<String, String>) -> ToolOutput {
-    match outcome {
-        Ok(content) => ToolOutput::success(content),
-        Err(explanation) => ToolOutput::failure(explanation),
-    }
-}
-
-fn no_input() -> Value {
-    json!({ "type": "object", "properties": {}, "additionalProperties": false })
-}
-
-fn path_input(description: &str) -> Value {
-    json!({
-        "type": "object",
-        "properties": { "path": { "type": "string", "description": description } },
-        "required": ["path"],
-        "additionalProperties": false
-    })
-}
-
-fn text_field<'a>(input: &'a Value, name: &str) -> Result<&'a str, String> {
-    input.get(name).and_then(Value::as_str).ok_or_else(|| format!("This tool needs `{name}` as text."))
-}
-
-fn as_lines(paths: Vec<String>) -> String {
-    paths.join("\n")
-}
-
-fn explain(error: impl Display) -> String {
-    error.to_string()
-}
 
 #[cfg(test)]
 mod tests {

@@ -14,13 +14,16 @@
   // Shows a sheet with a title, what it holds, and two buttons. `answerOf` gives the answer when the second one is
   // pressed, or when Enter is pressed in a box for typing. Escape and the first button both answer with nothing.
   // `details.onMade` is handed the second button, for a sheet that has to switch it off and on.
+  // `details.wide` gives a sheet with more to show more room, and `details.roomy` gives it most of the window.
+  // `details.alsoOffers` puts more buttons between the two, each with its `words`, the `answerOf` it gives, and
+  // an `onMade` of its own.
   function asked(sheet, details, answerOf) {
     return new Promise((resolve) => {
       const cancel = button("item-button", details.cancelWords || "CANCEL");
       const confirm = button("item-button done", details.confirmWords);
       const buttons = element("div", "sheet-buttons");
       const body = element("div", "window-body");
-      const made = element("div", `window sheet ${details.wide ? "wide" : ""}`);
+      const made = element("div", `window sheet ${details.wide ? "wide" : ""} ${details.roomy ? "roomy" : ""}`);
       const answer = (given) => {
         sheet.hidden = true;
         sheet.replaceChildren();
@@ -31,10 +34,16 @@
         if (event.key === "Escape") answer(null);
         if (event.key === "Enter" && event.target instanceof HTMLInputElement && !confirm.disabled) confirm.click();
       }
+      const alsoOffered = (details.alsoOffers || []).map((offer) => {
+        const offered = button("item-button", offer.words);
+        offered.addEventListener("click", () => answer(offer.answerOf()));
+        if (offer.onMade) offer.onMade(offered);
+        return offered;
+      });
       cancel.addEventListener("click", () => answer(null));
       confirm.addEventListener("click", () => answer(answerOf()));
       document.addEventListener("keydown", answerFromKeys);
-      buttons.append(cancel, confirm);
+      buttons.append(cancel, ...alsoOffered, confirm);
       body.append(...details.holds, buttons);
       made.setAttribute("role", "dialog");
       made.setAttribute("aria-label", details.title);

@@ -169,6 +169,14 @@
 
   const guidesWritten = new Set();
 
+  // The demo's catalog holds one plugin that can be taken in, and it is under MIT.
+  function owedToTheMakersOf(pluginName) {
+    const original = cameFrom[pluginName];
+    return original ? { credit: `Based on ${original.name} by ${original.author} (${original.source}), which is shared under ${original.license}.`, license: original.license } : null;
+  }
+  // The catalog plugin each plugin was taken in from, for those that were.
+  const cameFrom = {};
+
   // The plugin the demo pretends somebody handed over.
   const DEMO_IMPORT = "Glass Pad";
 
@@ -256,7 +264,7 @@
     source: "https://example.org/pulsars",
   };
   const DEMO_CATALOG = [
-    { id: "tape-echo", name: "Tape Echo", author: "somebody", kind: "effect", summary: "A worn tape echo with wow, flutter and a tone control.", style: "delay", license: "MIT", source: "https://github.com/somebody/tape-echo", screenshot: "blacksmith.png", remixName: "Tape Echo Remix", brief: "Make a remix of \"Tape Echo\" by somebody, an effect (delay) from the Open MPC catalog.", aboutItsPicture: "One of the attached pictures is the original's screen." },
+    { id: "tape-echo", name: "Tape Echo", author: "somebody", kind: "effect", summary: "A worn tape echo with wow, flutter and a tone control.", style: "delay", license: "MIT", source: "https://github.com/somebody/tape-echo", screenshot: "blacksmith.png", termsForTakingItIn: "MIT: you can use it and change it. If you share your version, keep the original maker's notice and licence with it.", remixName: "Tape Echo Remix", brief: "Make a remix of \"Tape Echo\" by somebody, an effect (delay) from the Open MPC catalog.", aboutItsPicture: "One of the attached pictures is the original's screen." },
     { id: "tr-6w6", name: "6W6", author: "athousanddetails", kind: "instrument", summary: "A drum machine voice set fitted against real hardware recordings.", style: "drum-machine", license: "GPL-3.0-only", source: null, screenshot: null, remixName: "Remix 6W6", brief: "Make a remix of \"6W6\" by athousanddetails, an instrument (drum-machine) from the Open MPC catalog.", aboutItsPicture: "One of the attached pictures is the original's screen." },
     { id: "glass", name: "Glass Hall", author: "another", kind: "effect", summary: "A bright, long reverb.", style: "reverb", license: null, source: null, screenshot: "a-picture-that-is-not-there.png", remixName: "Glass Hall Remix", brief: "Make a remix of \"Glass Hall\" by another, an effect (reverb) from the Open MPC catalog.", aboutItsPicture: "One of the attached pictures is the original's screen." },
   ];
@@ -309,7 +317,36 @@
   function demoBackend() {
     const handlers = {};
     const emit = (eventName, payload) => (handlers[eventName] || []).forEach((handler) => handler(payload));
-    const plugins = [{ name: "Dusty Tape", maker: "Demo", kind: "effect" }, { name: "Glass Pad", maker: "Demo", kind: "instrument" }];
+    const plugins = [{ name: "Dusty Tape", maker: "Demo", kind: "effect" }, { name: "Glass Pad", maker: "Demo", kind: "instrument" }, { name: "Pocket Pads", maker: "Demo", kind: "sample-app" }];
+
+    // The demo's stand-in Sample app. It shows itself afresh whenever the screen asks, as bytes, the way a
+    // real app's player does.
+    let sampleApp = null;
+
+    function startTheSampleApp(name) {
+      sampleApp = { name, app: window.demoSampleApp.make(), startedAt: performance.now(), waitsForAFile: false };
+    }
+
+    function showTheSmithFor(name) {
+      sampleApp = { name, app: window.demoSampleSmith.make(), startedAt: performance.now(), waitsForAFile: false };
+    }
+
+    // The demo's stand-in has no page for picking a file, so pressing SAMPLE SELECT stands in for opening one.
+    function tellTheSampleApp(input) {
+      if (input.control === "button" && input.name === "SAMPLE SELECT" && input.value === 1) sampleApp.waitsForAFile = true;
+      sampleApp.app.take(input);
+    }
+
+    // The demo picks no file: the app stops waiting, as when the musician decides against one.
+    function pickNoSoundForTheSampleApp(name) {
+      if (sampleApp && sampleApp.name === name) sampleApp.waitsForAFile = false;
+    }
+
+    function shownByTheSampleApp(name) {
+      if (!sampleApp || sampleApp.name !== name) throw "The app is not running.";
+      const shown = sampleApp.app.frame((performance.now() - sampleApp.startedAt) / 1000);
+      return window.sampleSurface.writeShown({ ...shown, waitsForAFile: sampleApp.waitsForAFile });
+    }
 
     const DEMO_CLOSING_WORDS = "This is the demo, so nothing was really built.\n\n**Controls:** Time, Repeats and Tone.";
     const DEMO_CHOICES = "This is the demo, so here are three made-up ideas: a reverb knob, a tape stop switch, or a stereo spread knob.\n\n[option] Add a reverb knob\n[option] Add a tape stop switch\n[option] Add a stereo spread knob";
@@ -490,7 +527,7 @@
       delete_plugin: ({ name }) => { plugins.splice(plugins.findIndex((plugin) => plugin.name === name), 1); },
       export_plugin: ({ name }) => `/Users/you/Desktop/${name}.mpforge`,
       allow_online_plugins: () => {},
-      open_mpc_listing_state: ({ name }) => ({ built: true, id: name.toLowerCase().replace(/[^a-z0-9]+/g, "-"), author: "Demo", version: "1.0.0", summary: guidesWritten.has(name) ? "A worn tape echo with wow, flutter and a tone control." : "", guideWritten: guidesWritten.has(name) }),
+      open_mpc_listing_state: ({ name }) => ({ built: true, id: name.toLowerCase().replace(/[^a-z0-9]+/g, "-"), author: "Demo", version: "1.0.0", summary: guidesWritten.has(name) ? "A worn tape echo with wow, flutter and a tone control." : "", guideWritten: guidesWritten.has(name), owed: owedToTheMakersOf(name) }),
       list_on_open_mpc: ({ name, listing }) => {
         if (!/^[\w.-]+\/[\w.-]+$/.test(listing.repository)) return Promise.reject("The repository has to be written as owner/name, such as yourname/tape-echo.");
         return new Promise((resolve) => setTimeout(() => resolve({ ready: true, report: DEMO_REPORT, folder: `/Users/you/Desktop/${name} for Open MPC` }), 700));
@@ -510,6 +547,25 @@
         plugins.push({ ...plugins.find((plugin) => plugin.name === DEMO_IMPORT), name });
         [DEMO_SCREENS, DEMO_PICTURES, looks, samples].forEach((known) => { known[name] = known[DEMO_IMPORT]; });
         return { name };
+      },
+      sample_app_start: ({ name }) => startTheSampleApp(name),
+      sample_smith_start: ({ name }) => showTheSmithFor(name),
+      sample_app_pick_sound: ({ name }) => pickNoSoundForTheSampleApp(name),
+      sample_app_tell: ({ name, input }) => { if (sampleApp && sampleApp.name === name) tellTheSampleApp(input); },
+      sample_app_shown: ({ name }) => shownByTheSampleApp(name),
+      sample_app_stop: () => { sampleApp = null; },
+      open_mpc_source_holds_a_project: () => new Promise((resolve) => setTimeout(() => resolve(true), 300)),
+      // The demo has no catalog plugin's source to fetch, so its Glass Pad comes in under the original's name.
+      import_from_open_mpc: ({ original, named }) => {
+        const name = named || original.name;
+        const takenIn = () => {
+          if (plugins.some((plugin) => plugin.name === name)) return { nameTaken: name };
+          plugins.push({ ...plugins.find((plugin) => plugin.name === DEMO_IMPORT), name });
+          [DEMO_SCREENS, DEMO_PICTURES, looks, samples].forEach((known) => { known[name] = known[DEMO_IMPORT]; });
+          cameFrom[name] = original;
+          return { name, credit: owedToTheMakersOf(name).credit };
+        };
+        return new Promise((resolve) => setTimeout(() => resolve(takenIn()), 900));
       },
       stop_work: ({ name }) => stopPretendingToWork(name),
       attachment_image: () => { throw "The demo keeps no pictures."; },

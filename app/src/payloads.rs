@@ -115,11 +115,13 @@ pub fn find(find: &Find) -> Value {
     json!({ "name": find.name, "story": find.story, "description": find.description, "source": find.source })
 }
 
-/// A plugin of the Open MPC catalog, with the name and the brief a remix of it starts from.
+/// A plugin of the Open MPC catalog, with the name and the brief a remix of it starts from, and what its
+/// licence asks of a musician who takes it in as it is. That is nothing for a plugin that cannot be taken in.
 pub fn listed_for_remixing(listed: &Listed) -> Value {
     json!({
         "id": listed.id, "name": listed.name, "author": listed.author, "kind": listed.kind.as_word(), "summary": listed.summary,
         "style": listed.style, "license": listed.license, "source": listed.source, "screenshot": listed.screenshot,
+        "termsForTakingItIn": listed.terms_for_taking_it_in(),
         "remixName": listed.name_for_a_remix(), "brief": listed.brief_for_a_remix(), "aboutItsPicture": open_mpc::ABOUT_THE_SCREENSHOT,
     })
 }
@@ -192,6 +194,7 @@ pub fn as_it_would_be_listed(listed: &AsItWouldBeListed) -> Value {
         "version": listed.version,
         "summary": listed.suggested_summary,
         "guideWritten": listed.guide_is_written,
+        "owed": listed.owed.as_ref().map(|owed| json!({ "credit": owed.credit, "license": owed.license.map(License::name) })),
     })
 }
 

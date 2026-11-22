@@ -17,7 +17,7 @@ const SAMPLES_FOLDER_IN_PLUGIN: &str = "Content/Samples";
 const SAMPLES_FOLDER_IN_CODE: &str = "Samples";
 const WAV_ENDING: &str = ".wav";
 const LONGEST_FILE_NAME: usize = 64;
-const LARGEST_SAMPLE_IN_BYTES: usize = 16 * 1024 * 1024;
+pub(crate) const LARGEST_SAMPLE_IN_BYTES: usize = 16 * 1024 * 1024;
 const MOST_BYTES_ON_A_SHELF: u64 = 64 * 1024 * 1024;
 const MOST_SAMPLES_ON_A_SHELF: usize = 64;
 
@@ -53,12 +53,25 @@ impl Sample {
     pub fn path_in_code(&self) -> String {
         format!("{SAMPLES_FOLDER_IN_CODE}/{}", self.file_name)
     }
+
+    /// The name a Sample app knows this file by: `kick` for kick.wav.
+    pub fn name_without_ending(&self) -> &str {
+        &self.file_name[..self.file_name.len() - WAV_ENDING.len()]
+    }
+
+    /// The file as whoever writes a Sample app is told of it: the name the app finds it under, and its length.
+    pub fn as_an_app_finds_it(&self) -> String {
+        format!("`{}` ({:.1} s, {})", self.name_without_ending(), self.seconds, self.width())
+    }
+
+    fn width(&self) -> &'static str {
+        if self.channels == 1 { "mono" } else { "stereo" }
+    }
 }
 
 impl fmt::Display for Sample {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let width = if self.channels == 1 { "mono" } else { "stereo" };
-        write!(formatter, "{} ({:.1} s, {width}, {} Hz)", self.path_in_code(), self.seconds, self.sample_rate)
+        write!(formatter, "{} ({:.1} s, {}, {} Hz)", self.path_in_code(), self.seconds, self.width(), self.sample_rate)
     }
 }
 
@@ -162,6 +175,11 @@ impl SampleShelf {
         samples
     }
 
+    /// The whole of one of the files `list` named.
+    pub fn read(&self, sample: &Sample) -> io::Result<Vec<u8>> {
+        fs::read(self.folder.join(&sample.file_name))
+    }
+
     /// Moves every file to another shelf and leaves this one gone.
     pub fn move_all_to(&self, other: &SampleShelf) -> io::Result<()> {
         if !self.folder.is_dir() {
@@ -210,7 +228,7 @@ fn wav_made_from(mp3_bytes: &[u8]) -> Result<Vec<u8>, SampleError> {
 }
 
 /// A WAV file holding these 16 bit numbers, left then right for each frame when there are two channels.
-pub(crate) fn sixteen_bit_wav(channels: u16, sample_rate: u32, numbers: &[i16]) -> Vec<u8> {
+pub fn sixteen_bit_wav(channels: u16, sample_rate: u32, numbers: &[i16]) -> Vec<u8> {
     let bytes_in_a_frame = channels * BYTES_IN_A_SIXTEEN_BIT_NUMBER as u16;
     let sound_length = (numbers.len() * BYTES_IN_A_SIXTEEN_BIT_NUMBER) as u32;
     let mut wav = Vec::with_capacity(WAV_HEADER_LENGTH + sound_length as usize);
@@ -447,6 +465,7 @@ mod tests {
 
         assert_eq!(kept, Sample { file_name: "kick.wav".to_string(), seconds: 0.5, channels: 2, sample_rate: 44_100 });
         assert_eq!(kept.to_string(), "Samples/kick.wav (0.5 s, stereo, 44100 Hz)");
+        assert_eq!(kept.as_an_app_finds_it(), "`kick` (0.5 s, stereo)");
         assert!(folder.0.join("Content/Samples/kick.wav").is_file());
         assert_eq!(shelf.list(), [kept]);
     }

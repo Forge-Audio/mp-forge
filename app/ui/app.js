@@ -15,6 +15,7 @@
   const appMenu = window.appMenu;
   const aiAccounts = window.aiAccounts;
   const livePlayer = window.livePlayer;
+  const samplePlayer = window.samplePlayer;
   const lookEditor = window.lookEditor;
   const { element, remember, recall } = window.helpers;
   const { addressOf } = window.fetchedImages;
@@ -41,6 +42,11 @@
   const WIDEN_THE_CONVERSATION = "Give the conversation the whole window.";
   const SHOW_THE_PLUGIN = "Bring the plugin's view back beside the conversation.";
   const ASK_FOR_A_PLUGIN = "Describe your plugin";
+  const ASK_FOR_AN_APP = "Describe your app for the MPC Sample";
+  const SAFE_BUT_NOT_SENT = "SAFE";
+  const KIND_OF_A_SAMPLE_APP = "sample-app";
+  const MADE_FOR_THE_SAMPLE = "sample";
+  const NAME_FOR_EXAMPLE = { plugin: "Dusty Tape", app: "Night Bus" };
   const ASK_FOR_A_CHANGE = "Ask for a change";
   const ASK_WHAT_IS_DIFFERENT = "Say what should be different in your version";
   const OPENING_QUESTION = "What do you want to make?";
@@ -49,7 +55,8 @@
   const LUCKY_WITHOUT_THE_WEB = "Web lookups are off for this model, so the find comes from what it already knows. Switch them on in the model menu for fresh finds.";
   const LONGEST_PLUGIN_NAME = 32;
   const FINISHED_WITHOUT_WORDS = "Done.";
-  const ARCHITECT_IS_THINKING = "The plugin architect is thinking of questions…";
+  const ARCHITECT_IS_THINKING = "The architect is thinking of questions…";
+  const ARCHITECTS = { plugin: "Plugin architect", os: "OS architect" };
   // Each plugin being built has an AI, a compiler and a safety check of its own at work on this computer.
   const MOST_BUILT_AT_ONCE = 5;
   const AI_HAS_NO_ROOM = "The AI is already building five plugins. Build this one once one of them has finished.";
@@ -62,6 +69,8 @@
   const ABOUT_A_LISTING_MADE = "Nothing has been sent anywhere. Open START HERE in that folder: it has the three steps to do on GitHub.";
   const GOES_ONLINE_FOR = "This plugin goes online. On your MPC and when you play it here, it fetches sound from:";
   const WHAT_AN_EXPORT_HOLDS = "The file holds the plugin's code, its screen and look, its pictures and its sounds. Your conversation with the AI and the plugin's earlier versions are not in it. Whoever you give it to brings it in with IMPORT A PLUGIN.";
+  const MARK_OF_A_SAMPLE_APP = "on-the-sample";
+  const KINDS_IN_WORDS = { effect: "Effect", instrument: "Instrument", "sample-app": "MPC Sample app" };
   const IMPORTED_AND_NOT_RUN = "**Brought in.** Nothing of it has been run yet. Run the safety check to build it, then you can see its screen, play it and change it.";
   const NO_SUCH_VERSION = "That version could not be found, so nothing was changed.";
   const NOT_SENT_UNTIL_SAFE = "A plugin has to pass its safety check before it can be sent to your MPC. Press the status at the top to run the check.";
@@ -141,6 +150,9 @@
     title: document.getElementById("plugin-title"),
     subtitle: document.getElementById("plugin-subtitle"),
     screen: document.getElementById("mpc-screen"),
+    sampleDevice: document.getElementById("sample-device"),
+    sampleProblem: document.getElementById("sample-problem"),
+    sampleBeingWritten: document.getElementById("sample-being-written"),
     hardwareGrid: document.getElementById("hardware-grid"),
     hardwareNote: document.getElementById("hardware-note"),
     editKnobs: document.getElementById("edit-knobs"),
@@ -187,6 +199,8 @@
     architect: null,
     // Whether the scout is out looking for a find, after the dice were rolled for "I'm feeling lucky".
     scouting: false,
+    // The catalog plugin whose source is on its way, while one is being taken in as it is.
+    fetchingSourceOf: null,
     // The plugin of the Open MPC catalog the new plugin is to be a remix of, when one was picked.
     remixOf: null,
     remixMaterial: null,
@@ -226,8 +240,13 @@
     return Boolean(state.architect && state.architect.thinking);
   }
 
+  // The scout is out looking for a plugin to build, or a catalog plugin's source is on its way.
+  function isWaitingOnTheWeb() {
+    return state.scouting || Boolean(state.fetchingSourceOf);
+  }
+
   function somethingIsBeingWorkedOn() {
-    return state.aiJobs.size > 0 || state.checking.size > 0 || architectIsThinking() || state.scouting;
+    return state.aiJobs.size > 0 || state.checking.size > 0 || architectIsThinking() || isWaitingOnTheWeb();
   }
 
   // The AI's work can be stopped from the conversation of the plugin it is working on.
@@ -437,7 +456,7 @@
   // room for the conversation as soon as there is one.
   function nothingSaidYet() {
     const saysSomething = (message) => message.kind === "you" || message.kind === "note";
-    return state.openName === NEW_PLUGIN && !state.architect && !state.scouting && !conversationAbout(NEW_PLUGIN).some(saysSomething);
+    return state.openName === NEW_PLUGIN && !state.architect && !isWaitingOnTheWeb() && !conversationAbout(NEW_PLUGIN).some(saysSomething);
   }
 
   function openingLines() {
@@ -481,7 +500,7 @@
   }
 
   function summaryLine(plugin) {
-    const kind = plugin.summary.kind === "instrument" ? "Instrument" : "Effect";
+    const kind = KINDS_IN_WORDS[plugin.summary.kind] || KINDS_IN_WORDS.effect;
     const kept = plugin.versionsKept ? ` · ${plugin.versionsKept} earlier version${plugin.versionsKept === 1 ? "" : "s"} kept` : "";
     return `${kind} by ${plugin.summary.maker}${kept}${streamsOf(plugin).length ? " · ONLINE" : ""}`;
   }
@@ -527,15 +546,48 @@
     drawScreen(page.screen, plugin, state.screenPage, { onPageChosen: showScreenPage, onTurned: controlTurned, onControlPicked });
   }
 
+  // Something new for the MPC Sample is shown on the drawing of the device before it exists, as a Sample app is.
+  function isShownOnTheSample(plugin) {
+    return plugin ? samplePlayer.isASampleApp(plugin) : isNewForTheSample();
+  }
+
+  // An app runs on the drawing except while it is worked on, when its code is changing under it. The
+  // blacksmith is then shown on the device's screen in its place, on the drawing and on a real MPC Sample.
+  function showOnTheSample(plugin) {
+    const isOutOfReach = isBeingWorkedOn(plugin.summary.name);
+    samplePlayer.drawnIn(page.sampleDevice);
+    samplePlayer.follow(plugin, page.sampleDevice, isOutOfReach);
+    page.sampleBeingWritten.hidden = !isOutOfReach;
+  }
+
   function drawMirror() {
     const plugin = state.openPlugin;
-    page.title.textContent = plugin ? plugin.summary.name : "New plugin";
+    const runsOnTheSample = isShownOnTheSample(plugin);
+    page.title.textContent = plugin ? plugin.summary.name : isNewForTheSample() ? "New app" : "New plugin";
     page.subtitle.textContent = plugin ? summaryLine(plugin) : "";
     page.subtitle.title = whereItGoesOnline(plugin);
-    livePlayer.follow(plugin && plugin.builtAt ? plugin : null);
+    showTheDeviceItRunsOn(runsOnTheSample);
+    if (plugin && runsOnTheSample) showOnTheSample(plugin);
+    else samplePlayer.follow(null, page.sampleDevice);
+    livePlayer.follow(!runsOnTheSample && plugin && plugin.builtAt ? plugin : null);
+    if (!runsOnTheSample) drawAsOnAnMpc(plugin);
+    drawStatus();
+  }
+
+  // A Sample app is shown on the drawing of the MPC Sample. Anything else is shown as an MPC's touch screen,
+  // with its presets and the hardware knobs. The styles show the one or the other by this mark on the page.
+  function showTheDeviceItRunsOn(runsOnTheSample) {
+    document.body.classList.toggle(MARK_OF_A_SAMPLE_APP, runsOnTheSample);
+  }
+
+  function showWhyTheSampleAppIsNotRunning(problem) {
+    page.sampleProblem.textContent = problem;
+    page.sampleProblem.hidden = !problem;
+  }
+
+  function drawAsOnAnMpc(plugin) {
     drawMpcScreen(plugin);
     drawHardwareKnobs();
-    drawStatus();
     readPresets();
   }
 
@@ -569,7 +621,7 @@
 
   function canTakeNoRequest() {
     const startingNew = state.openName === NEW_PLUGIN;
-    return aiHasNoRoom() || isBeingWorkedOn(state.openName) || (startingNew && (architectIsThinking() || state.scouting));
+    return aiHasNoRoom() || isBeingWorkedOn(state.openName) || (startingNew && (architectIsThinking() || isWaitingOnTheWeb()));
   }
 
   // While the AI works on the open plugin, what is typed waits its turn. With nothing typed, the button stops the work.
@@ -596,8 +648,10 @@
 
   function drawComposer() {
     const startingNew = state.openName === NEW_PLUGIN;
-    const asked = !startingNew ? ASK_FOR_A_CHANGE : state.remixOf ? ASK_WHAT_IS_DIFFERENT : ASK_FOR_A_PLUGIN;
+    const askedOfSomethingNew = isNewForTheSample() ? ASK_FOR_AN_APP : state.remixOf ? ASK_WHAT_IS_DIFFERENT : ASK_FOR_A_PLUGIN;
+    const asked = startingNew ? askedOfSomethingNew : ASK_FOR_A_CHANGE;
     page.newPluginFields.hidden = !startingNew;
+    page.pluginName.placeholder = isNewForTheSample() ? NAME_FOR_EXAMPLE.app : NAME_FOR_EXAMPLE.plugin;
     page.message.placeholder = asked;
     page.message.setAttribute("aria-label", asked);
     const cannotTakeARequest = canTakeNoRequest();
@@ -716,6 +770,15 @@
     if (state.openName !== pluginName) return;
     state.openPlugin = read;
     drawSamples();
+  }
+
+  // A Sample app is handed its sound files when it starts, so it is started again when they change.
+  async function soundFilesChanged() {
+    const pluginName = state.openName;
+    await reloadOpenPlugin();
+    if (state.openName !== pluginName || !samplePlayer.isASampleApp(state.openPlugin)) return;
+    samplePlayer.stopIfItIs(pluginName);
+    showOnTheSample(state.openPlugin);
   }
 
   // The box grows with what is typed, up to the tallest the page allows, so it is small while it is empty.
@@ -873,12 +936,27 @@
   }
 
   function drawSmith() {
+    keepTheSampleInStep();
     if (smithIsAtWork()) smith.show(`${statusOf(state.openName)}…`);
     else smith.hide();
   }
 
+  // An app for the MPC Sample has him on the device's own screen, from the moment the work on it starts until
+  // the moment it ends, when the app is back on it.
+  function keepTheSampleInStep() {
+    const plugin = state.openPlugin;
+    if (!samplePlayer.isASampleApp(plugin) || samplePlayer.showsTheSmith() === isBeingWorkedOn(plugin.summary.name)) return;
+    showOnTheSample(plugin);
+  }
+
+  // An app for the MPC Sample cannot be sent anywhere yet, so one that passed its check is only said to be safe.
+  function statusInWords() {
+    const status = statusOf(state.openName);
+    return status === STATUS.safe && samplePlayer.isASampleApp(state.openPlugin) ? SAFE_BUT_NOT_SENT : status;
+  }
+
   function drawStatus() {
-    page.status.textContent = statusOf(state.openName);
+    page.status.textContent = statusInWords();
     drawSmith();
     page.statusButton.disabled = !canBeChecked();
     drawSendButton();
@@ -924,6 +1002,7 @@
   function startAiWork(pluginName) {
     state.aiJobs.set(pluginName, { status: STATUS.working, canBeStopped: true, beganAt: timeTaken.now(), steps: [], awaitsItsScreen: false });
     state.contextOf.set(pluginName, 0);
+    samplePlayer.stopIfItIs(pluginName);
     drawContext();
     working.fold.open = false;
     drawWork();
@@ -935,7 +1014,7 @@
   }
 
   function blockedMessage(report) {
-    return { kind: "problem", text: `**Not safe to send yet.** It was stopped at "${whereItWasBlocked(report)}". Ask for a fix and it will try again.` };
+    return { kind: "problem", text: `**Not safe yet.** It was stopped at "${whereItWasBlocked(report)}". Ask for a fix and it will try again.` };
   }
 
   // A safe plugin is announced by the status in the top bar alone. Only a blocked one is explained in the conversation.
@@ -960,19 +1039,29 @@
 
   // A remix is described by what is known of the original, then by what was typed. Its `shown` is how the
   // request reads in the conversation, which leaves out the long README.
+  // Whether what is being started is an app for the MPC Sample, and not a plugin for the MPCs with a touch screen.
+  function isNewForTheSample() {
+    return page.composer.querySelector('input[name="made-for"]:checked').value === MADE_FOR_THE_SAMPLE;
+  }
+
+  function kindOfWhatIsNew() {
+    return isNewForTheSample() ? KIND_OF_A_SAMPLE_APP : page.composer.querySelector('input[name="kind"]:checked').value;
+  }
+
+  // Nothing is remixed into an app for the MPC Sample: the plugins there are to remix are for other MPCs.
   function newPluginRequest() {
-    const kind = page.composer.querySelector('input[name="kind"]:checked').value;
     const typed = page.message.value.trim();
-    const said = { name: page.pluginName.value.trim(), maker: page.makerName.value.trim(), kind };
-    if (!state.remixOf) return { ...said, description: typed };
+    const said = { name: page.pluginName.value.trim(), maker: page.makerName.value.trim(), kind: kindOfWhatIsNew() };
+    if (!state.remixOf || isNewForTheSample()) return { ...said, description: typed };
     const sent = sentWithTheRemix();
     return { ...said, description: remixPicker.describedWith(state.remixOf, typed, sent), shown: remixPicker.shownWith(state.remixOf, typed, sent) };
   }
 
   function whatIsMissing(request) {
-    if (!request.name) return "Give the plugin a name first.";
-    if (!request.maker) return "Say who the maker is. It is shown on the MPC and cannot be changed later.";
-    if (!request.description) return "Describe what you want the plugin to do.";
+    const called = request.kind === KIND_OF_A_SAMPLE_APP ? "app" : "plugin";
+    if (!request.name) return `Give the ${called} a name first.`;
+    if (!request.maker) return "Say who the maker is. It cannot be changed later.";
+    if (!request.description) return `Describe what you want the ${called} to do.`;
     return null;
   }
 
@@ -983,6 +1072,20 @@
     const missing = whatIsMissing(request);
     if (missing) return addMessage(NEW_PLUGIN, { kind: "problem", text: missing });
     return page.architect.checked ? beginWithTheArchitect(request) : build(request);
+  }
+
+  // The switch between the MPCs with a touch screen and the MPC Sample was thrown: the form and the drawing
+  // beside it change to what is now being started.
+  function madeForChanged() {
+    remember("madeFor", isNewForTheSample() ? MADE_FOR_THE_SAMPLE : "mpc");
+    drawComposer();
+    drawMirror();
+  }
+
+  function putInTheMessageBox(words) {
+    page.message.value = words;
+    page.message.dispatchEvent(new Event("input", { bubbles: true }));
+    page.message.focus();
   }
 
   // A request reads in the conversation as the builder is sent it, unless it says how else it is to be shown.
@@ -1031,11 +1134,12 @@
 
   // --- The plugin architect ---------------------------------------------------------------------
 
-  // The line that says the scout is out looking. Otherwise the architect's card of questions, or the working
-  // line while it thinks of them.
+  // The line that says the scout is out looking, or that a catalog plugin's source is on its way. Otherwise the
+  // architect's card of questions, or the working line while it thinks of them.
   function whatIsBeingThoughtOver() {
     const planning = state.architect;
     if (state.scouting) return [element("div", "architect-thinking soft", SCOUT_IS_LOOKING)];
+    if (state.fetchingSourceOf) return [element("div", "architect-thinking soft", fetchingLine(state.fetchingSourceOf))];
     if (!planning) return [];
     if (planning.thinking) return [element("div", "architect-thinking soft", ARCHITECT_IS_THINKING)];
     return planning.card ? [planning.card.made] : [];
@@ -1058,7 +1162,8 @@
     drawWork();
     try {
       const questions = await ask("architect_questions", { idea, ...aiMenu.chosen() });
-      planning.card = pluginArchitect.card(questions, { onBuild: buildWhatWasPlanned, onMore: askForMoreQuestions, onStartOver: startOver });
+      const called = planning.request.kind === KIND_OF_A_SAMPLE_APP ? ARCHITECTS.os : ARCHITECTS.plugin;
+      planning.card = pluginArchitect.card(questions, { called, onBuild: buildWhatWasPlanned, onMore: askForMoreQuestions, onStartOver: startOver });
     } catch (problem) {
       if (state.architect === planning) addMessage(NEW_PLUGIN, { kind: "problem", text: `${describeProblem(problem)} Press BUILD IT to build from what you have said so far.` });
     }
@@ -1164,10 +1269,15 @@
     state.remixMaterial = { readme: material.readme, picture };
   }
 
-  // The plugin picked from the catalog fills in the form: a name for the remix and its kind. Both can be changed.
-  async function chooseARemix() {
-    const original = await remixPicker.pick(page.appSheet);
-    if (!original) return;
+  // A plugin picked from the catalog is either taken in as its makers wrote it, or remixed.
+  async function chooseFromTheCatalog() {
+    const picked = await remixPicker.pick(page.appSheet);
+    if (!picked) return;
+    return picked.asItIs ? importFromTheCatalog(picked.original) : remix(picked.original);
+  }
+
+  // The plugin to remix fills in the form: a name for the remix and its kind. Both can be changed.
+  async function remix(original) {
     forgetTheRemix();
     await bringWhatGoesWith(original);
     state.remixOf = original;
@@ -1544,10 +1654,40 @@
     return anotherName ? takeIn(from, anotherName) : null;
   }
 
-  async function showImported(pluginName) {
+  async function showImported(pluginName, credit) {
     await refreshLibrary();
     await open(pluginName);
-    addMessage(pluginName, { kind: "note", text: `${IMPORTED_AND_NOT_RUN} ${whereItGoesOnline(state.openPlugin)}`.trim() });
+    addMessage(pluginName, { kind: "note", text: [IMPORTED_AND_NOT_RUN, credit, whereItGoesOnline(state.openPlugin)].filter(Boolean).join(" ") });
+  }
+
+  // Takes a catalog plugin in as its makers wrote it, asking for another name for as long as its own is taken.
+  // Answers with what came in, or with nothing when the musician gave up.
+  async function takeInFromTheCatalog(original, named) {
+    const taken = await ask("import_from_open_mpc", { original: whereItComesFrom(original), named: named || null });
+    if (taken.name) return taken;
+    const anotherName = await askForAnotherName(page.appSheet, taken.nameTaken);
+    return anotherName ? takeInFromTheCatalog(original, anotherName) : null;
+  }
+
+  function whereItComesFrom(original) {
+    return { name: original.name, author: original.author, source: original.source, license: original.license };
+  }
+
+  function fetchingLine(original) {
+    return `Fetching the source of ${original.name} by ${original.author}…`;
+  }
+
+  async function importFromTheCatalog(original) {
+    state.fetchingSourceOf = original;
+    drawWork();
+    try {
+      const taken = await takeInFromTheCatalog(original);
+      if (taken) await showImported(taken.name, `${taken.credit} ${original.termsForTakingItIn}`);
+    } catch (problem) {
+      addMessage(NEW_PLUGIN, { kind: "problem", text: describeProblem(problem) });
+    }
+    state.fetchingSourceOf = null;
+    return drawWork();
   }
 
   async function importAPlugin() {
@@ -1636,6 +1776,7 @@
   // The files are put back, and the plugin is built and checked again so the preview and the sound match them.
   async function goToVersion(pluginName, number) {
     livePlayer.follow(null);
+    samplePlayer.stopIfItIs(pluginName);
     const went = await ask("go_to_version", { name: pluginName, number });
     addMessage(pluginName, went ? { kind: "note", text: `Went back to version ${number}. How it was before that is kept as a version too.` } : { kind: "problem", text: NO_SUCH_VERSION });
     if (went) await foldOldVersions(pluginName);
@@ -1871,6 +2012,7 @@
     outputVolume.start(document.getElementById("output-volume"));
     document.addEventListener("keydown", (event) => playNoteKey(event, true));
     document.addEventListener("keyup", (event) => playNoteKey(event, false));
+    samplePlayer.listen({ onProblem: showWhyTheSampleAppIsNotRunning });
     livePlayer.begin({
       onReady: playerBecameReady,
       onValue: playerToldAValue,
@@ -1905,8 +2047,10 @@
     page.presetBefore.addEventListener("click", () => stepPreset(-1));
     page.presetAfter.addEventListener("click", () => stepPreset(1));
     page.architect.addEventListener("change", () => remember("architect", page.architect.checked ? "on" : "off"));
+    page.composer.querySelectorAll('input[name="made-for"]').forEach((side) => side.addEventListener("change", madeForChanged));
+    page.composer.querySelectorAll("[data-idea]").forEach((idea) => idea.addEventListener("click", () => putInTheMessageBox(idea.dataset.idea)));
     page.feelLucky.addEventListener("click", feelLucky);
-    page.remix.addEventListener("click", chooseARemix);
+    page.remix.addEventListener("click", chooseFromTheCatalog);
     page.remixOfClear.addEventListener("click", forgetTheRemix);
     page.showGuide.addEventListener("click", showTheGuide);
     page.editLook.addEventListener("click", editTheLook);
@@ -2036,7 +2180,7 @@
     drawPlanNote();
     sampleShelf.start(
       { button: page.addSamples, picker: page.samplePicker, list: page.sampleList },
-      { onProblem: (text) => addMessage(state.openName, { kind: "problem", text }), onChanged: reloadOpenPlugin },
+      { onProblem: (text) => addMessage(state.openName, { kind: "problem", text }), onChanged: soundFilesChanged },
     );
     pictureTray.start(
       { button: page.addPictures, picker: page.picturePicker, list: page.pictureList, message: page.message, dropZone: page.conversation },
@@ -2044,6 +2188,7 @@
     );
     page.makerName.value = recall("maker") || "";
     page.architect.checked = recall("architect") === "on";
+    page.composer.querySelector(`input[name="made-for"][value="${recall("madeFor") || "mpc"}"]`).checked = true;
     connectButtons();
     connectAddMenu();
     connectMoreMenu();

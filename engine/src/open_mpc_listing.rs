@@ -20,7 +20,8 @@ use crate::guide::{self, Facts, GuideError, Words};
 use crate::guide_readme::{AsShared, picture_file_of, readme_of};
 use crate::online;
 use crate::ordered_json::Json;
-use crate::project_file::carried_files_in;
+use crate::origin::Origin;
+use crate::project_file::{LICENSE_FILES, carried_files_in};
 use crate::small_zip::Zip;
 
 const MANIFEST: &str = "plugin.json";
@@ -63,6 +64,13 @@ impl License {
             License::Mit => "MIT",
             License::Gpl3 => "GPL-3.0-only",
         }
+    }
+
+    /// The licence a version of somebody else's plugin is listed under: the one their work is shared under, or
+    /// the nearest it may be passed on under. None when that is neither of the two a listing can be made with.
+    fn carried_on_from(original: &str) -> Option<License> {
+        let may_become_gpl_3 = original.starts_with("GPL-3.0") || original == "GPL-2.0-or-later" || original.starts_with("LGPL-");
+        if original == License::Mit.name() { Some(License::Mit) } else { may_become_gpl_3.then_some(License::Gpl3) }
     }
 
     fn text_for(self, holder: &str, year: i64) -> String {
@@ -149,6 +157,30 @@ impl From<GuideError> for NotListed {
     }
 }
 
+/// What a listing owes the makers of the plugin it is based on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Owed {
+    /// Their plugin and their name, in a sentence that goes on the listed plugin's page.
+    pub credit: String,
+    /// The licence the listing has to carry. None when theirs allows neither of the two a listing can be made with.
+    pub license: Option<License>,
+}
+
+impl Owed {
+    fn to_the_makers_of(original: &Origin) -> Owed {
+        Owed { credit: original.credit(), license: License::carried_on_from(&original.license) }
+    }
+
+    /// Why a listing under `chosen` would not give them what they are owed.
+    fn problems_with(&self, chosen: License) -> Vec<String> {
+        match self.license {
+            None => vec![format!("{} A listing made here is under MIT or GPL-3.0-only, and that licence allows neither, so this plugin has to be listed by hand.", self.credit)],
+            Some(owed) if owed != chosen => vec![format!("{} So this plugin has to be listed under {}.", self.credit, owed.name())],
+            Some(_) => Vec::new(),
+        }
+    }
+}
+
 /// What the musician is shown before they decide: how the plugin would be listed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AsItWouldBeListed {
@@ -158,6 +190,8 @@ pub struct AsItWouldBeListed {
     /// A line for the card, taken from the plugin's guide when it has one.
     pub suggested_summary: String,
     pub guide_is_written: bool,
+    /// What is owed to the makers of the original, when the plugin is somebody else's work taken in.
+    pub owed: Option<Owed>,
 }
 
 pub fn as_it_would_be_listed(plugin_dir: &Path) -> Result<AsItWouldBeListed, NotListed> {
@@ -168,6 +202,7 @@ pub fn as_it_would_be_listed(plugin_dir: &Path) -> Result<AsItWouldBeListed, Not
         version: plugin.version.clone(),
         suggested_summary: first_sentence_of(&plugin.words.about),
         guide_is_written: plugin.guide_is_written,
+        owed: plugin.owed(),
     })
 }
 
@@ -182,6 +217,7 @@ pub fn prepare(plugin_dir: &Path, listing: &Listing, into: &Path) -> Result<Path
     let mut problems = listing.problems();
     let plugin = BuiltPlugin::in_folder(plugin_dir)?;
     problems.extend(plugin.problems());
+    problems.extend(plugin.owed().map(|owed| owed.problems_with(listing.license)).unwrap_or_default());
     if !problems.is_empty() {
         return Err(NotListed::DoesNotFit(problems));
     }
@@ -231,6 +267,10 @@ impl BuiltPlugin {
         checks.into_iter().filter(|(holds, _)| !holds).map(|(_, problem)| problem).collect()
     }
 
+    fn owed(&self) -> Option<Owed> {
+        Origin::of_plugin(&self.project).map(|original| Owed::to_the_makers_of(&original))
+    }
+
     /// What the catalog knows the plugin by: its name in small letters and digits, with hyphens between.
     fn id(&self) -> String {
         words_joined_by_hyphens(&self.facts.name.to_ascii_lowercase())
@@ -262,7 +302,9 @@ impl BuiltPlugin {
         }
         write_into(&repository.join(MANIFEST), self.manifest_as_listed(&self.manifest, listing).as_bytes())?;
         write_into(&repository.join(README), self.readme(listing).as_bytes())?;
-        write_into(&repository.join(LICENSE_FILE), listing.license.text_for(&self.facts.maker, this_year()).as_bytes())?;
+        if !self.brings_its_own_licence() {
+            write_into(&repository.join(LICENSE_FILE), listing.license.text_for(&self.facts.maker, this_year()).as_bytes())?;
+        }
         for (page_number, page) in self.pages_with_a_picture() {
             write_into(&repository.join(picture_file_of(page_number)), &page.picture)?;
         }
@@ -272,9 +314,16 @@ impl BuiltPlugin {
         self.write_what_goes_online(repository)
     }
 
+    /// Somebody else's plugin arrives with the licence its makers wrote, their notice in it. That file stays as
+    /// it is: a fresh one in the musician's name would take the makers' notice off their work.
+    fn brings_its_own_licence(&self) -> bool {
+        LICENSE_FILES.iter().any(|name| self.project.join(name).is_file())
+    }
+
     fn readme(&self, listing: &Listing) -> String {
         let releases_page = format!("https://github.com/{}/releases/latest", listing.repository);
-        let shared = AsShared { about: &listing.summary, releases_page: &releases_page, goes_online: !self.streams().is_empty() };
+        let credit = self.owed().map(|owed| owed.credit);
+        let shared = AsShared { about: &listing.summary, releases_page: &releases_page, goes_online: !self.streams().is_empty(), based_on: credit.as_deref() };
         readme_of(&self.facts, &self.words, &shared)
     }
 
@@ -515,6 +564,28 @@ mod tests {
         assert_eq!(License::named("Proprietary"), None);
         assert!(License::Mit.text_for("Somebody", 2026).starts_with("MIT License\n\nCopyright (c) 2026 Somebody\n"));
         assert!(License::Gpl3.text_for("Somebody", 2026).contains("GNU GENERAL PUBLIC LICENSE"));
+    }
+
+    #[test]
+    fn a_version_of_somebody_elses_plugin_is_listed_under_the_licence_theirs_allows() {
+        assert_eq!(License::carried_on_from("MIT"), Some(License::Mit));
+        for stays_open in ["GPL-3.0-only", "GPL-3.0-or-later", "GPL-2.0-or-later", "LGPL-2.1-or-later"] {
+            assert_eq!(License::carried_on_from(stays_open), Some(License::Gpl3), "`{stays_open}`");
+        }
+        for neither in ["AGPL-3.0-only", "GPL-2.0-only", "Apache-2.0", "PolyForm-Noncommercial-1.0.0"] {
+            assert_eq!(License::carried_on_from(neither), None, "`{neither}`");
+        }
+    }
+
+    #[test]
+    fn a_listing_that_would_not_give_the_original_its_due_says_why() {
+        let original = |license: &str| Origin { name: "Tape Echo".to_string(), author: "somebody".to_string(), source: "https://github.com/somebody/tape-echo".to_string(), license: license.to_string() };
+        let stays_open = Owed::to_the_makers_of(&original("GPL-3.0-or-later"));
+        let allows_neither = Owed::to_the_makers_of(&original("AGPL-3.0-only"));
+
+        assert!(stays_open.problems_with(License::Gpl3).is_empty());
+        assert!(stays_open.problems_with(License::Mit)[0].ends_with("which is shared under GPL-3.0-or-later. So this plugin has to be listed under GPL-3.0-only."));
+        assert!(allows_neither.problems_with(License::Gpl3)[0].contains("has to be listed by hand"));
     }
 
     #[test]

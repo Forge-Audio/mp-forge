@@ -344,7 +344,9 @@ impl Player {
     }
 
     fn started(&self) -> Result<Option<Stream>, String> {
-        self.speakers.as_ref().ok_or_else(|| NO_SPEAKERS.to_string())?.play(Arc::clone(&self.rig)).map(Some)
+        let rig = Arc::clone(&self.rig);
+        let speakers = self.speakers.as_ref().ok_or_else(|| NO_SPEAKERS.to_string())?;
+        speakers.play(move |heard| render_or_stay_silent(&rig, heard)).map(Some)
     }
 
     /// Changes what an effect is fed. A long file takes a while to read, so that is done apart from the
@@ -438,7 +440,7 @@ fn plugin_loaded_from(plugin_library: &Path, sample_rate: u32) -> Result<HostedP
     loaded
 }
 
-fn private_copy_of(plugin_library: &Path) -> io::Result<PathBuf> {
+pub(crate) fn private_copy_of(plugin_library: &Path) -> io::Result<PathBuf> {
     let ending = plugin_library.extension().map(|ending| ending.to_string_lossy().into_owned()).unwrap_or_default();
     let copy = std::env::temp_dir().join(format!("workbench-player-{}.{ending}", std::process::id()));
     fs::copy(plugin_library, &copy)?;
@@ -446,39 +448,40 @@ fn private_copy_of(plugin_library: &Path) -> io::Result<PathBuf> {
 }
 
 /// The computer's usual sound output and the format it wants.
-struct Speakers {
+pub(crate) struct Speakers {
     device: cpal::Device,
     format: SupportedStreamConfig,
 }
 
 impl Speakers {
-    fn of_this_computer() -> Option<Self> {
+    pub(crate) fn of_this_computer() -> Option<Self> {
         let device = cpal::default_host().default_output_device()?;
         let format = device.default_output_config().ok()?;
         Some(Self { device, format })
     }
 
-    fn sample_rate(&self) -> u32 {
+    pub(crate) fn sample_rate(&self) -> u32 {
         self.format.sample_rate()
     }
 
-    fn play(&self, rig: Arc<Mutex<Rig>>) -> Result<Stream, String> {
+    /// Plays whatever `render` writes, a stretch of frames at a time, for as long as the stream is kept.
+    pub(crate) fn play(&self, render: impl FnMut(&mut [[f32; 2]]) + Send + 'static) -> Result<Stream, String> {
         let stream = match self.format.sample_format() {
-            SampleFormat::F32 => self.stream_of::<f32>(rig),
-            SampleFormat::I16 => self.stream_of::<i16>(rig),
-            SampleFormat::U16 => self.stream_of::<u16>(rig),
+            SampleFormat::F32 => self.stream_of::<f32>(render),
+            SampleFormat::I16 => self.stream_of::<i16>(render),
+            SampleFormat::U16 => self.stream_of::<u16>(render),
             other => Err(format!("This computer's sound output uses a format the player does not speak ({other}).")),
         }?;
         stream.play().map_err(|error| format!("The sound could not be started: {error}"))?;
         Ok(stream)
     }
 
-    fn stream_of<Sample: SizedSample + FromSample<f32>>(&self, rig: Arc<Mutex<Rig>>) -> Result<Stream, String> {
+    fn stream_of<Sample: SizedSample + FromSample<f32>>(&self, mut render: impl FnMut(&mut [[f32; 2]]) + Send + 'static) -> Result<Stream, String> {
         let channels = usize::from(self.format.channels());
         let mut heard: Vec<[f32; 2]> = Vec::new();
         let fill = move |wanted: &mut [Sample], _: &cpal::OutputCallbackInfo| {
             heard.resize(wanted.len() / channels.max(1), [0.0; 2]);
-            render_or_stay_silent(&rig, &mut heard);
+            render(&mut heard);
             write_frames(&heard, wanted, channels);
         };
         let built = self.device.build_output_stream(self.format.config(), fill, |_| {}, None);

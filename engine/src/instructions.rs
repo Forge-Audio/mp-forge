@@ -8,6 +8,13 @@ const SOUND_DESIGN_RULES: &str = include_str!("../../directives/plugin-sound-des
 const SCREEN_DESIGN_RULES: &str = include_str!("../../directives/plugin-screen-design.md");
 const WHAT_TO_SAY_AT_THE_END: &str = include_str!("../../directives/plugin-final-message.md");
 
+const HOW_A_SAMPLE_APP_IS_MADE: &str = include_str!("../../directives/sample-app-maker.md");
+
+/// What the AI is told before it starts work on an app for the MPC Sample, which is all in one document.
+pub fn for_making_sample_apps() -> String {
+    HOW_A_SAMPLE_APP_IS_MADE.to_string()
+}
+
 pub fn for_making_plugins() -> String {
     [HOW_THE_WORKBENCH_WORKS, SOUND_DESIGN_RULES, SCREEN_DESIGN_RULES, WHAT_TO_SAY_AT_THE_END].join("\n\n")
 }
@@ -15,6 +22,16 @@ pub fn for_making_plugins() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_sample_app_is_made_by_rules_of_its_own_that_end_with_what_to_say() {
+        let instructions = for_making_sample_apps();
+
+        assert!(instructions.contains("MPC_SAMPLE_APP(YourClass)") && instructions.contains("check_plugin") && instructions.contains("look_at_screen"));
+        assert!(instructions.contains("Every value of sound stays between -1 and 1"));
+        assert!(!instructions.contains("ui.json"));
+        assert!(instructions.rfind("# What you say to the musician").unwrap() > instructions.find("## When the message asks for nothing").unwrap());
+    }
 
     #[test]
     fn the_instructions_cover_both_the_working_rules_and_the_screen_design() {

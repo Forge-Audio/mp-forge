@@ -9,6 +9,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use crate::sample_app;
 use crate::online;
 
 const STARTS_PROGRAMS: &str = "starts another program";
@@ -141,14 +142,15 @@ pub struct Hit {
     pub reason: &'static str,
 }
 
-/// Reads every file of the plugin's code but MP Forge's own stream helper, exactly as MP Forge writes it,
-/// which is the one part of a plugin that may go online.
+/// Reads every file of the plugin's code but what is MP Forge's own, exactly as MP Forge writes it: the stream
+/// helper, which is the one part of a plugin that may go online, and the kit a Sample app is written with.
 pub fn scan_plugin(plugin: &Path) -> io::Result<Vec<Violation>> {
     let code = plugin.join("src");
     let mut violations = Vec::new();
     for file in files_under(&code)? {
         let written = fs::read(&file)?;
-        if online::is_mp_forges_own(file.strip_prefix(&code).unwrap_or(&file), &written) {
+        let within_the_code = file.strip_prefix(&code).unwrap_or(&file);
+        if online::is_mp_forges_own(within_the_code, &written) || sample_app::is_the_kit(within_the_code, &written) {
             continue;
         }
         let text = String::from_utf8_lossy(&written).into_owned();
