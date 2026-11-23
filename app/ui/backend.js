@@ -501,7 +501,7 @@
       },
       clipboard_words: () => navigator.clipboard.readText(),
       // The stand-in's Claude Code is ready. Keeping another word under "demoClaudeCode" shows how the menu reads then.
-      this_copy: () => ({ version: "0.1.5", builtFrom: "the stand-in" }),
+      this_copy: () => ({ version: "0.1.6", builtFrom: "the stand-in" }),
       claude_code_standing: () => window.helpers.recall("demoClaudeCode") || "ready",
       ai_accounts: () => [...DEMO_SERVICES.map((service) => ({ ...service, hasKey: demoKeys.has(service.word) })), demoSignInAccount()],
       keep_key: ({ account, key }) => {
