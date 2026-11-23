@@ -9,6 +9,7 @@
 // Holding SHIFT and STOP together for a second leaves the app, whatever the app does with those buttons. An
 // app that stops answering is left too, so the device is never stuck in it.
 
+#include "mp_forge_device_controls.h"
 #include "mp_forge_device_map.h"
 #include "mp_forge_host_files.h"
 #include "mp_forge_host_sound.h"
@@ -350,7 +351,7 @@ int run(char** places) {
     if (mp_forge_sample_kit() != kKitThisProgramSpeaks) return couldNotStart("it was built with another version of MP Forge's kit.", "");
     const int screen = open(places[1], O_WRONLY | O_CLOEXEC);
     if (screen < 0) return couldNotStart("the screen could not be opened:", places[1]);
-    const int controls = open(places[2], O_RDWR | O_NOCTTY | O_CLOEXEC);
+    const int controls = device_controls::openTheControls(places[2]);
     if (controls < 0) return couldNotStart("the controls could not be opened:", places[2]);
     standUpToWhatEndsAProgram();
     SoundOut sound(places[3], places[4]);

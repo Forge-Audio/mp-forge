@@ -18,6 +18,7 @@ use crate::boot_menu::{PlaceForAFolder, ShownInTheMenu};
 use crate::app_sending::PORT_FOR_APPS;
 use crate::device_link::PORT_OF_THE_PROGRAM;
 use crate::sample_app::{NotBuilt, compile_with, write_kit_in};
+use crate::sample_surface;
 use crate::sdk::Sdk;
 
 /// What the built program is called, on the device and here.
@@ -33,10 +34,11 @@ const PORT_IN_THE_START_SCRIPT: &str = "@PORT@";
 const PORT_FOR_APPS_IN_THE_START_SCRIPT: &str = "@PORT_FOR_APPS@";
 
 const CODE_FILE: &str = "mp_forge_link.cpp";
-/// The program as the code it is built from: the carrying, and the taking of apps.
-const CODE: [(&str, &str); 2] = [
+/// The program as the code it is built from: the carrying, the taking of apps, and the opening of the controls.
+const CODE: [(&str, &str); 3] = [
     (CODE_FILE, include_str!("../helpers/sample/mp_forge_link.cpp")),
     ("mp_forge_link_apps.h", include_str!("../helpers/sample/mp_forge_link_apps.h")),
+    sample_surface::CODE_THAT_OPENS_THE_CONTROLS,
 ];
 const COMPILER_FLAGS: [&str; 4] = ["-std=c++17", "-O2", "-Wall", "-Wextra"];
 /// The MPC Sample's processor, with everything the program needs built into it.

@@ -15,6 +15,7 @@
 // port the device's pads, knobs and buttons speak MIDI on. The computer reaches the program at the port.
 // Started without a port for apps, the program takes none.
 
+#include "mp_forge_device_controls.h"
 #include "mp_forge_link_apps.h"
 #include "mpc_sample_app.h"
 
@@ -104,7 +105,7 @@ public:
 
     bool take() {
         screen_ = open(screenPath_, O_WRONLY | O_CLOEXEC);
-        controls_ = open(controlsPath_, O_RDWR | O_CLOEXEC);
+        controls_ = device_controls::openTheControls(controlsPath_);
         return screen_ >= 0 && controls_ >= 0;
     }
 

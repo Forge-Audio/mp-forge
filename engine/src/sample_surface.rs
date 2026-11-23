@@ -151,6 +151,11 @@ fn sets_the_light_of(button: usize, is_lit: bool) -> Vec<u8> {
 // The same, for the programs that run on the device
 // ---------------------------------------------------------------------------
 
+/// The file of code with which every program MP Forge builds for the device opens its controls, by its name.
+/// Akai's own app leaves the controls handing over each piece wrapped up with the time it came, which read as
+/// plain bytes looks like presses of KNOB FX and of whatever the time spells, so the file asks for plain bytes.
+pub(crate) const CODE_THAT_OPENS_THE_CONTROLS: (&str, &str) = ("mp_forge_device_controls.h", include_str!("../helpers/sample/mp_forge_device_controls.h"));
+
 /// What is known here of the device's controls and lights, as a file of code for the programs MP Forge builds
 /// for the device. It is written from the numbers above, so the device and the computer always read the
 /// controls alike.
