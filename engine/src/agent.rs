@@ -5,6 +5,7 @@
 //! The model can only ever act through the toolbox it is given.
 
 use std::fmt;
+use std::time::Duration;
 
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
@@ -16,6 +17,16 @@ use crate::stop_signal::StopSignal;
 /// documents are read, the screen and the code are written, and the plugin is built, checked and mended. A model
 /// that goes in circles spends the musician's money for as long as it is let.
 const DEFAULT_TURN_LIMIT: usize = 250;
+/// How long a service that says it is asked too often is left alone before it is asked again, when it names
+/// no time itself: after its first refusal and after its second. Its third stands.
+const USUAL_WAITS_WHEN_ASKED_TOO_OFTEN: [Duration; 2] = [Duration::from_secs(20), Duration::from_secs(60)];
+/// A service that asks for longer than this is not waited for. The musician is told how long it asks for.
+const LONGEST_WAIT_KEPT: Duration = Duration::from_secs(150);
+const SECONDS_A_MINUTE: u64 = 60;
+const MINUTES_AN_HOUR: u64 = 60;
+/// Up to this long a wait is said in seconds, and up to this many minutes in minutes.
+const LONGEST_SAID_IN_SECONDS: u64 = 90;
+const MOST_MINUTES_SAID_IN_MINUTES: u64 = 90;
 const CUT_OFF_BEFORE_COMPLETE: &str =
     "This request was cut off before it was complete, so nothing was done. Send it again in smaller pieces.";
 const CONTINUE_AFTER_CUT_OFF: &str = "Your last message was cut off. Continue from where you stopped.";
@@ -139,6 +150,9 @@ pub struct Brief<'a> {
 pub enum ModelError {
     NoCredential(String),
     Rejected { status: u16, message: String },
+    /// The service is being asked more often than it allows, which passes by itself. It may say how long it
+    /// asks to be left alone.
+    AskedTooOften { message: String, asks_to_wait: Option<Duration> },
     Unreachable(String),
     Garbled(String),
 }
@@ -148,9 +162,37 @@ impl fmt::Display for ModelError {
         match self {
             ModelError::NoCredential(how_to_fix) => write!(formatter, "The AI is not signed in. {how_to_fix}"),
             ModelError::Rejected { status, message } => write!(formatter, "The AI service said no ({status}): {message}"),
+            ModelError::AskedTooOften { message, asks_to_wait } => {
+                let its_words = message.trim_end_matches('.');
+                write!(formatter, "The AI service said no because it is being asked too often (429): {its_words}. {}", when_to_send_again(*asks_to_wait))
+            }
             ModelError::Unreachable(cause) => write!(formatter, "The AI service could not be reached: {cause}"),
             ModelError::Garbled(cause) => write!(formatter, "The AI service sent a reply that could not be read: {cause}"),
         }
+    }
+}
+
+fn when_to_send_again(asks_to_wait: Option<Duration>) -> String {
+    match asks_to_wait {
+        Some(wait) => format!("It asks to be left alone for {}: send your message again after that, or pick another model.", span_in_words(wait)),
+        None => "Send your message again in a few minutes, or pick another model.".to_string(),
+    }
+}
+
+/// What whoever watches is told while a service that is asked too often is left alone.
+pub fn said_while_waiting(wait: Duration) -> String {
+    format!("the AI service says it is being asked too often: asking again in {}", span_in_words(wait))
+}
+
+/// A length of time as it is said to the musician: in seconds while it is short, then in minutes, then in hours.
+pub fn span_in_words(span: Duration) -> String {
+    let seconds = span.as_secs().max(1);
+    let minutes = seconds.div_ceil(SECONDS_A_MINUTE);
+    match (seconds, minutes) {
+        (1, _) => "1 second".to_string(),
+        (..=LONGEST_SAID_IN_SECONDS, _) => format!("{seconds} seconds"),
+        (_, ..=MOST_MINUTES_SAID_IN_MINUTES) => format!("about {minutes} minutes"),
+        _ => format!("about {} hours", minutes.div_ceil(MINUTES_AN_HOUR)),
     }
 }
 
@@ -178,6 +220,8 @@ pub enum Event<'a> {
     ContextUsed { tokens: u64 },
     /// Older material was dropped from the conversation with the model to make room.
     ContextCompacted,
+    /// The AI service said it is asked too often. It is left alone for this long and then asked again.
+    WaitingToAskAgain { wait: Duration },
 }
 
 #[derive(Debug)]
@@ -255,7 +299,12 @@ impl<'a> Agent<'a> {
     fn ask_model(&mut self) -> Result<ModelTurn, ModelError> {
         let tools = self.toolbox.definitions();
         let brief = Brief { instructions: self.instructions, tools: &tools, history: &self.history };
-        let turn = self.model.next_turn(&brief)?;
+        let (observer, stop) = (&mut self.observer, &self.stop);
+        let wait_out = |wait: Duration| {
+            observer(Event::WaitingToAskAgain { wait });
+            stop.lets_pass(wait)
+        };
+        let turn = turn_asked_patiently(&mut *self.model, &brief, wait_out)?;
         if !turn.text.trim().is_empty() {
             (self.observer)(Event::ModelSaid(&turn.text));
         }
@@ -309,6 +358,38 @@ impl<'a> Agent<'a> {
     }
 }
 
+impl Agent<'_> {
+    /// A wait that the musician cut short ends in having stopped, not in the refusal that was being waited out.
+    fn stopped_or(&self, refusal: ModelError) -> AgentError {
+        if self.stop.is_asked() { AgentError::Stopped } else { AgentError::Model(refusal) }
+    }
+}
+
+/// Asks the model for its next turn. A service that says it is asked too often is left alone for a while and
+/// asked again, for as long as `wait_out` says each wait passed whole.
+fn turn_asked_patiently(model: &mut dyn Model, brief: &Brief, mut wait_out: impl FnMut(Duration) -> bool) -> Result<ModelTurn, ModelError> {
+    let mut times_waited = 0;
+    loop {
+        let refusal = match model.next_turn(brief) {
+            Err(refusal) => refusal,
+            turn => return turn,
+        };
+        match wait_before_asking_again(&refusal, times_waited) {
+            Some(wait) if wait_out(wait) => times_waited += 1,
+            _ => return Err(refusal),
+        }
+    }
+}
+
+/// How long to leave a service alone before asking it again, when that is worth doing: as long as it asks,
+/// or as long as usual when it names no time. Nothing once it has been waited for often enough, when it asks
+/// for longer than is kept, and for every other kind of refusal.
+fn wait_before_asking_again(refusal: &ModelError, times_waited: usize) -> Option<Duration> {
+    let ModelError::AskedTooOften { asks_to_wait, .. } = refusal else { return None };
+    let usual = USUAL_WAITS_WHEN_ASKED_TOO_OFTEN.get(times_waited)?;
+    Some(asks_to_wait.unwrap_or(*usual)).filter(|wait| *wait <= LONGEST_WAIT_KEPT)
+}
+
 impl Worker for Agent<'_> {
     /// Lets the model work until it stops asking for tools.
     fn work_on(&mut self, message: &str) -> Result<String, AgentError> {
@@ -317,7 +398,7 @@ impl Worker for Agent<'_> {
             if self.stop.is_asked() {
                 return Err(AgentError::Stopped);
             }
-            let turn = self.ask_model()?;
+            let turn = self.ask_model().map_err(|refusal| self.stopped_or(refusal))?;
             if let Some(closing_words) = self.respond_to(turn)? {
                 return Ok(closing_words);
             }
@@ -374,19 +455,29 @@ pub mod test_support {
     /// A model that plays back turns written in advance.
     #[derive(Default)]
     pub struct ScriptedModel {
+        refusals: VecDeque<ModelError>,
         turns: VecDeque<ModelTurn>,
         pub histories_seen: Vec<Vec<Entry>>,
     }
 
     impl ScriptedModel {
         pub fn playing(turns: impl IntoIterator<Item = ModelTurn>) -> Self {
-            Self { turns: turns.into_iter().collect(), histories_seen: Vec::new() }
+            Self { turns: turns.into_iter().collect(), ..Self::default() }
+        }
+
+        /// Its service says no this many times, in these words, before the first turn is played.
+        pub fn refusing_first(mut self, refusals: impl IntoIterator<Item = ModelError>) -> Self {
+            self.refusals = refusals.into_iter().collect();
+            self
         }
     }
 
     impl Model for ScriptedModel {
         fn next_turn(&mut self, brief: &Brief) -> Result<ModelTurn, ModelError> {
             self.histories_seen.push(brief.history.to_vec());
+            if let Some(refusal) = self.refusals.pop_front() {
+                return Err(refusal);
+            }
             self.turns.pop_front().ok_or_else(|| ModelError::Garbled("the script ran out of turns".to_string()))
         }
     }
@@ -575,6 +666,88 @@ mod tests {
 
         assert!(matches!(result, Err(AgentError::TooManyTurns(3))));
         assert_eq!(toolbox.runs.len(), 3);
+    }
+
+    fn asked_too_often(asks_to_wait: Option<Duration>) -> ModelError {
+        ModelError::AskedTooOften { message: "slow down".to_string(), asks_to_wait }
+    }
+
+    const A_MOMENT: Option<Duration> = Some(Duration::from_millis(1));
+
+    #[test]
+    fn a_service_that_is_asked_too_often_is_left_alone_as_long_as_it_asks_and_then_asked_again() {
+        let mut model = ScriptedModel::playing([says("All done.")]).refusing_first([asked_too_often(A_MOMENT), asked_too_often(A_MOMENT)]);
+        let mut toolbox = RecordingToolbox::default();
+        let mut waits_told = Vec::new();
+        let noting_the_waits = |event: Event| {
+            if let Event::WaitingToAskAgain { wait } = event {
+                waits_told.push(wait);
+            }
+        };
+
+        let closing_words = Agent::new(&mut model, &mut toolbox, "").watched_by(noting_the_waits).work_on("go").unwrap();
+
+        assert_eq!(closing_words, "All done.");
+        assert_eq!(waits_told, [A_MOMENT.unwrap(), A_MOMENT.unwrap()]);
+    }
+
+    #[test]
+    fn a_service_that_still_says_no_after_its_waits_has_its_refusal_stand() {
+        let mut model = ScriptedModel::playing([says("never reached")]).refusing_first([A_MOMENT, A_MOMENT, A_MOMENT].map(asked_too_often));
+        let mut toolbox = RecordingToolbox::default();
+
+        let result = Agent::new(&mut model, &mut toolbox, "").work_on("go");
+
+        assert!(matches!(result, Err(AgentError::Model(ModelError::AskedTooOften { .. }))));
+        assert_eq!(model.histories_seen.len(), 3);
+    }
+
+    #[test]
+    fn a_wait_the_musician_cuts_short_ends_in_having_stopped() {
+        let mut model = ScriptedModel::playing([says("never reached")]).refusing_first([asked_too_often(Some(Duration::from_secs(100)))]);
+        let mut toolbox = RecordingToolbox::default();
+        let stop = StopSignal::default();
+        let asks_to_stop_once_it_waits = |event: Event| {
+            if matches!(event, Event::WaitingToAskAgain { .. }) {
+                stop.ask_to_stop();
+            }
+        };
+
+        let result = Agent::new(&mut model, &mut toolbox, "").stopped_by(stop.clone()).watched_by(asks_to_stop_once_it_waits).work_on("go");
+
+        assert!(matches!(result, Err(AgentError::Stopped)));
+    }
+
+    #[test]
+    fn how_long_a_service_is_left_alone_is_what_it_asks_or_else_the_usual_and_only_a_few_times() {
+        let names_no_time = asked_too_often(None);
+        let asks_for_longer_than_is_kept = asked_too_often(Some(LONGEST_WAIT_KEPT + Duration::from_secs(1)));
+        let another_refusal = ModelError::Rejected { status: 401, message: "no".to_string() };
+
+        assert_eq!(wait_before_asking_again(&names_no_time, 0), Some(USUAL_WAITS_WHEN_ASKED_TOO_OFTEN[0]));
+        assert_eq!(wait_before_asking_again(&names_no_time, 1), Some(USUAL_WAITS_WHEN_ASKED_TOO_OFTEN[1]));
+        assert_eq!(wait_before_asking_again(&names_no_time, 2), None);
+        assert_eq!(wait_before_asking_again(&asked_too_often(Some(Duration::from_secs(45))), 0), Some(Duration::from_secs(45)));
+        assert_eq!(wait_before_asking_again(&asks_for_longer_than_is_kept, 0), None);
+        assert_eq!(wait_before_asking_again(&another_refusal, 0), None);
+    }
+
+    #[test]
+    fn a_service_asked_too_often_is_said_in_plain_words_with_how_long_it_asks_to_be_left_alone() {
+        let naming_no_time = ModelError::AskedTooOften { message: "Provider returned error. Chutes said: rate limited.".to_string(), asks_to_wait: None }.to_string();
+        let asking_for_an_hour = asked_too_often(Some(Duration::from_secs(3600))).to_string();
+
+        assert_eq!(naming_no_time, "The AI service said no because it is being asked too often (429): Provider returned error. Chutes said: rate limited. Send your message again in a few minutes, or pick another model.");
+        assert!(asking_for_an_hour.ends_with("slow down. It asks to be left alone for about 60 minutes: send your message again after that, or pick another model."), "{asking_for_an_hour}");
+    }
+
+    #[test]
+    fn a_length_of_time_is_said_in_seconds_then_minutes_then_hours() {
+        let said = |seconds: u64| span_in_words(Duration::from_secs(seconds));
+
+        assert_eq!([said(0), said(1), said(20), said(90)], ["1 second", "1 second", "20 seconds", "90 seconds"]);
+        assert_eq!([said(91), said(120), said(5400)], ["about 2 minutes", "about 2 minutes", "about 90 minutes"]);
+        assert_eq!([said(5401), said(86_400)], ["about 2 hours", "about 24 hours"]);
     }
 
     #[test]

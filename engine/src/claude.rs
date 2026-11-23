@@ -3,7 +3,7 @@
 //! Anthropic publishes no SDK for Rust, so this speaks the HTTP API directly. The reply is streamed,
 //! because a turn that writes a whole source file is long enough to time out otherwise.
 
-use std::io::{BufRead, BufReader};
+use std::io::BufRead;
 use std::process::Stdio;
 
 use crate::process::command_for;
@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 
 use crate::agent::{Brief, Entry, Illustration, Model, ModelError, ModelTurn, StopReason, ToolCall, ToolDefinition, ToolInput, ToolOutput, ToolResult};
 use crate::ai_settings::{AiSettings, ClaudeModel, Effort};
-use crate::model_http::{self, HTTP_OK, rejection};
+use crate::model_http::{self, rejection};
 
 const API_URL: &str = "https://api.anthropic.com/v1/messages";
 const API_VERSION: &str = "2026-10-21";
@@ -146,13 +146,8 @@ impl Claude {
         for (name, value) in self.credential.headers(self.choices.model)? {
             request = request.header(name, value);
         }
-        let response = request.send(body).map_err(|error| ModelError::Unreachable(error.to_string()))?;
-        let status = response.status().as_u16();
-        let mut reply = response.into_body();
-        if status != HTTP_OK {
-            return Err(rejection(status, &reply.read_to_string().unwrap_or_default()));
-        }
-        Ok(Box::new(BufReader::new(reply.into_reader())))
+        let reply = request.send(body).map_err(|error| ModelError::Unreachable(error.to_string()))?;
+        model_http::event_stream_of(reply, rejection)
     }
 }
 

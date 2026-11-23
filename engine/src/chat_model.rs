@@ -4,13 +4,13 @@
 //! Such a model gets exactly the tools Claude gets and nothing more. The reply is streamed, because a turn that
 //! writes a whole source file is long enough to time out otherwise.
 
-use std::io::{BufRead, BufReader};
+use std::io::BufRead;
 
 use serde_json::{Map, Value, json};
 
 use crate::agent::{Brief, Entry, Illustration, Model, ModelError, ModelTurn, StopReason, ToolCall, ToolDefinition, ToolInput, ToolResult};
 use crate::ai_settings::Effort;
-use crate::model_http::{self, HTTP_OK, rejection};
+use crate::model_http::{self, rejection};
 use crate::providers::Provider;
 
 const PICTURES_FOLLOW: &str = "The pictures that came with the tool results above:";
@@ -55,13 +55,8 @@ impl ChatModel {
         if let Some(key) = &self.key {
             request = request.header("authorization", format!("Bearer {key}"));
         }
-        let response = request.send(body).map_err(|error| ModelError::Unreachable(error.to_string()))?;
-        let status = response.status().as_u16();
-        let mut reply = response.into_body();
-        if status != HTTP_OK {
-            return Err(rejection(status, &reply.read_to_string().unwrap_or_default()));
-        }
-        Ok(Box::new(BufReader::new(reply.into_reader())))
+        let reply = request.send(body).map_err(|error| ModelError::Unreachable(error.to_string()))?;
+        model_http::event_stream_of(reply, rejection)
     }
 }
 
@@ -113,10 +108,17 @@ fn wire_tool(tool: &ToolDefinition) -> Value {
 fn wire_messages(entry: &Entry, sees_pictures: bool) -> Vec<Value> {
     match entry {
         Entry::User(text) => vec![json!({ "role": "user", "content": text })],
-        Entry::Model(turn) if turn.replay.is_object() => vec![turn.replay.clone()],
+        Entry::Model(turn) if says_or_asks_something(&turn.replay) => vec![turn.replay.clone()],
         Entry::Model(_) => Vec::new(),
         Entry::ToolResults(results) => wire_tool_results(results, sees_pictures),
     }
+}
+
+/// A turn in which the model wrote nothing and asked for no tool is left out of what is sent back. Such a
+/// turn comes when the model runs out of room before its first word, and Ollama refuses a message with
+/// nothing in it.
+fn says_or_asks_something(replay: &Value) -> bool {
+    replay["content"].is_string() || replay["tool_calls"].is_array()
 }
 
 /// This protocol has no room for a picture inside a tool's answer. So the answers go first, as words, and the
@@ -435,6 +437,32 @@ mod tests {
         let roles: Vec<&str> = body["messages"].as_array().unwrap().iter().map(|message| message["role"].as_str().unwrap()).collect();
         assert_eq!(roles, ["system", "user", "assistant", "tool"]);
         assert_eq!(body["messages"][3], json!({ "role": "tool", "tool_call_id": "call_1", "content": "All checks passed." }));
+    }
+
+    #[test]
+    fn a_turn_that_ran_out_of_room_before_its_first_word_is_not_sent_back() {
+        let wrote_nothing = turn_from(&[r#"data: {"choices":[{"delta":{"reasoning":"Let me think"},"finish_reason":"length"}]}"#]).unwrap();
+        let history = [Entry::User("Make an echo.".to_string()), Entry::Model(wrote_nothing), Entry::User("Continue.".to_string())];
+
+        let body = request_body(&Brief { instructions: "Be careful.", tools: &[], history: &history }, &chosen(true));
+
+        let sent = body["messages"].as_array().unwrap();
+        assert_eq!(sent.iter().map(|message| &message["role"]).collect::<Vec<_>>(), ["system", "user", "user"]);
+        assert!(sent.iter().all(|message| !message["content"].is_null()));
+    }
+
+    #[test]
+    fn a_turn_that_only_asks_for_a_tool_is_still_sent_back() {
+        let only_asks = turn_from(&[
+            r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"check_plugin","arguments":"{}"}}]}}]}"#,
+            r#"data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}"#,
+        ])
+        .unwrap();
+
+        let messages = wire_messages(&Entry::Model(only_asks), true);
+
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0]["tool_calls"][0]["id"], "call_1");
     }
 
     #[test]

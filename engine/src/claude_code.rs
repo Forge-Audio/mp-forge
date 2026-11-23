@@ -473,7 +473,7 @@ mod tests {
             Event::ToolStarted { name, input } => narration.push(format!("tool: {name} {input}")),
             Event::ContextUsed { tokens } => narration.push(format!("context: {tokens}")),
             Event::ContextCompacted => narration.push("compacted".to_string()),
-            Event::ToolFinished { .. } => {}
+            Event::ToolFinished { .. } | Event::WaitingToAskAgain { .. } => {}
         };
         for event in events {
             transcript.take(event, &mut observer);

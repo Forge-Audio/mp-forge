@@ -5,7 +5,7 @@ use std::path::Path;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use workbench_engine::agent::Event;
+use workbench_engine::agent::{Event, said_while_waiting};
 use workbench_engine::architect::{Answer, Idea, Question};
 use workbench_engine::sdk::PluginKind;
 use workbench_engine::ai_settings::AiSettings;
@@ -307,13 +307,19 @@ pub fn progress(event: &Event) -> Option<Value> {
         Event::ToolStarted { name, input } => Some(json!({ "kind": "step", "text": describe_step(name, input) })),
         Event::ToolFinished { succeeded: false, .. } => Some(json!({ "kind": "step-failed", "text": "that did not work; the AI has been told why" })),
         Event::ContextCompacted => Some(json!({ "kind": "step", "text": "making room: older material was dropped from the AI's context" })),
+        Event::WaitingToAskAgain { wait } => Some(json!({ "kind": "step", "text": said_while_waiting(*wait) })),
         Event::ToolFinished { .. } | Event::ContextUsed { .. } => None,
     }
 }
 
 /// A step in the conversation saying what is being fetched before the build can begin.
 pub fn fetching(what: &str) -> Value {
-    json!({ "kind": "step", "text": format!("fetching {what}, which this computer needs to build a plugin: this happens once and takes a minute or two") })
+    step(&format!("fetching {what}, which this computer needs to build a plugin: this happens once and takes a minute or two"))
+}
+
+/// A line among the steps of the AI's work, in words that are already the musician's to read.
+pub fn step(text: &str) -> Value {
+    json!({ "kind": "step", "text": text })
 }
 
 /// How many tokens the AI's conversation holds, when the event says. The screen shows it beside the conversation.
@@ -349,6 +355,8 @@ pub fn failed(plugin_name: &str, explanation: &str) -> Value {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use super::*;
 
     fn listing_asked(repository: &str, license: &str) -> ListingAsked {
@@ -430,6 +438,7 @@ mod tests {
         assert!(progress(&Event::ToolFinished { name: "check_plugin", succeeded: false }).is_some());
         assert!(progress(&Event::ContextUsed { tokens: 9 }).is_none());
         assert!(progress(&Event::ContextCompacted).unwrap()["text"].as_str().unwrap().starts_with("making room"));
+        assert!(progress(&Event::WaitingToAskAgain { wait: Duration::from_secs(20) }).unwrap()["text"].as_str().unwrap().ends_with("asking again in 20 seconds"));
         assert_eq!(context(&Event::ContextUsed { tokens: 41_200 }).unwrap()["tokens"], 41_200);
         assert!(context(&Event::ContextCompacted).is_none());
     }

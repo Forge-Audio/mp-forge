@@ -122,6 +122,13 @@ impl Provider {
         std::env::var(self.key_variable).ok().filter(|key| !key.trim().is_empty())
     }
 
+    /// How many tokens a model's conversation is given, where that is decided on this computer and not by the
+    /// model. Only Ollama is asked. A service on the internet gives a model all it holds, and says how much
+    /// when it lists the model.
+    pub fn room_given_to(&self, model: &str) -> Option<u64> {
+        self.runs_on_this_computer.then(|| ollama::room_given_to(self.api_root, model)).flatten()
+    }
+
     /// Asks the service which models it offers today. Nothing about the musician or their plugins is sent.
     pub fn models_offered(&self, key: Option<&str>) -> Result<Vec<OfferedModel>, ModelError> {
         if self.runs_on_this_computer {
@@ -306,5 +313,13 @@ mod tests {
     fn the_chat_address_is_built_from_the_services_own_root() {
         assert_eq!(provider_called("deepseek").unwrap().chat_address(), "https://api.deepseek.com/chat/completions");
         assert_eq!(provider_called("ollama").unwrap().chat_address(), "http://localhost:11434/v1/chat/completions");
+    }
+
+    #[test]
+    fn only_a_service_on_this_computer_is_asked_how_much_room_it_gives_a_model() {
+        let on_the_internet = CHAT_PROVIDERS.iter().filter(|provider| !provider.runs_on_this_computer);
+
+        assert!(on_the_internet.clone().count() > 1);
+        assert!(on_the_internet.clone().all(|provider| provider.room_given_to("any-model").is_none()));
     }
 }

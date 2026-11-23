@@ -33,6 +33,7 @@ use workbench_engine::layers::layer_from;
 use workbench_engine::library;
 use workbench_engine::look::{look_from, look_of};
 use workbench_engine::lucky_find::{self, Find, Hunt};
+use workbench_engine::ollama;
 use workbench_engine::online;
 use workbench_engine::open_mpc;
 use workbench_engine::open_mpc_listing::NotListed;
@@ -792,6 +793,17 @@ struct AiForAJob {
     compact_at: Option<u64>,
 }
 
+impl AiForAJob {
+    /// How much room the conversation has, for a model on this computer. It is asked for when the work
+    /// starts, because it follows from this computer's settings and memory, which no list of models says.
+    fn room_on_this_computer(&self) -> Option<u64> {
+        match &self.ai {
+            ChosenAi::Chat { provider, model } => provider.room_given_to(&model.id),
+            _ => None,
+        }
+    }
+}
+
 fn ai_for_a_job(route: AiChoice, picks: &AiPicks) -> Result<AiForAJob, String> {
     Ok(AiForAJob { ai: chosen_ai(route, picks)?, compact_at: picks.compact_at })
 }
@@ -822,10 +834,14 @@ fn run_in_background(
 ) -> Result<(), String> {
     let claim = workbench.claim_for_ai_work(&plugin_name)?;
     let sdk = workbench.sdk()?;
-    let maker = workbench.maker()?.compacting_at(ai.compact_at).stopped_by(workbench.stop_signal_for_job_on(&plugin_name));
+    let maker = workbench.maker()?.stopped_by(workbench.stop_signal_for_job_on(&plugin_name));
     let news = NewsOfTheWork { app, plugin_name };
     thread::spawn(move || {
-        let outcome = with_all_a_build_needs(&sdk, &news).and_then(|()| run_job(&maker, Box::new(job), ai.ai, &news));
+        let outcome = with_all_a_build_needs(&sdk, &news).and_then(|()| {
+            let room = ai.room_on_this_computer();
+            tell_of_little_room(room, &news);
+            run_job(&maker.compacting_at(ollama::tidied_at(room, ai.compact_at)), Box::new(job), ai.ai, &news)
+        });
         let message = match outcome {
             Ok(delivery) => payloads::finished(&news.plugin_name, &delivery),
             Err(explanation) => payloads::failed(&news.plugin_name, &explanation),
@@ -840,6 +856,14 @@ fn run_in_background(
 /// looked is fetched first, and the musician is told what the wait is for.
 fn with_all_a_build_needs(sdk: &Sdk, news: &NewsOfTheWork) -> Result<(), String> {
     readiness::fetch_what_is_missing(sdk, &|fetching| news.tell(PROGRESS_EVENT, payloads::fetching(fetching)))
+}
+
+/// A model on this computer that was given little room loses the start of a long piece of work. The
+/// musician is told so before the work begins, with what to change.
+fn tell_of_little_room(room: Option<u64>, news: &NewsOfTheWork) {
+    if let Some(said) = room.and_then(ollama::said_of_little_room) {
+        news.tell(PROGRESS_EVENT, payloads::step(&said));
+    }
 }
 
 fn run_job(maker: &Maker, job: Box<Job>, ai: ChosenAi, news: &NewsOfTheWork) -> Result<Delivery, String> {

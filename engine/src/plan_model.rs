@@ -6,13 +6,13 @@
 //!
 //! Such a model gets exactly the tools Claude gets and nothing more.
 
-use std::io::{BufRead, BufReader};
+use std::io::BufRead;
 
 use serde_json::{Value, json};
 
 use crate::agent::{Brief, Entry, Illustration, Model, ModelError, ModelTurn, StopReason, ToolCall, ToolDefinition, ToolInput, ToolResult};
 use crate::chat_model::{ChosenModel, PICTURE_NOT_SHOWN};
-use crate::model_http::{self, HTTP_OK, is_worth_retrying, rejection};
+use crate::model_http::{self, is_worth_retrying, rejection};
 
 const ASKED_AT: &str = "https://api.openai.com/v1/responses";
 /// The plan takes tools grouped under one name, so MP Forge's tools go in a group of their own.
@@ -71,13 +71,8 @@ impl<'a> PlanModel<'a> {
 
     fn send(&self, token: &str, body: &str) -> Result<Box<dyn BufRead>, ModelError> {
         let request = self.http.post(&self.address).header("content-type", "application/json").header("authorization", format!("Bearer {token}"));
-        let response = request.send(body).map_err(|error| ModelError::Unreachable(error.to_string()))?;
-        let status = response.status().as_u16();
-        let mut reply = response.into_body();
-        if status != HTTP_OK {
-            return Err(refusal_of(status, &reply.read_to_string().unwrap_or_default()));
-        }
-        Ok(Box::new(BufReader::new(reply.into_reader())))
+        let reply = request.send(body).map_err(|error| ModelError::Unreachable(error.to_string()))?;
+        model_http::event_stream_of(reply, refusal_of)
     }
 }
 
@@ -386,7 +381,7 @@ mod tests {
 
         assert!(matches!(&mid_reply, Err(ModelError::Rejected { message, .. }) if message == PLAN_LIMIT_REACHED));
         assert!(is_final_word_on_the_plan(&before_reply) && !is_final_word_on_the_plan(&busy));
-        assert!(matches!(busy, ModelError::Rejected { status: 429, message } if message == "slow down"));
+        assert!(matches!(busy, ModelError::AskedTooOften { message, .. } if message == "slow down"));
         assert!(matches!(other_failure, Err(ModelError::Unreachable(cause)) if cause.contains("it fell over")));
     }
 

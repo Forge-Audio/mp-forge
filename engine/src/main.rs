@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Duration;
 
-use workbench_engine::agent::Event;
+use workbench_engine::agent::{self, Event};
 use workbench_engine::ai_settings::AiSettings;
 use workbench_engine::claude::Claude;
 use workbench_engine::gate::Gate;
@@ -201,6 +201,7 @@ fn narrate(event: Event) {
         Event::ToolFinished { succeeded: false, .. } => println!("    (that did not work; Claude has been told why)"),
         Event::ToolFinished { .. } | Event::ContextUsed { .. } => {}
         Event::ContextCompacted => println!("    (older material was dropped from the conversation to make room)"),
+        Event::WaitingToAskAgain { wait } => println!("    ({})", agent::said_while_waiting(wait)),
     }
 }
 
