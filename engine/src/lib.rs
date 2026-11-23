@@ -22,6 +22,7 @@ pub mod claude_code;
 pub mod codex;
 pub mod contact_sheet;
 pub mod control_parts;
+mod controls_stream;
 pub mod delivery;
 pub mod device_link;
 pub mod conversation;

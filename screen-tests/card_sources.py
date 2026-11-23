@@ -4,13 +4,14 @@ import json
 import os
 from collections import namedtuple
 
-# `parameters` is how many parameters the shared plugin declares.
-SharedPlugin = namedtuple("SharedPlugin", "header shared_class parameters")
+# `parameters` is how many parameters the shared plugin declares. `entry` is the macro that makes its entry point.
+SharedPlugin = namedtuple("SharedPlugin", "header shared_class parameters entry", defaults=("MPC_PLUGIN_ENTRY",))
 KNOBS_THAT_HOLD_A_VALUE = SharedPlugin("test_card_plugin.h", "TestCardPlugin", 16)
 PICTURES_THAT_MOVE = SharedPlugin("live_card_plugin.h", "LiveCardPlugin", 28)
 PICTURES_AT_FOUR_SPEEDS = SharedPlugin("fast_card_plugin.h", "FastCardPlugin", 6)
 REACHES_THE_INTERNET = SharedPlugin("net_card_plugin.h", "NetCardPlugin", 7)
 PLAYS_A_STATION = SharedPlugin("radio_card_plugin.h", "RadioCardPlugin", 11)
+LOOKS_AT_THE_SCREEN = SharedPlugin("screen_probe_plugin.h", "ScreenProbePlugin", 22, entry="SCREEN_PROBE_ENTRY")
 
 SOURCE = """// {name} - a screen test card for the MPC, by Workbench Tests.
 //
@@ -28,7 +29,7 @@ public:
 }};
 
 // This macro creates the exported VSTPluginMain entry point. Keep it last.
-MPC_PLUGIN_ENTRY({class_name})
+{entry}({class_name})
 """
 
 README = """# {name}

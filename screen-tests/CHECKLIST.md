@@ -1,6 +1,6 @@
 # Screen test cards: what to look at on the MPC
 
-Ten small effect plugins. Nine do nothing to the sound, and Radio Check plays a station on top of it. Their screens try things out so we can see what an
+Eleven small effect plugins. Ten do nothing to the sound, and Radio Check plays a station on top of it. Their screens try things out so we can see what an
 MPC plugin screen really supports before building the edit mode.
 
 - **Test Card** holds the checks the edit mode depends on.
@@ -10,6 +10,8 @@ MPC plugin screen really supports before building the edit mode.
 - **Draw Fast** tests how often a second a picture can be changed before more stops looking smoother.
 - **Net Check** tests whether a plugin can keep a thread of its own and reach the internet.
 - **Radio Check** tests whether a plugin can play an internet radio station.
+- **Screen Probe** tests whether a plugin could paint a picture of its own on the MPC's screen, and tell when
+  its page is the one showing.
 
 Every item has a number and a caption drawn into the page. A photo of each page is the easiest report. For a
 Draw card, "blank" or "shows its page" is already an answer.
@@ -70,6 +72,11 @@ Draw card, "blank" or "shows its page" is already an answer.
 | Can a plugin play an internet radio station? | **Yes, and it sounds good**, At rest the MPC asked the plugin for 44,160 frames a second in 345 calls of 128, the same as a computer does (photo). The first card skipped, then went jumbled and silent by turns: that was the card's own fault, not the MPC's. It gave the decoder the very end of each piece that arrived, where a cut-off piece of sound is thrown away. Fed a saved sample in pieces of 1448 bytes, it got 3 seconds of sound out of 22. Keeping the last 4096 bytes back until more arrives gets all of it, at any piece size | Radio Check, by ear and rows 7 to 10 |
 | How much memory does a session of loading and restarting leave behind? | Memory read 2.3 of 3.8 GB after a morning of installs and app restarts, and 1.3 GB after a full reboot. Not a clean comparison: the cards were loaded in the first reading and may not have been in the second | MPC Resources screen |
 | Does the MPC keep running an effect when nothing is playing? | Yes, so displays keep moving while the song is stopped | Draw Live |
+| Does the MPC offer its screen as a file a plugin can open? | Yes. `/dev/fb0` opened for reading and writing. It gives the name `rockchipdrmfb`, 800 dots across and 1280 down (the panel lies on its side), 32 bits a dot, red from bit 16, green from bit 8, blue from bit 0 | Screen Probe, SCREEN (photo) |
+| Does a block painted into that file show on the screen? | **No.** Every look found the block still in the file (100 and 100), and nothing showed on the screen while Painting over was running. The file is a stand-in the screen does not show: the MPC draws through the graphics chip. A plugin cannot paint on the screen this way | Screen Probe, SCREEN (video, which starts during Painting over; the magenta half was not filmed) |
+| Can a plugin tell whether its page is showing? | **Yes.** While either of its pages showed, the MPC asked for a control's words 6 times a second and never went quiet for more than 1 second in 224. Away on another screen for about 16 seconds, it did not ask once. The card tells the MPC of a change every second, so whether the MPC would ask unprompted is not known | Screen Probe, CALLS (two photos) |
+| Which other calls does the MPC make while a page shows? | None regularly. It read no values and made no idle call in 224 seconds; values were read once after the card's knob was turned or its page came back. The last other call was number 49, asking the plugin's version | Screen Probe, CALLS |
+| Does the MPC read a plugin's screen files again while its app runs? | **No.** A second look was sent with the card loaded (new tab names, a new picture, and a changed picture under an old name). "Nothing changed" on leaving the page and coming back, switching tabs, or removing the card and adding it again (reported). After a restart of the MPC app the new look was there (reported; which of the three signs was not said). Not tried: the plugin asking for its page to be rebuilt | Screen Probe with a second look sent by hand |
 
 The yellow line around the PLACE and MORE pages is part of the test ruler picture, not something the MPC adds.
 
@@ -105,10 +112,10 @@ page background on the computer. Renaming a control needs no change to the plugi
 ## Putting the cards on the MPC
 
 1. Save any open project on the MPC. The MPC app has to restart to see new plugins.
-2. Install or refresh all ten (put the MPC's address in place of `ADDRESS`):
+2. Install or refresh all eleven (put the MPC's address in place of `ADDRESS`):
 
    ```bash
-   python3 vendor/mpc-plugin-builder-sdk/tools/mpc_remote.py ADDRESS update "screen-tests/Test Card" "screen-tests/Draw Path" "screen-tests/Draw Plot" "screen-tests/Draw Knobs" "screen-tests/Draw Guess" "screen-tests/Draw Extras" "screen-tests/Draw Live" "screen-tests/Draw Fast" "screen-tests/Net Check" "screen-tests/Radio Check"
+   python3 vendor/mpc-plugin-builder-sdk/tools/mpc_remote.py ADDRESS update "screen-tests/Test Card" "screen-tests/Draw Path" "screen-tests/Draw Plot" "screen-tests/Draw Knobs" "screen-tests/Draw Guess" "screen-tests/Draw Extras" "screen-tests/Draw Live" "screen-tests/Draw Fast" "screen-tests/Net Check" "screen-tests/Radio Check" "screen-tests/Screen Probe"
    ```
 
 3. Restart the MPC app:
@@ -298,6 +305,56 @@ that reaches the internet.
 
 The thread never waits longer than a tenth of a second without looking whether the plugin is going away, so
 removing the card does not hold the MPC up.
+
+### Screen Probe
+
+Could a plugin paint a picture of its own into its part of the MPC's screen, and tell when its page is the
+one showing? This card looks at both. It goes one step further than the other cards: it opens the file Linux may offer the screen as
+(`/dev/fb0`), asks how its dots lie, and reads and writes dots in one block of it. It changes no setting, and
+puts back what was under the block.
+
+Page SCREEN is drawn on the ruler. Photograph it as it is. Then turn PAINT (drag it on the screen, or use its hardware knob) past
+halfway and watch the middle of the screen for eight seconds: a magenta block for three seconds, then a green
+one for five. A video is the best report. Turn PAINT down and up again to repeat.
+
+| Row | What to look for | What it tells us |
+|---|---|---|
+| 1 | Open. Otherwise No screen file, Cannot open or Cannot ask | Whether the MPC offers its screen as a file a plugin can open |
+| 2 | A short name | Which part of Linux is behind the file, which says whether the file is the real screen or a stand-in |
+| 3, 4, 5 | Dots across and down, and bits in a dot | The screen's size as the file sees it. Turned on its side if down is the larger |
+| 6 | Three numbers, such as R16 G8 B0 | The order of the colours in a dot |
+| 7 | Painted once, Painting over, then Done. Otherwise Cannot here or Could not write | How far the paint test got |
+| 8 | 0 to 100 | Of the looks taken in the first three seconds, how many found the magenta block still in the file |
+| 9 | 0 to 100 | The same for the green block, which is painted again fifty times a second |
+| by eye | Did a magenta block show? Did it stay, flicker or vanish? The same for the green one | Whether what is in the file is what the screen shows |
+| by eye | Where the block sits on the ruler, which way its long side runs, and which corner its white mark is in | Where the file's dots land on the page, and whether the screen is turned or mirrored. In the file the block is 300 across and 150 down, from 400 across and 300 down, with the mark top-left |
+
+How to read it together:
+
+| Seen | Rows 8 and 9 | What it means |
+|---|---|---|
+| Both blocks show and stay | 100 and 100 | The MPC only paints what changes. A plugin can paint its page's part of the screen and it stays |
+| Magenta vanishes at once, green shows but flickers | low, and anything | The MPC paints its whole picture over and over. A plugin's picture would flicker |
+| Nothing shows | 100 and 100 | The file is not what the screen shows. Painting is not possible this way |
+| Nothing shows | row 1 is not Open | The MPC does not offer its screen this way to a plugin |
+
+Page CALLS counts the calls the MPC makes to the plugin, in four kinds: asking for a control's words, reading
+a control's value, idle calls, and every other call. Row 10 counts up once a second, which tells the MPC of a
+change that often. Photograph the page. Then:
+
+1. Turn FRESH a little (drag it on the screen, or use its hardware knob). The longest quiet times start again from nothing.
+2. Go to another screen of the MPC, such as Main, for about ten seconds, and come back. Photograph the page.
+3. Turn FRESH again, show the SCREEN page of this card for about ten seconds, and come back. Photograph it.
+
+| Row | What to look for | What it tells us |
+|---|---|---|
+| 1, 3, 5, 7 | How many calls of each kind came in the last second | Which calls the MPC makes while the page is showing |
+| 2, 4, 6, 8 | About ten after step 2 or 3, or still nought | **A kind whose quiet time is about as long as you were away stops when the page is not showing.** A plugin can use it to tell |
+| 9 | A number | Which call the MPC made last that is none of the three kinds (the number VST gives it) |
+| 10 | A number that goes up once a second | That the card's own thread runs |
+
+If what is put back at the end of the paint test looks wrong, it is what was under the block when the test
+began. Showing another page and coming back draws it again.
 
 ### Radio Check
 

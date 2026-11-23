@@ -16,8 +16,8 @@ import shutil
 from collections import namedtuple
 
 import test_pictures
-from card_sources import (KNOBS_THAT_HOLD_A_VALUE, PICTURES_AT_FOUR_SPEEDS, PICTURES_THAT_MOVE, PLAYS_A_STATION, REACHES_THE_INTERNET,
-                          write_readme, write_source)
+from card_sources import (KNOBS_THAT_HOLD_A_VALUE, LOOKS_AT_THE_SCREEN, PICTURES_AT_FOUR_SPEEDS, PICTURES_THAT_MOVE, PLAYS_A_STATION,
+                          REACHES_THE_INTERNET, write_readme, write_source)
 from skin_parts import (ACCENT, CENTRED, KNOB_OVERLAY, NAME_HEIGHT, VALUE_HEIGHT, WHITE, FilmStrip, Page, bounds_of, box,
                         colour_block, control, display, entry, fixed_words, font, kit_strip, knob_component,
                         knob_overlay_component, live_words, named_knob_component, obj, parameter, picture, picture_data,
@@ -426,17 +426,65 @@ FIRST_READING = 1
 READING_ROWS_TOP, READING_ROWS_HEIGHT, TALLEST_READING_ROW = 30, 570, 90
 
 
-def reading_row(row, caption, row_height):
+def reading_row(row, row_height, caption, shown_parameter):
     top = READING_ROWS_TOP + row * row_height
     lettering = text_style(font(height=min(40.0, row_height * 0.6)))
-    reading = live_words("Value", lettering, parameter(FIRST_READING + row))
+    reading = live_words("Value", lettering, parameter(shown_parameter))
     return [Note(caption, 40, top + row_height // 2 - 12), shown("reading %d" % (row + 1), "Label", reading, box(720, top, 500, row_height))]
 
 
-def readings_page(name, captions):
-    """A page that shows what a card found out, one numbered reading to a row. The rows share the page's height."""
+def reading_rows(captions, first_reading=FIRST_READING):
+    """What a card found out, one numbered reading to a row. The rows share the page's height."""
     row_height = min(TALLEST_READING_ROW, READING_ROWS_HEIGHT // len(captions))
-    return TestPage(name, [part for row, caption in enumerate(captions) for part in reading_row(row, caption, row_height)])
+    return [part for row, caption in enumerate(captions) for part in reading_row(row, row_height, caption, first_reading + row)]
+
+
+def readings_page(name, captions):
+    return TestPage(name, reading_rows(captions))
+
+
+# Screen Probe's parameters, in the order shared/screen_probe_plugin.h declares them: two knobs, then the readings.
+PROBE_PAINT, PROBE_FRESH, PROBE_FIRST_SCREEN_READING = 1, 2, 3
+PROBE_SCREEN_READINGS = [
+    "1  the screen's file",
+    "2  the name it gives",
+    "3  dots across",
+    "4  dots down",
+    "5  bits in a dot",
+    "6  first bit of red, green, blue",
+    "7  the paint test",
+    "8  kept, painted once (%)",
+    "9  kept, painted over (%)",
+]
+PROBE_CALL_READINGS = [
+    "1  text asked for, last second",
+    "2  longest quiet of those, in s",
+    "3  values read, last second",
+    "4  longest quiet of those, in s",
+    "5  idle calls, last second",
+    "6  longest quiet of those, in s",
+    "7  other calls, last second",
+    "8  longest quiet of those, in s",
+    "9  number of the last other call",
+    "10  counts up once a second",
+]
+PROBE_FIRST_CALL_READING = PROBE_FIRST_SCREEN_READING + len(PROBE_SCREEN_READINGS)
+
+
+def probe_knob(parameter_index, what_turning_it_does):
+    """Between the captions and the readings, below where the painted block is expected to land."""
+    return [knob(parameter_index, 520, 470), Note(what_turning_it_does, 430, 572)]
+
+
+def probe_screen_page():
+    """On the ruler, so a photo shows where on the page the dots of the screen's file land."""
+    parts = reading_rows(PROBE_SCREEN_READINGS, PROBE_FIRST_SCREEN_READING) + probe_knob(PROBE_PAINT, "past halfway: paint")
+    return TestPage("SCREEN", parts, turned_by_knobs=[PROBE_PAINT], on_ruler=True)
+
+
+def probe_calls_page():
+    parts = reading_rows(PROBE_CALL_READINGS, PROBE_FIRST_CALL_READING) + probe_knob(PROBE_FRESH, "turn: count afresh")
+    return TestPage("CALLS", parts, turned_by_knobs=[PROBE_FRESH])
 
 
 CARDS = [
@@ -451,6 +499,7 @@ CARDS = [
     Card("Draw Fast", [fast_page()], shared_plugin=PICTURES_AT_FOUR_SPEEDS),
     Card("Net Check", [readings_page("ONLINE", NET_READINGS)], shared_plugin=REACHES_THE_INTERNET),
     Card("Radio Check", [readings_page("RADIO", RADIO_READINGS)], shared_plugin=PLAYS_A_STATION),
+    Card("Screen Probe", [probe_screen_page(), probe_calls_page()], shared_plugin=LOOKS_AT_THE_SCREEN),
 ]
 
 

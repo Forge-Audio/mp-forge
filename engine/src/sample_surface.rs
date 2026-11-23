@@ -6,13 +6,12 @@
 //! measured their own devices. The messages that set the lights come from the same notes, whose writers found
 //! them by watching what the controls are sent.
 
-use crate::sample_app::{BUTTONS, CONTROLLER, HARDEST_HIT, Input, NOTE_OFF, NOTE_ON, PADS, Shown};
+use crate::controls_stream::{CHANNEL_OF_MESSAGE, KIND_OF_MESSAGE, Message, MessageReader, is_pressed, pad_that_sends};
+use crate::sample_app::{BUTTONS, CONTROLLER, HARDEST_HIT, Input, PADS, Shown};
 
 /// The pads send notes on a channel of their own, so a button's note is never taken for a pad's.
 const CHANNEL_OF_THE_PADS: u8 = 10;
 const CHANNEL_OF_THE_OTHER_CONTROLS: u8 = 1;
-/// The note each pad sends, from pad 1 to pad 16. They are not in the order of the pads.
-const NOTES_OF_THE_PADS: [u8; PADS] = [37, 36, 42, 82, 40, 38, 46, 44, 48, 47, 45, 43, 49, 55, 51, 53];
 /// The note each button sends, in the order the kit counts the buttons.
 const NOTES_OF_THE_BUTTONS: [u8; BUTTONS.len()] = [12, 13, 14, 6, 7, 1, 0, 49, 35, 9, 11, 75, 43, 74, 40, 36, 53, 55, 54, 73, 80, 81, 82, 111];
 const CONTROLLER_OF_THE_FIRST_KNOB: u8 = 16;
@@ -38,62 +37,17 @@ const LIGHT_ON: u8 = 2;
 const LIGHT_OFF: u8 = 0;
 const BUTTONS_WITHOUT_A_LIGHT: [&str; 7] = ["B1", "B2", "B3", "SHIFT", "MINUS", "PLUS", "ENCODER"];
 
-const FIRST_STATUS_BYTE: u8 = 0x80;
-const STARTS_A_LONG_MESSAGE: u8 = 0xF0;
-const FIRST_BYTE_SENT_IN_BETWEEN: u8 = 0xF8;
-const KIND_OF_MESSAGE: u8 = 0xF0;
-const CHANNEL_OF_MESSAGE: u8 = 0x0F;
-const PROGRAM_CHANGE: u8 = 0xC0;
-const CHANNEL_PRESSURE: u8 = 0xD0;
-
-/// One whole message of the controls: what kind it is and on which channel, and its two numbers.
-type Message = [u8; 3];
-
 /// Reads the bytes of the controls as they arrive, in whatever pieces they arrive in.
 #[derive(Debug, Default)]
 pub struct SurfaceReader {
-    /// The kind and channel of the message being read. A device may say it once for several messages in a row.
-    status: Option<u8>,
-    numbers_so_far: Vec<u8>,
-    is_inside_a_long_message: bool,
+    messages: MessageReader,
 }
 
 impl SurfaceReader {
     /// What the musician did, going by the bytes that arrived since the last time.
     pub fn read(&mut self, bytes: &[u8]) -> Vec<Input> {
-        bytes.iter().filter_map(|byte| self.message_ended_by(*byte)).filter_map(told_by).collect()
+        self.messages.read(bytes).into_iter().filter_map(told_by).collect()
     }
-
-    fn message_ended_by(&mut self, byte: u8) -> Option<Message> {
-        match byte {
-            FIRST_BYTE_SENT_IN_BETWEEN.. => None,
-            FIRST_STATUS_BYTE.. => self.start_a_message(byte),
-            _ if self.is_inside_a_long_message => None,
-            _ => self.take_a_number(byte),
-        }
-    }
-
-    fn start_a_message(&mut self, status: u8) -> Option<Message> {
-        self.is_inside_a_long_message = status == STARTS_A_LONG_MESSAGE;
-        self.status = (status < STARTS_A_LONG_MESSAGE).then_some(status);
-        self.numbers_so_far.clear();
-        None
-    }
-
-    fn take_a_number(&mut self, number: u8) -> Option<Message> {
-        let status = self.status?;
-        self.numbers_so_far.push(number);
-        if self.numbers_so_far.len() < numbers_in_a_message_of(status) {
-            return None;
-        }
-        let message = [status, self.numbers_so_far[0], self.numbers_so_far.get(1).copied().unwrap_or(0)];
-        self.numbers_so_far.clear();
-        Some(message)
-    }
-}
-
-fn numbers_in_a_message_of(status: u8) -> usize {
-    if matches!(status & KIND_OF_MESSAGE, PROGRAM_CHANGE | CHANNEL_PRESSURE) { 1 } else { 2 }
 }
 
 fn told_by([status, number, value]: Message) -> Option<Input> {
@@ -108,7 +62,7 @@ fn told_by([status, number, value]: Message) -> Option<Input> {
 
 /// How hard a pad is pressed while it is held is left out: the kit tells an app of the hit and the letting go.
 fn told_by_a_pad(kind: u8, note: u8, velocity: u8) -> Option<Input> {
-    let pad = NOTES_OF_THE_PADS.iter().position(|of_a_pad| *of_a_pad == note)? as i32 + 1;
+    let pad = i32::from(pad_that_sends(note)?);
     match is_pressed(kind, velocity)? {
         true => Some(Input::pad_hit(pad, f32::from(velocity) / HARDEST_HIT)),
         false => Some(Input::pad_let_go(pad)),
@@ -118,15 +72,6 @@ fn told_by_a_pad(kind: u8, note: u8, velocity: u8) -> Option<Input> {
 fn told_by_a_button(kind: u8, note: u8, velocity: u8) -> Option<Input> {
     let button = NOTES_OF_THE_BUTTONS.iter().position(|of_a_button| *of_a_button == note)?;
     Input::button(BUTTONS[button], is_pressed(kind, velocity)?)
-}
-
-/// Whether a note says its control was pressed or let go. None for a message that is not a note.
-fn is_pressed(kind: u8, velocity: u8) -> Option<bool> {
-    match kind {
-        NOTE_ON => Some(velocity > 0),
-        NOTE_OFF => Some(false),
-        _ => None,
-    }
 }
 
 /// The main volume knob is left out: an app's sound is heard on the computer, at the computer's own volume.

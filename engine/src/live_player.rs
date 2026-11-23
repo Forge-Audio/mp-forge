@@ -32,7 +32,9 @@ const RATE_WITHOUT_SPEAKERS: u32 = 44_100;
 const USUAL_VOLUME: f32 = 0.9;
 /// How long the way out takes to follow a setting from one end to the other.
 const GLIDE_SECONDS: f32 = 0.02;
+/// How hard a note is played when nothing says how hard, as from the window's own piano.
 const NOTE_VELOCITY: u8 = 100;
+const HARDEST_A_NOTE_IS_PLAYED: u64 = 127;
 /// About as often as a screen is drawn again.
 const LOOKS_FOR_MOVES_EVERY: Duration = Duration::from_millis(33);
 const NO_SPEAKERS: &str = "This computer has no sound output to play through.";
@@ -63,7 +65,7 @@ impl Request {
         }
         if let Some(note) = asked.get("note") {
             let pitch = u8::try_from(note["pitch"].as_u64()?).ok()?;
-            return Some(Request::Play(Note { pitch, velocity: NOTE_VELOCITY, pressed: note["pressed"].as_bool()? }));
+            return Some(Request::Play(Note { pitch, velocity: how_hard_is_asked(note), pressed: note["pressed"].as_bool()? }));
         }
         if let Some(preset) = asked.get("preset") {
             return usize::try_from(preset.as_u64()?).ok().map(Request::Preset);
@@ -506,9 +508,27 @@ fn write_frames<Sample: SizedSample + FromSample<f32>>(heard: &[[f32; 2]], wante
     }
 }
 
+/// How hard a note is to be played: as hard as it says, when it does, as a key of a real keyboard does.
+fn how_hard_is_asked(note: &Value) -> u8 {
+    let said = note["velocity"].as_u64().filter(|how_hard| (1..=HARDEST_A_NOTE_IS_PLAYED).contains(how_hard));
+    said.map_or(NOTE_VELOCITY, |how_hard| how_hard as u8)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_note_is_played_as_hard_as_it_says_and_as_hard_as_usual_when_it_says_nothing_sensible() {
+        let hardness_of = |line: &str| match Request::from_line(line) {
+            Some(Request::Play(note)) => note.velocity,
+            _ => 0,
+        };
+
+        assert_eq!(hardness_of(r#"{"note": {"pitch": 60, "pressed": true, "velocity": 31}}"#), 31);
+        assert_eq!(hardness_of(r#"{"note": {"pitch": 60, "pressed": true, "velocity": 900}}"#), NOTE_VELOCITY);
+        assert_eq!(hardness_of(r#"{"note": {"pitch": 60, "pressed": false, "velocity": 0}}"#), NOTE_VELOCITY);
+    }
 
     #[test]
     fn each_kind_of_request_is_read_from_its_line() {

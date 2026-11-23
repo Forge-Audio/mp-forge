@@ -1,0 +1,17 @@
+{
+  "name": "Screen Probe",
+  "manufacturer": "Workbench Tests",
+  "version": "1.0.0",
+  "format": "vst2",
+  "kind": "effect",
+  "uid": "WSp1",
+  "numInputs": 2,
+  "numOutputs": 2,
+  "category": "Effect",
+  "file32": "VST/screen-probe-arm32.so",
+  "file64": "VST/screen-probe-arm64.so",
+  "description": "Screen Probe: a screen test card. It reads how the MPC's screen is laid out, paints a block on it for eight seconds when asked, and counts the calls the MPC makes to it. It does nothing to the sound.",
+  "author": "Workbench Tests",
+  "url": "",
+  "license": "MIT"
+}
