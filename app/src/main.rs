@@ -14,6 +14,7 @@ mod key_store;
 mod payloads;
 mod player;
 mod sample_player;
+mod updates;
 mod upload;
 mod workbench;
 
@@ -36,6 +37,7 @@ use workbench_engine::sdk::Sdk;
 
 use player::LivePlayer;
 use sample_player::SamplePlayer;
+use updates::Offer;
 use workbench::Workbench;
 
 const PLUGINS_FOLDER_OF_AN_INSTALLED_COPY: &str = "MP Forge";
@@ -144,6 +146,7 @@ fn make_sure_the_plugins_have_a_folder(workbench: &Workbench) {
 fn open_window() -> ExitCode {
     let started = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let workbench = workbench_of(app.path())?;
             make_sure_the_plugins_have_a_folder(&workbench);
@@ -152,6 +155,7 @@ fn open_window() -> ExitCode {
         })
         .manage(LivePlayer::default())
         .manage(SamplePlayer::default())
+        .manage(Offer::default())
         .invoke_handler(tauri::generate_handler![
             commands::library,
             commands::open_plugin,
@@ -180,6 +184,9 @@ fn open_window() -> ExitCode {
             commands::send_to_mpc,
             commands::clipboard_words,
             commands::this_copy,
+            updates::newest_version,
+            updates::install_update,
+            updates::open_download_page,
             accounts::ai_accounts,
             accounts::claude_code_standing,
             accounts::keep_key,

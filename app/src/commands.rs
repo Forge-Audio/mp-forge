@@ -58,6 +58,7 @@ use crate::key_store;
 use crate::payloads::{self, AiChoice, AiPicks, ChangeAsked, HuntAsked, IdeaAsked, ListingAsked, MpcAsked, NewPlugin};
 use crate::player::{LivePlayer, Played};
 use crate::sample_player::SamplePlayer;
+use crate::updates::Updating;
 use crate::upload::UploadedFile;
 use crate::workbench::Workbench;
 
@@ -415,11 +416,11 @@ fn mpc_of(asked: &MpcAsked) -> Result<Mpc, String> {
     Ok(reached.with_password(key_store::kept(MPC_ACCOUNT)))
 }
 
-/// Which copy of MP Forge this is: its version, and the commit it was built from with that commit's day.
-/// Copies of one version can differ, and the commit tells them apart.
+/// Which copy of MP Forge this is: its version, the commit it was built from with that commit's day, and how
+/// it comes by a newer version. Copies of one version can differ, and the commit tells them apart.
 #[tauri::command]
 pub fn this_copy(app: AppHandle) -> Value {
-    json!({ "version": app.package_info().version.to_string(), "builtFrom": option_env!("MP_FORGE_BUILT_FROM") })
+    json!({ "version": app.package_info().version.to_string(), "builtFrom": option_env!("MP_FORGE_BUILT_FROM"), "updating": Updating::of_this_copy().word() })
 }
 
 /// The words on this computer's clipboard, for the app's own Paste.

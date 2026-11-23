@@ -317,6 +317,13 @@
   function demoBackend() {
     const handlers = {};
     const emit = (eventName, payload) => (handlers[eventName] || []).forEach((handler) => handler(payload));
+
+    // The demo fetches a newer version that is not there, says how far it has come, and then owns up.
+    function pretendToUpdate() {
+      [25, 50, 75, 100].forEach((hundredths, step) => setTimeout(() => emit("update-progress", { fetched: hundredths }), 400 * (step + 1)));
+      setTimeout(() => emit("update-progress", { installing: true }), 2000);
+      return new Promise((resolve, reject) => setTimeout(() => reject("The demo has nothing to install. The real app would open again here."), 3000));
+    }
     const plugins = [{ name: "Dusty Tape", maker: "Demo", kind: "effect" }, { name: "Glass Pad", maker: "Demo", kind: "instrument" }, { name: "Pocket Pads", maker: "Demo", kind: "sample-app" }];
 
     // The demo's stand-in Sample app. It shows itself afresh whenever the screen asks, as bytes, the way a
@@ -501,7 +508,12 @@
       },
       clipboard_words: () => navigator.clipboard.readText(),
       // The stand-in's Claude Code is ready. Keeping another word under "demoClaudeCode" shows how the menu reads then.
-      this_copy: () => ({ version: "0.1.6", builtFrom: "the stand-in" }),
+      // The stand-in is the newest version and can update itself. Keeping "newer" or "nothingForThisCopy" under
+      // "demoUpdate", or "asAPackage" or "fromSource" under "demoUpdating", shows how the settings read then.
+      this_copy: () => ({ version: "0.1.6", builtFrom: "the stand-in", updating: window.helpers.recall("demoUpdating") || "byItself" }),
+      newest_version: () => ({ standing: window.helpers.recall("demoUpdate") || "newest", version: "0.1.7" }),
+      install_update: () => pretendToUpdate(),
+      open_download_page: () => {},
       claude_code_standing: () => window.helpers.recall("demoClaudeCode") || "ready",
       ai_accounts: () => [...DEMO_SERVICES.map((service) => ({ ...service, hasKey: demoKeys.has(service.word) })), demoSignInAccount()],
       keep_key: ({ account, key }) => {

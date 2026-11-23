@@ -186,6 +186,10 @@ body.keeps-still .tab.working::before { animation: none; }
 .bar-icon[aria-pressed="true"] { background: var(--ink); color: var(--face); }
 body.editing .bar-icon { pointer-events: none; opacity: 0.55; }
 
+/* A few quiet words in the top bar that lead somewhere, such as the note that a newer version is out. */
+.bar-note { min-height: 30px; padding: 0 10px; border: 0; border-left: 2px solid var(--line); background: transparent; color: var(--accent); font-family: var(--label-letters); font-size: 11px; white-space: nowrap; }
+body.editing .bar-note { pointer-events: none; opacity: 0.55; }
+
 .mode-button {
   min-height: 30px;
   padding: 0 10px;

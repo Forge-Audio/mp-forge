@@ -1,6 +1,7 @@
 //! Where the app keeps its things, and the rules about what may happen at the same time. The AI works on
 //! up to five plugins at once, each a job of its own. Safety checks run side by side, one to a plugin, and
-//! beside the AI's work on other plugins. A plugin with neither going on can be changed by hand.
+//! beside the AI's work on other plugins. A plugin with neither going on can be changed by hand. MP Forge updates
+//! itself only while none of that is going on, and nothing starts until it has.
 
 use std::collections::HashMap;
 use std::env;
@@ -30,6 +31,8 @@ const FOLDER_ON_THE_NOTE: &str = "pluginsFolder";
 const STAYS_WHILE_BUSY: &str = "Something is still being built, checked or changed. Choose the folder again once it has finished.";
 const ALREADY_THERE: &str = "Your plugins are already kept in that folder.";
 const NOT_INSIDE_ITSELF: &str = "Choose a folder that is not inside the one your plugins are in now.";
+const UPDATE_WAITS_FOR_WORK: &str = "Something is still being built, checked or changed. Update once it has finished.";
+const UPDATING_ITSELF: &str = "MP Forge is updating itself and opens again in a moment.";
 
 /// What the workbench is in the middle of.
 #[derive(Default)]
@@ -40,12 +43,17 @@ struct Work {
     checking: Vec<String>,
     /// The plugins with a quick change by hand under way, once for each such change.
     changing_by_hand: Vec<String>,
+    /// Whether MP Forge is fetching and installing a newer version of itself, which ends in the app opening again.
+    updating_itself: bool,
 }
 
 impl Work {
     /// Why nothing new may be started on this plugin just now. None when it is free.
     fn what_holds(&self, plugin_name: &str) -> Option<String> {
         let named = |plugins: &[String]| plugins.iter().any(|held| held == plugin_name);
+        if self.updating_itself {
+            return Some(UPDATING_ITSELF.to_string());
+        }
         if named(&self.ai_working_on) {
             return Some(format!("The AI is working on `{plugin_name}`. Try again once it has finished."));
         }
@@ -56,11 +64,19 @@ impl Work {
     }
 
     fn is_idle(&self) -> bool {
-        self.ai_working_on.is_empty() && self.checking.is_empty() && self.changing_by_hand.is_empty()
+        self.ai_working_on.is_empty() && self.checking.is_empty() && self.changing_by_hand.is_empty() && !self.updating_itself
+    }
+
+    /// Why MP Forge may not update itself just now. None when nothing at all is going on.
+    fn what_holds_an_update(&self) -> Option<&'static str> {
+        if self.updating_itself {
+            return Some(UPDATING_ITSELF);
+        }
+        (!self.is_idle()).then_some(UPDATE_WAITS_FOR_WORK)
     }
 
     fn is_being_worked_on(&self, plugin_name: &str) -> bool {
-        self.ai_working_on.iter().chain(&self.checking).any(|worked_on| worked_on == plugin_name)
+        self.updating_itself || self.ai_working_on.iter().chain(&self.checking).any(|worked_on| worked_on == plugin_name)
     }
 }
 
@@ -207,6 +223,17 @@ impl Workbench {
         Ok(self.claim_holding(Held::ChangeByHand(plugin_name.to_string())))
     }
 
+    /// Claims the whole workbench for MP Forge to update itself. Updating ends in the app opening again, so
+    /// nothing may be under way, and nothing can start until the claim is given up.
+    pub fn claim_to_update(&self) -> Result<Claim, String> {
+        let mut work = work_of(&self.work);
+        if let Some(reason) = work.what_holds_an_update() {
+            return Err(reason.to_string());
+        }
+        work.updating_itself = true;
+        Ok(self.claim_holding(Held::Update))
+    }
+
     fn claim_holding(&self, held: Held) -> Claim {
         Claim { work: Arc::clone(&self.work), held }
     }
@@ -261,6 +288,7 @@ enum Held {
     AiWork(String),
     Check(String),
     ChangeByHand(String),
+    Update,
 }
 
 pub struct Claim {
@@ -275,6 +303,7 @@ impl Drop for Claim {
             Held::AiWork(plugin_name) => forget_once(&mut work.ai_working_on, plugin_name),
             Held::Check(plugin_name) => forget_once(&mut work.checking, plugin_name),
             Held::ChangeByHand(plugin_name) => forget_once(&mut work.changing_by_hand, plugin_name),
+            Held::Update => work.updating_itself = false,
         }
     }
 }
@@ -370,6 +399,33 @@ mod tests {
         drop(another_change);
 
         assert!(workbench.claim_to_check("Glass Pad").is_ok());
+    }
+
+    #[test]
+    fn mp_forge_updates_itself_only_while_nothing_is_under_way() {
+        let workbench = Workbench::at_home();
+        let building = workbench.claim_for_ai_work("Dusty Tape").unwrap();
+        assert!(workbench.claim_to_update().is_err_and(|why| why == UPDATE_WAITS_FOR_WORK));
+        drop(building);
+        let checking = workbench.claim_to_check("Glass Pad").unwrap();
+        assert!(workbench.claim_to_update().is_err_and(|why| why == UPDATE_WAITS_FOR_WORK));
+        drop(checking);
+
+        assert!(workbench.claim_to_update().is_ok());
+    }
+
+    #[test]
+    fn nothing_starts_while_mp_forge_updates_itself() {
+        let workbench = Workbench::at_home();
+        let updating = workbench.claim_to_update().unwrap();
+
+        assert!(workbench.claim_for_ai_work("Dusty Tape").is_err_and(|why| why == UPDATING_ITSELF));
+        assert!(workbench.claim_to_check("Dusty Tape").is_err_and(|why| why == UPDATING_ITSELF));
+        assert!(workbench.claim_to_change_by_hand("Dusty Tape").is_err_and(|why| why == UPDATING_ITSELF));
+        assert!(workbench.claim_to_update().is_err_and(|why| why == UPDATING_ITSELF));
+        drop(updating);
+
+        assert!(workbench.claim_for_ai_work("Dusty Tape").is_ok());
     }
 
     #[test]

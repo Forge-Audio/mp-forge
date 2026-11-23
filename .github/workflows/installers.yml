@@ -4,10 +4,16 @@
 # Pushing a version's tag, such as v0.1.0, builds all of them and puts them on a draft release under that tag. A
 # draft is seen by nobody until a person has looked it over and published it.
 #
+# A copy of MP Forge updates itself from the newest published release. So every build is signed with the key in
+# the secret TAURI_SIGNING_PRIVATE_KEY, whose password is in TAURI_SIGNING_PRIVATE_KEY_PASSWORD, and the draft
+# also gets latest.json, which says which version this is and where each system's update will be. A copy only
+# ever reads the latest.json of a published release, so a draft is offered to nobody either.
+#
 # Started by hand, it only builds them and keeps them with the run for a week, to try. The Mac is then left out
 # unless it is asked for: a minute on GitHub's Macs costs about ten times a minute on Linux.
 #
-# The installers are not signed yet, so macOS and Windows each warn the first time one is opened.
+# The installers are not signed with Apple or Microsoft yet, so macOS and Windows each warn the first time one
+# is opened. That is another signing than the one for updates.
 name: Installers
 
 on:
@@ -54,6 +60,22 @@ jobs:
             exit 1
           fi
 
+      # A copy checks an update against the public key it carries, so a release built without the real pair
+      # could never be updated from.
+      - name: Check that the updates can be signed
+        env:
+          SIGNING_KEY_IS_SET: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+        run: |
+          public_key="$(node -p "require('./app/tauri.conf.json').plugins.updater.pubkey")"
+          if [[ "$public_key" == *" "* ]]; then
+            echo "app/tauri.conf.json does not hold the public key yet. Put it under plugins > updater > pubkey." >&2
+            exit 1
+          fi
+          if [[ "$SIGNING_KEY_IS_SET" != "true" ]]; then
+            echo "The secret TAURI_SIGNING_PRIVATE_KEY is not set, so the updates cannot be signed." >&2
+            exit 1
+          fi
+
       - name: Install what the app's window, its sound and its installers need on Linux
         if: runner.os == 'Linux'
         run: |
@@ -77,17 +99,23 @@ jobs:
       - name: Pack Akai's SDK for the installer to carry
         run: scripts/pack-sdk-for-installers.sh
 
+      # On Linux and Windows a copy updates itself from the installer. On a Mac it updates from the app, packed,
+      # which is only made when the app is asked for by name beside the .dmg.
       - name: Choose the installers this system makes
         id: wanted
         run: |
           case "$RUNNER_OS" in
             Linux) echo "installers=--bundles appimage,deb" ;;
             Windows) echo "installers=--bundles nsis" ;;
-            macOS) echo "installers=--bundles dmg --target universal-apple-darwin" ;;
+            macOS) echo "installers=--bundles app,dmg --target universal-apple-darwin" ;;
           esac >> "$GITHUB_OUTPUT"
 
+      # The build signs what a copy updates from, and leaves each signature beside it as a .sig file.
       - name: Build the installers
         working-directory: app
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npx --yes "$BUNDLING_TOOL" build --config tauri.installer.conf.json ${{ steps.wanted.outputs.installers }}
 
       - uses: actions/upload-artifact@v4
@@ -97,12 +125,17 @@ jobs:
           retention-days: 7
           path: |
             app/target/**/bundle/dmg/*.dmg
+            app/target/**/bundle/macos/*.app.tar.gz
+            app/target/**/bundle/macos/*.app.tar.gz.sig
             app/target/**/bundle/nsis/*.exe
+            app/target/**/bundle/nsis/*.exe.sig
             app/target/**/bundle/appimage/*.AppImage
+            app/target/**/bundle/appimage/*.AppImage.sig
             app/target/**/bundle/deb/*.deb
+            app/target/**/bundle/deb/*.deb.sig
 
   draft-release:
-    name: Put the installers on a draft release
+    name: Put the installers and latest.json on a draft release
     if: github.event_name == 'push'
     needs: build
     runs-on: ubuntu-24.04
@@ -111,15 +144,18 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
-          path: installers
+          path: built
           pattern: installers-*
           merge-multiple: true
+
+      - name: Lay out the installers, what a Mac updates from, and latest.json
+        run: scripts/lay-out-release.sh built release "${GITHUB_REF_NAME#v}" "$GITHUB_REPOSITORY"
 
       - name: Make the draft release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          find installers -type f \( -name '*.dmg' -o -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' \) -print0 |
-            xargs -0 gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "MP Forge ${GITHUB_REF_NAME#v}" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" release/* --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "MP Forge ${GITHUB_REF_NAME#v}" --generate-notes

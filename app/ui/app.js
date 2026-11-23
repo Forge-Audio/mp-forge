@@ -2139,6 +2139,16 @@
     },
   };
 
+  function updatesParts() {
+    const part = (name) => document.getElementById(`updates-${name}`);
+    return { how: part("how"), check: part("check"), page: part("page"), asking: part("asking"), said: part("said"), note: document.getElementById("update-note") };
+  }
+
+  function showUpdatesInSettings() {
+    showSettings(true);
+    window.settingsGroups.showTheGroupOf(document.getElementById("updates-check"));
+  }
+
   function pluginsFolderParts() {
     const part = (name) => document.getElementById(`plugins-folder-${name}`);
     return { path: part("path"), state: part("state"), show: part("show"), choose: part("choose"), asking: part("asking"), said: part("said") };
@@ -2168,6 +2178,7 @@
     appSettings.start(settingsParts());
     window.settingsGroups.start(document.getElementById("settings-groups"), document.getElementById("settings-shown"));
     window.pluginsFolder.start(pluginsFolderParts(), pluginsAreKeptElsewhere);
+    window.updates.start(updatesParts(), showUpdatesInSettings);
     tabStrip.start({ strip: page.tabs, earlier: document.getElementById("tabs-earlier"), later: document.getElementById("tabs-later") }, drawTabs);
     page.newPluginTab.addEventListener("click", () => openFromItsTab(NEW_PLUGIN));
     window.whatIsNeeded.start(whatIsNeededParts(), gettingThisComputerReady);

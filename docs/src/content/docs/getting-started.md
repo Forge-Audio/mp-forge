@@ -142,6 +142,38 @@ been restarted.
 
 [Sending a plugin to your MPC](./send-to-your-mpc.md) has every step, developer mode included.
 
+## Keeping MP Forge up to date
+
+MP Forge tells you when a newer version is out, and installs it when you say so.
+
+- **When it opens**, MP Forge asks GitHub which version is the newest. If yours is older, the words
+  **VERSION … IS OUT** appear in the bar at the top. Press them to see the offer.
+- **Whenever you like**, open **Settings → About** and press **CHECK FOR UPDATES**.
+- Press **UPDATE AND RESTART** to take the newer version. MP Forge fetches it, checks that it is signed with
+  MP Forge's own key, installs it and opens again. Press **NOT NOW** to stay on the version you have.
+
+Nothing is ever installed without your say. MP Forge also does not update while a plugin is being built,
+checked or changed: it tells you so, and you update once that has finished.
+
+The question to GitHub is a request for one small file from MP Forge's newest release. Nothing about you or
+your plugins is in it. GitHub sees what any website sees: the internet address your computer asks from.
+
+How a copy updates depends on how it was installed:
+
+| Your copy | How it updates |
+| --- | --- |
+| macOS, from the `.dmg` | It replaces itself. If MP Forge is kept where your account may not change it, macOS asks for an administrator's password. |
+| Windows, from the setup file | The newer setup runs by itself, shows how far it is, and opens MP Forge again. |
+| Linux, the `.AppImage` | It replaces the `.AppImage` file where it is. |
+| Linux, the `.deb` | It installs the newer package, and your system asks for an administrator's password. |
+| Built from source | It cannot update itself. Fetch the newer source and build it again, or get an installer from the [download page](/mp-forge/download/). |
+
+Versions up to 0.1.6 have no updating built in. From one of those, download the newest installer once, the
+way you did the first time, and install it over the old one.
+
+If an update cannot be installed, MP Forge says why and stays as it is. The newest installer is always on
+the [download page](/mp-forge/download/).
+
 ## If something goes wrong
 
 [Troubleshooting](./troubleshooting.md) lists the messages MP Forge shows and what to do about each. If you

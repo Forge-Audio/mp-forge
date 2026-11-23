@@ -74,15 +74,22 @@ then build the installer for the system you are on. This needs Node.js, for Taur
 ```sh
 ./scripts/pack-sdk-for-installers.sh
 cd app
-npx @tauri-apps/cli@2.12.5 build --config tauri.installer.conf.json
+npx @tauri-apps/cli@2.12.5 build --config tauri.installer.conf.json --config '{"bundle":{"createUpdaterArtifacts":false}}'
 ```
+
+The second `--config` leaves out the signing that MP Forge's own releases get so that a copy can
+[update itself](./getting-started.md#keeping-mp-forge-up-to-date). That signing needs the project's private
+key. Without the second `--config` the build still writes the installer, and then stops with `A public key
+has been found, but no private key`. A copy installed from your own installer still offers MP Forge's
+published versions as updates.
 
 The installer is written under `app/target/release/bundle/`. MP Forge installed from it does not use the
 `mp-forge` folder. The first time it is opened it unpacks the SDK among its own files on that computer, and
 it keeps plugins in a folder called `MP Forge` in the Music folder.
 
-The installers on the download page are built the same way by `.github/workflows/installers.yml`, when a
-version is tagged.
+The installers on the download page are built by `.github/workflows/installers.yml`, when a version is
+tagged. That build signs them, and `scripts/lay-out-release.sh` writes the `latest.json` a copy of MP Forge
+reads to learn of a newer version.
 
 ## Run the tests
 
@@ -125,7 +132,7 @@ be run at all.
 | `engine/` | The Rust engine: the safety checks, the AI's work, building, playing and sending. |
 | `directives/` | The instructions the AI is given. |
 | `screen-tests/` | Test plugins for trying out what an MPC's screen supports. |
-| `scripts/` | Fetching Akai's SDK, checking it, and packing it for an installer. |
+| `scripts/` | Fetching Akai's SDK, checking it, packing it for an installer, and laying out a release. |
 | `docs/` | This site. `npm install` and `npm run dev` in that folder show it on your computer. |
 
 The code calls the app "workbench" in places. The product's name is always MP Forge.
