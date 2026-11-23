@@ -324,6 +324,16 @@
       setTimeout(() => emit("update-progress", { installing: true }), 2000);
       return new Promise((resolve, reject) => setTimeout(() => reject("The demo has nothing to install. The real app would open again here."), 3000));
     }
+    const WHY_NOT_SENT_BY_CABLE = {
+      noDevice: "No MPC Sample is linked. Start MP Forge Link from the boot menu on your MPC Sample and plug its USB-C cable into this computer. Or write the app to a card instead.",
+      olderLink: "The MP Forge Link on your MPC Sample is an older one that cannot take apps. Put the new one on its card (Settings, Your MPC Sample), start it again, then send the app.",
+    };
+
+    // The demo pretends an MPC Sample is linked and takes the app, unless it was told to show why one would not.
+    function pretendToSendByCable() {
+      const whyNot = WHY_NOT_SENT_BY_CABLE[window.helpers.recall("demoSampleLink")];
+      return new Promise((resolve, reject) => setTimeout(() => (whyNot ? reject(whyNot) : resolve({ done: true, report: DEMO_REPORT })), 1500));
+    }
     const plugins = [{ name: "Dusty Tape", maker: "Demo", kind: "effect" }, { name: "Glass Pad", maker: "Demo", kind: "instrument" }, { name: "Pocket Pads", maker: "Demo", kind: "sample-app" }];
 
     // The demo's stand-in Sample app. It shows itself afresh whenever the screen asks, as bytes, the way a
@@ -544,6 +554,13 @@
         if (!/^[\w.-]+\/[\w.-]+$/.test(listing.repository)) return Promise.reject("The repository has to be written as owner/name, such as yourname/tape-echo.");
         return new Promise((resolve) => setTimeout(() => resolve({ ready: true, report: DEMO_REPORT, folder: `/Users/you/Desktop/${name} for Open MPC` }), 700));
       },
+      // The demo pretends a card with the boot menu was picked, and takes a moment to pretend it is building.
+      make_link_for_mpc_sample: () => new Promise((resolve) => setTimeout(() => resolve({ folder: "/Volumes/MPC SAMPLE/autorun/mods/MP Forge Link", isWhereTheBootMenuLooks: true }), 900)),
+      // The demo pretends an MPC Sample is linked and a card with the boot menu is picked. Keeping "noDevice" or
+      // "olderLink" under "demoSampleLink" shows what is said when sending by cable cannot be done.
+      choose_card_for_sample_app: () => true,
+      put_sample_app_on_card: ({ name }) => new Promise((resolve) => setTimeout(() => resolve({ done: true, report: DEMO_REPORT, made: { folder: `/Volumes/MPC SAMPLE/autorun/mods/${name}`, isWhereTheBootMenuLooks: true } }), 900)),
+      send_sample_app_by_link: () => pretendToSendByCable(),
       // The demo keeps no guide's words until one has been made, and takes a moment to pretend the AI is writing.
       guide_state: ({ name }) => ({ built: true, written: guidesWritten.has(name) }),
       make_guide: ({ name, writeAgain }) => {

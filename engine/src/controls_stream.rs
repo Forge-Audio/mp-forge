@@ -8,7 +8,7 @@ use crate::sample_app::{NOTE_OFF, NOTE_ON, PADS};
 
 /// The note each pad sends, from pad 1 to pad 16. They are not in the order of the pads. An MPC Sample and an
 /// MPC Key 37 send the same ones.
-const NOTES_OF_THE_PADS: [u8; PADS] = [37, 36, 42, 82, 40, 38, 46, 44, 48, 47, 45, 43, 49, 55, 51, 53];
+pub(crate) const NOTES_OF_THE_PADS: [u8; PADS] = [37, 36, 42, 82, 40, 38, 46, 44, 48, 47, 45, 43, 49, 55, 51, 53];
 
 pub(crate) const KIND_OF_MESSAGE: u8 = 0xF0;
 pub(crate) const CHANNEL_OF_MESSAGE: u8 = 0x0F;

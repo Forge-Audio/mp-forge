@@ -16,6 +16,7 @@
   const aiAccounts = window.aiAccounts;
   const livePlayer = window.livePlayer;
   const samplePlayer = window.samplePlayer;
+  const sampleSend = window.sampleSend;
   const lookEditor = window.lookEditor;
   const { element, remember, recall } = window.helpers;
   const { addressOf } = window.fetchedImages;
@@ -43,7 +44,6 @@
   const SHOW_THE_PLUGIN = "Bring the plugin's view back beside the conversation.";
   const ASK_FOR_A_PLUGIN = "Describe your plugin";
   const ASK_FOR_AN_APP = "Describe your app for the MPC Sample";
-  const SAFE_BUT_NOT_SENT = "SAFE";
   const KIND_OF_A_SAMPLE_APP = "sample-app";
   const MADE_FOR_THE_SAMPLE = "sample";
   const NAME_FOR_EXAMPLE = { plugin: "Dusty Tape", app: "Night Bus" };
@@ -74,6 +74,8 @@
   const IMPORTED_AND_NOT_RUN = "**Brought in.** Nothing of it has been run yet. Run the safety check to build it, then you can see its screen, play it and change it.";
   const NO_SUCH_VERSION = "That version could not be found, so nothing was changed.";
   const NOT_SENT_UNTIL_SAFE = "A plugin has to pass its safety check before it can be sent to your MPC. Press the status at the top to run the check.";
+  const NOT_PUT_ON_THE_SAMPLE_UNTIL_SAFE = "An app has to pass its safety check before it can go onto your MPC Sample. Press the status at the top to run the check.";
+  const WHERE_AN_OPEN_PLUGIN_GOES = { plugin: "Send to your MPC", app: "Put on your MPC Sample" };
   const SHOWS_AFTER_A_RESTART = "It shows in the MPC's plugin list once the MPC's app has next been restarted.";
   // The steps of the AI's work that change what the plugin's screen shows, by how their words begin.
   const STEPS_THAT_CHANGE_THE_SCREEN = ["writing ", "styling the screen"];
@@ -684,8 +686,12 @@
     return statusOf(state.openName) === STATUS.safe;
   }
 
+  function whereTheOpenPluginGoes() {
+    return samplePlayer.isASampleApp(state.openPlugin) ? WHERE_AN_OPEN_PLUGIN_GOES.app : WHERE_AN_OPEN_PLUGIN_GOES.plugin;
+  }
+
   function drawSendButton() {
-    const words = canBeSent() ? "Send to your MPC" : "Send to your MPC. It has to pass its safety check first.";
+    const words = canBeSent() ? whereTheOpenPluginGoes() : `${whereTheOpenPluginGoes()}. It has to pass its safety check first.`;
     page.sendToMpc.disabled = state.openName === NEW_PLUGIN || isBeingWorkedOn(state.openName);
     page.sendToMpc.classList.toggle("is-held", !canBeSent());
     page.sendToMpc.title = words;
@@ -949,14 +955,8 @@
     showOnTheSample(plugin);
   }
 
-  // An app for the MPC Sample cannot be sent anywhere yet, so one that passed its check is only said to be safe.
-  function statusInWords() {
-    const status = statusOf(state.openName);
-    return status === STATUS.safe && samplePlayer.isASampleApp(state.openPlugin) ? SAFE_BUT_NOT_SENT : status;
-  }
-
   function drawStatus() {
-    page.status.textContent = statusInWords();
+    page.status.textContent = statusOf(state.openName);
     drawSmith();
     page.statusButton.disabled = !canBeChecked();
     drawSendButton();
@@ -1815,8 +1815,29 @@
     drawWork();
   }
 
+  // An app for the MPC Sample goes onto the device's card, by its cable or by a card in this computer. The
+  // safety check is run once more first, as before any sending.
+  async function putOpenAppOnTheSample() {
+    const appName = state.openName;
+    if (!canBeSent()) return addMessage(appName, { kind: "problem", text: NOT_PUT_ON_THE_SAMPLE_UNTIL_SAFE });
+    const way = await sampleSend.askWhichWay(page.appSheet, appName);
+    if (!way || !(await sampleSend.isReadyToGo(way).catch(() => false))) return;
+    state.checking.set(appName, STATUS.sending);
+    drawWork();
+    try {
+      const outcome = await sampleSend.put(appName, way, (words) => addMessage(appName, { kind: "note", text: words }));
+      showReport(appName, outcome.report);
+      if (outcome.words) addMessage(appName, { kind: "note", text: outcome.words });
+    } catch (problem) {
+      addMessage(appName, { kind: "problem", text: describeProblem(problem) });
+    }
+    state.checking.delete(appName);
+    drawWork();
+  }
+
   async function sendOpenPluginToMpc() {
     const pluginName = state.openName;
+    if (samplePlayer.isASampleApp(state.openPlugin)) return putOpenAppOnTheSample();
     if (!canBeSent()) return addMessage(pluginName, { kind: "problem", text: NOT_SENT_UNTIL_SAFE });
     const asked = await askBeforeSending(page.appSheet, pluginName, appSettings.mpc(), whereItGoesOnline(state.openPlugin));
     if (!asked) return;
@@ -1846,7 +1867,7 @@
     const cannotBeTouched = state.openName === NEW_PLUGIN || isBeingWorkedOn(state.openName);
     return [
       appMenu.row(livePlayer.isSounding() ? "Stop playing" : "Play plugin", toggleLiveSound, page.play.disabled),
-      appMenu.row("Send to your MPC…", sendOpenPluginToMpc, cannotBeTouched || !canBeSent()),
+      appMenu.row(`${whereTheOpenPluginGoes()}…`, sendOpenPluginToMpc, cannotBeTouched || !canBeSent()),
       appMenu.row("Edit the look", editTheLook, page.editLook.disabled),
       appMenu.row("Versions…", showVersions, page.goBack.disabled),
       appMenu.row("Run the safety check", checkOpenPlugin, !canBeChecked()),
@@ -2149,6 +2170,11 @@
     window.settingsGroups.showTheGroupOf(document.getElementById("updates-check"));
   }
 
+  function sampleLinkParts() {
+    const part = (name) => document.getElementById(`sample-link-${name}`);
+    return { make: part("make"), made: part("made"), said: part("said") };
+  }
+
   function pluginsFolderParts() {
     const part = (name) => document.getElementById(`plugins-folder-${name}`);
     return { path: part("path"), state: part("state"), show: part("show"), choose: part("choose"), asking: part("asking"), said: part("said") };
@@ -2178,6 +2204,7 @@
     appSettings.start(settingsParts());
     window.settingsGroups.start(document.getElementById("settings-groups"), document.getElementById("settings-shown"));
     window.pluginsFolder.start(pluginsFolderParts(), pluginsAreKeptElsewhere);
+    window.sampleLink.start(sampleLinkParts());
     window.updates.start(updatesParts(), showUpdatesInSettings);
     tabStrip.start({ strip: page.tabs, earlier: document.getElementById("tabs-earlier"), later: document.getElementById("tabs-later") }, drawTabs);
     page.newPluginTab.addEventListener("click", () => openFromItsTab(NEW_PLUGIN));

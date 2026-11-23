@@ -25,6 +25,10 @@ flate2 = "1"
 tar = "0.4"
 midir = "0.11.1"
 
+[dev-dependencies]
+# Already in the build through other crates. The tests use it to stand in for the port the MPC Sample's controls speak on.
+libc = "0.2"
+
 # Decoding an MP3 unoptimised takes seconds for one song, so the decoder is optimised in development builds too.
 [profile.dev.package.symphonia-bundle-mp3]
 opt-level = 3

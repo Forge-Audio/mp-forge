@@ -2055,6 +2055,7 @@ dependencies = [
  "base64",
  "cpal",
  "flate2",
+ "libc",
  "libloading 0.9.1",
  "midir",
  "resvg",

@@ -9,6 +9,9 @@
 // Never two at once: MP Forge calls one of an app's functions at a time, so an app needs no locks. `makeSound`
 // is called very often and must come back at once: no waiting, no files, no memory asked for there.
 //
+// On the device, holding SHIFT and STOP together for a second leaves the app. MP Forge sees to that itself,
+// whatever the app does: an app is told of both buttons like any other, and gives that hold no use of its own.
+//
 // An app never opens a file. The sound files the musician added to it are read by MP Forge and handed over
 // whole, as `samples()`. A file on the SD card is asked for through `card()`, or picked by the musician on the
 // kit's own page, `browseCard`, and MP Forge loads it and hands it over the same way.

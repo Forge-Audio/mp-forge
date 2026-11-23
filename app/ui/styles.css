@@ -937,7 +937,7 @@ body.on-the-sample .for-mpcs { display: none; }
 /* While something new is only being described there is no device to show yet, and the drawing would hold the
    conversation off the side of the window. */
 body.starting-new .sample-view { display: none; }
-body.on-the-sample :is(.mirror-row, .playing-row, #play, #send-to-mpc, #edit-look) { display: none; }
+body.on-the-sample :is(.mirror-row, .playing-row, #play, #edit-look) { display: none; }
 .sample-view { display: flex; flex-direction: column; gap: 12px; }
 .sample-view > .sheet-problem { white-space: pre-wrap; }
 /* The hints stand beside the device, where they are read without scrolling, and go under it only where the

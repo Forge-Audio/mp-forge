@@ -8,11 +8,13 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use serde_json::json;
+use workbench_engine::app_sending::{self, Doors, NotSent, Refusal};
 use workbench_engine::app_sounds::{AppSound, sounds_of};
 use workbench_engine::agent::{Brief, Entry, Model, ModelError, ModelTurn, StopReason, ToolOutput, Toolbox};
 use workbench_engine::artwork::{built_control_number, draw_pictures};
 use workbench_engine::beat_loop::beat_loop;
 use workbench_engine::built_knobs::KNOB_FILE;
+use workbench_engine::device_app;
 use workbench_engine::device_link::DeviceLink;
 use workbench_engine::gate::{
     APP_BUILD_CHECK, APP_SOURCE_CHECK, APP_TRIAL_CHECK,
@@ -21,7 +23,7 @@ use workbench_engine::gate::{
 use workbench_engine::hosted_plugin::{HostedPlugin, LARGEST_BLOCK, Note, moves_made_by_the_plugin};
 use workbench_engine::library::built_parameters;
 use workbench_engine::link_program;
-use workbench_engine::maker::{Connection, Maker, PluginRequest};
+use workbench_engine::maker::{Connection, Maker, PluginRequest, PutOnACard, SentToTheSample};
 use workbench_engine::online::{ONLINE_FILE, ONLINE_IS_SWITCHED_OFF};
 use workbench_engine::open_mpc_listing::{self, License, Listing};
 use workbench_engine::origin::Origin;
@@ -34,6 +36,7 @@ use workbench_engine::open_mpc;
 use workbench_engine::project_file::{self, pack, take_in};
 use workbench_engine::sample_app::{self, Input, MidiCameIn, RunningApp, Shown, SoundIn};
 use workbench_engine::sample_app_tools::SampleAppTools;
+use workbench_engine::sample_surface::Lights;
 use workbench_engine::samples::{SampleShelf, sixteen_bit_wav};
 use workbench_engine::sd_card::{self, AskedOfTheCard, SdCard, write_trial_card};
 use workbench_engine::sdk::{PluginIdentity, PluginKind, Sdk, built_screen_file, native_library_of};
@@ -1432,7 +1435,20 @@ struct StandInDevice {
     screen: PathBuf,
     controls: PathBuf,
     port: u16,
+    port_for_apps: u16,
+    /// The folder that stands in for where the boot menu looks on the device's card.
+    folder_for_apps: PathBuf,
     _folder: PluginsFolder,
+}
+
+/// How a stand-in device is started: as one that only links, as one that also takes apps onto its card, or
+/// as one whose folder for apps turns out to lie on the device's own storage.
+#[cfg(unix)]
+#[derive(Clone, Copy, PartialEq)]
+enum Takes {
+    NoApps,
+    Apps,
+    AppsButIsNotOnACard,
 }
 
 #[cfg(unix)]
@@ -1440,15 +1456,70 @@ impl StandInDevice {
     const BYTES_A_SCREEN: usize = sample_app::SCREEN_WIDTH * sample_app::SCREEN_HEIGHT * 4;
 
     fn started(label: &str) -> Self {
+        Self::started_as_one_that(Takes::NoApps, label)
+    }
+
+    fn started_as_one_that(takes: Takes, label: &str) -> Self {
         let folder = PluginsFolder::empty(label);
         let sdk = Sdk::at(sdk_dir()).unwrap_or_else(|not_found| panic!("{not_found}"));
         let built = link_program::build_for_this_computer(&sdk, &folder.0, Duration::from_secs(300)).unwrap_or_else(|not_built| panic!("{not_built}"));
-        let (screen, controls) = (folder.0.join("screen"), folder.0.join("controls"));
+        let (screen, controls, folder_for_apps) = (folder.0.join("screen"), folder.0.join("controls"), folder.0.join("card/autorun/mods"));
         fs::write(&screen, vec![0u8; Self::BYTES_A_SCREEN]).unwrap();
+        fs::create_dir_all(&folder_for_apps).unwrap();
         assert!(std::process::Command::new("mkfifo").arg(&controls).status().unwrap().success());
-        let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
-        let program = std::process::Command::new(built).args([&screen, &controls]).arg(port.to_string()).spawn().unwrap();
-        Self { program, screen, controls, port, _folder: folder }
+        let [port, port_for_apps] = [(); 2].map(|()| std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port());
+        let mut started = std::process::Command::new(built);
+        started.args([&screen, &controls]).arg(port.to_string());
+        if takes != Takes::NoApps {
+            started.arg(port_for_apps.to_string()).arg(&folder_for_apps);
+        }
+        if takes == Takes::AppsButIsNotOnACard {
+            started.arg(&folder.0);
+        }
+        Self { program: started.spawn().unwrap(), screen, controls, port, port_for_apps, folder_for_apps, _folder: folder }
+    }
+
+    fn doors(&self) -> Doors {
+        Doors::at(self.address(), self.port_for_apps)
+    }
+
+    /// Whether the screen asks the musician to let the computer put apps on the card. Only that picture has
+    /// writing this far up.
+    fn asks_the_musician(&self) -> bool {
+        const INK_ON_THE_SCREEN: [u8; 4] = [242, 235, 236, 0];
+        const ROWS_OF_THE_QUESTION: std::ops::Range<usize> = 40..50;
+        let bytes_a_row = sample_app::SCREEN_WIDTH * 4;
+        let shown = fs::read(&self.screen).unwrap();
+        shown[ROWS_OF_THE_QUESTION.start * bytes_a_row..ROWS_OF_THE_QUESTION.end * bytes_a_row].chunks_exact(4).any(|dot| dot == INK_ON_THE_SCREEN)
+    }
+
+    /// Waits until the musician is asked on the screen, then answers with what the controls send.
+    fn answer_once_asked(&self, sent_by_the_controls: &[u8]) {
+        let gives_up = std::time::Instant::now() + Duration::from_secs(10);
+        while !self.asks_the_musician() && std::time::Instant::now() < gives_up {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        self.touch(sent_by_the_controls);
+    }
+
+    /// What `send` comes to, with the musician answering on the device as soon as they are asked.
+    fn with_the_musician_answering<Sent: Send>(&self, sent_by_the_controls: &[u8], send: impl FnOnce() -> Sent + Send) -> Sent {
+        std::thread::scope(|both| {
+            both.spawn(|| self.answer_once_asked(sent_by_the_controls));
+            both.spawn(send).join().unwrap()
+        })
+    }
+
+    /// Doors nothing waits at.
+    fn doors_of_nothing(&self) -> Doors {
+        let nothing_waits_here = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap();
+        Doors::at(nothing_waits_here, nothing_waits_here.port())
+    }
+
+    fn names_where_the_boot_menu_looks(&self) -> Vec<String> {
+        let mut names: Vec<String> = fs::read_dir(&self.folder_for_apps).unwrap().flatten().map(|entry| entry.file_name().to_string_lossy().into_owned()).collect();
+        names.sort();
+        names
     }
 
     fn address(&self) -> std::net::SocketAddr {
@@ -1548,4 +1619,543 @@ fn the_folder_for_the_boot_menu_holds_mp_forge_link_built_for_the_mpc_samples_pr
     assert_eq!(files, ["autorun.json", "mp-forge-link", "sampleboot.txt", "start-mp-forge-link.sh"], "nothing that starts the boot menu itself is among them");
     assert_eq!(fs::read_to_string(written.join("autorun.json")).unwrap(), r#"{"scripts":[{"path":"start-mp-forge-link.sh"}]}"#);
     assert_eq!(fs::read_to_string(written.join("sampleboot.txt")).unwrap(), "MP Forge Link");
+}
+
+/// What stands in for the port the MPC Sample's controls speak on: one place a program both reads what the
+/// controls send and writes what sets their lights. Here the test is the controls.
+#[cfg(unix)]
+struct StandInControls {
+    this_end: fs::File,
+    /// Kept open so that the port stays as it was set up for as long as the test runs.
+    _the_programs_end: fs::File,
+    port: PathBuf,
+}
+
+#[cfg(unix)]
+impl StandInControls {
+    fn opened() -> Self {
+        use std::os::fd::{AsRawFd, FromRawFd};
+        use std::os::unix::fs::OpenOptionsExt;
+        unsafe {
+            let this_end = libc::posix_openpt(libc::O_RDWR | libc::O_NOCTTY);
+            assert!(this_end >= 0 && libc::grantpt(this_end) == 0 && libc::unlockpt(this_end) == 0);
+            let port = PathBuf::from(std::ffi::CStr::from_ptr(libc::ptsname(this_end)).to_str().unwrap());
+            let the_programs_end = fs::OpenOptions::new().read(true).write(true).custom_flags(libc::O_NOCTTY).open(&port).unwrap();
+            let mut passes_bytes_as_they_are: libc::termios = std::mem::zeroed();
+            assert_eq!(libc::tcgetattr(the_programs_end.as_raw_fd(), &mut passes_bytes_as_they_are), 0);
+            libc::cfmakeraw(&mut passes_bytes_as_they_are);
+            assert_eq!(libc::tcsetattr(the_programs_end.as_raw_fd(), libc::TCSANOW, &passes_bytes_as_they_are), 0);
+            assert_eq!(libc::fcntl(this_end, libc::F_SETFL, libc::O_NONBLOCK), 0);
+            Self { this_end: fs::File::from_raw_fd(this_end), _the_programs_end: the_programs_end, port }
+        }
+    }
+
+    fn send(&mut self, sent_by_the_controls: &[u8]) {
+        self.this_end.write_all(sent_by_the_controls).unwrap();
+    }
+
+    /// Everything the program has sent to the controls since the last time, once that ends with `awaited`,
+    /// or whatever it has sent after ten seconds.
+    fn sent_to_them_once_it_ends_with(&mut self, awaited: &[u8]) -> Vec<u8> {
+        use std::io::Read;
+        let gives_up = std::time::Instant::now() + Duration::from_secs(10);
+        let mut sent = Vec::new();
+        while !sent.ends_with(awaited) && std::time::Instant::now() < gives_up {
+            let mut arrived = [0u8; 1024];
+            match self.this_end.read(&mut arrived) {
+                Ok(count) => sent.extend(&arrived[..count]),
+                Err(_) => std::thread::sleep(Duration::from_millis(20)),
+            }
+        }
+        sent
+    }
+}
+
+/// An app built with MP Forge's program that runs it on the device, run here in the device's place: a file
+/// for its screen, a file its sound is written to, and a folder for its card.
+#[cfg(unix)]
+struct StandInSample {
+    program: std::process::Child,
+    controls: StandInControls,
+    screen: PathBuf,
+    sound: PathBuf,
+    notes: PathBuf,
+}
+
+#[cfg(unix)]
+impl StandInSample {
+    const BYTES_A_SCREEN: usize = sample_app::SCREEN_WIDTH * sample_app::SCREEN_HEIGHT * 4;
+    const LOUDEST: f32 = 2_147_483_647.0;
+
+    /// Starts the app in `app_dir` with the sound files in `sounds` and the card in `card`.
+    fn running(app_dir: &Path, sounds: &Path, card: &Path) -> Self {
+        let sdk = Sdk::at(sdk_dir()).unwrap_or_else(|not_found| panic!("{not_found}"));
+        let built = device_app::build_for_this_computer(&sdk, app_dir, Duration::from_secs(300)).unwrap_or_else(|not_built| panic!("{not_built}"));
+        let controls = StandInControls::opened();
+        let [screen, sound, notes] = ["screen", "sound", "notes"].map(|file| app_dir.join(file));
+        fs::write(&screen, vec![0u8; Self::BYTES_A_SCREEN]).unwrap();
+        fs::write(&sound, []).unwrap();
+        let places = [screen.as_path(), controls.port.as_path(), sound.as_path(), Path::new("/dev/null"), sounds, card];
+        let program = std::process::Command::new(built).args(places).stderr(fs::File::create(&notes).unwrap()).spawn().unwrap();
+        Self { program, controls, screen, sound, notes }
+    }
+
+    /// The dot at the top left of the screen once it is this one, or whatever it is after ten seconds.
+    fn first_dot_once_it_is(&self, awaited: [u8; 4]) -> Vec<u8> {
+        let first_dot = || fs::read(&self.screen).unwrap()[..4].to_vec();
+        let gives_up = std::time::Instant::now() + Duration::from_secs(10);
+        while first_dot() != awaited && std::time::Instant::now() < gives_up {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        first_dot()
+    }
+
+    /// How loud the loudest sound is that the app makes in the next stretch of time, from 0 to 1.
+    fn loudest_in_the_next(&self, stretch: Duration) -> f32 {
+        let heard_before = fs::metadata(&self.sound).unwrap().len() as usize;
+        std::thread::sleep(stretch);
+        let heard = fs::read(&self.sound).unwrap();
+        let numbers = heard[heard_before - heard_before % 4..].chunks_exact(4).map(|number| i32::from_le_bytes([number[0], number[1], number[2], number[3]]));
+        numbers.fold(0.0, |loudest, number| (number as f32 / Self::LOUDEST).abs().max(loudest))
+    }
+
+    fn has_ended_within(&mut self, patience: Duration) -> bool {
+        let gives_up = std::time::Instant::now() + patience;
+        while std::time::Instant::now() < gives_up {
+            if self.program.try_wait().unwrap().is_some() {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        false
+    }
+
+    fn notes(&self) -> String {
+        fs::read_to_string(&self.notes).unwrap()
+    }
+}
+
+#[cfg(unix)]
+impl Drop for StandInSample {
+    fn drop(&mut self) {
+        let _ = self.program.kill();
+        let _ = self.program.wait();
+    }
+}
+
+#[cfg(unix)]
+const ASKS_WHERE_THE_KNOBS_STAND: [u8; 8] = [0xF0, 0x47, 0x7F, 0x5C, 0x42, 0x00, 0x00, 0xF7];
+#[cfg(unix)]
+const PAD_ONE_HIT: [u8; 3] = [0x99, 37, 127];
+#[cfg(unix)]
+const PLAY_PRESSED: [u8; 3] = [0x90, 82, 127];
+#[cfg(unix)]
+const SHIFT_AND_STOP_HELD: [u8; 6] = [0x90, 49, 127, 0x90, 81, 127];
+#[cfg(unix)]
+const MAIN_VOLUME_ALL_THE_WAY_UP: [u8; 3] = [0xB0, 19, 127];
+#[cfg(unix)]
+const LAST_LIGHT_SET: [u8; 3] = [0xB0, 82, 0];
+
+/// What Pocket Pads shows on a computer before anything is touched, and once PLAY is pressed.
+#[cfg(unix)]
+fn shown_by_pocket_pads_on_a_computer(app_dir: &Path) -> (Shown, Shown) {
+    let sdk = Sdk::at(sdk_dir()).unwrap_or_else(|not_found| panic!("{not_found}"));
+    let library = sample_app::build_for_this_computer(&sdk, app_dir, Duration::from_secs(300)).unwrap_or_else(|not_built| panic!("{not_built}"));
+    let mut app = RunningApp::load(&library, 44_100.0, Vec::new()).unwrap();
+    let at_rest = app.show();
+    app.tell(Input::button("PLAY", true).unwrap());
+    (at_rest, app.show())
+}
+
+#[cfg(unix)]
+#[test]
+fn on_the_device_an_app_asks_the_knobs_where_they_stand_and_shows_its_picture_and_lights_as_on_a_computer() {
+    const THE_TITLE_BAR_ON_THE_SCREEN: [u8; 4] = [31, 39, 181, 0];
+    let apps = PluginsFolder::empty("device-app-shows");
+    let app_dir = pocket_pads_in(&apps);
+    let (at_rest, with_play_pressed) = shown_by_pocket_pads_on_a_computer(&app_dir);
+    let lights_at_rest = Lights::of(&at_rest).bytes_to_set_from(None);
+    let lights_that_change = Lights::of(&with_play_pressed).bytes_to_set_from(Some(&Lights::of(&at_rest)));
+
+    let mut device = StandInSample::running(&app_dir, &apps.0.join("no-sounds"), &apps.0.join("no-card"));
+    let sent_at_the_start = device.controls.sent_to_them_once_it_ends_with(&LAST_LIGHT_SET);
+    let shown = device.first_dot_once_it_is(THE_TITLE_BAR_ON_THE_SCREEN);
+    device.controls.send(&PLAY_PRESSED);
+    let sent_once_play_is_pressed = device.controls.sent_to_them_once_it_ends_with(&lights_that_change);
+
+    assert_eq!(sent_at_the_start, [&ASKS_WHERE_THE_KNOBS_STAND[..], &lights_at_rest].concat(), "the knobs are asked first, then every light is set as a computer sets it");
+    assert_eq!(shown, THE_TITLE_BAR_ON_THE_SCREEN, "the picture reaches the screen in the screen's own order of colours");
+    assert_eq!(sent_once_play_is_pressed, lights_that_change, "after that only a light that changed is set");
+    assert_eq!(lights_that_change, [0xB0, 82, 2]);
+}
+
+#[cfg(unix)]
+#[test]
+fn on_the_device_an_app_is_heard_as_loud_as_the_main_volume_says_and_is_left_by_holding_shift_and_stop() {
+    const ONLY_SHIFT_HELD: [u8; 3] = [0x90, 49, 127];
+    const STOP_HELD_TOO: [u8; 3] = [0x90, 81, 127];
+    let apps = PluginsFolder::empty("device-app-sound");
+    let mut device = StandInSample::running(&pocket_pads_in(&apps), &apps.0.join("no-sounds"), &apps.0.join("no-card"));
+    device.controls.sent_to_them_once_it_ends_with(&LAST_LIGHT_SET);
+
+    let before_a_hit = device.loudest_in_the_next(Duration::from_millis(200));
+    device.controls.send(&PAD_ONE_HIT);
+    let at_the_volume_it_starts_with = device.loudest_in_the_next(Duration::from_millis(300));
+    device.controls.send(&[MAIN_VOLUME_ALL_THE_WAY_UP, PAD_ONE_HIT].concat());
+    let at_full_volume = device.loudest_in_the_next(Duration::from_millis(300));
+    device.controls.send(&ONLY_SHIFT_HELD);
+    let left_by_shift_alone = device.has_ended_within(Duration::from_millis(1500));
+    device.controls.send(&STOP_HELD_TOO);
+    let left_by_both = device.has_ended_within(Duration::from_secs(10));
+
+    assert_eq!(before_a_hit, 0.0, "nothing is heard until a pad is hit");
+    assert!(at_the_volume_it_starts_with > 0.01, "a hit pad is heard, at {at_the_volume_it_starts_with}");
+    assert!(at_full_volume > at_the_volume_it_starts_with * 2.0 && at_full_volume <= 1.0, "{at_the_volume_it_starts_with} then {at_full_volume}");
+    assert!(!left_by_shift_alone && left_by_both, "{}", device.notes());
+    assert!(device.controls.sent_to_them_once_it_ends_with(&LAST_LIGHT_SET).ends_with(&LAST_LIGHT_SET), "every light is put out on the way out");
+}
+
+#[cfg(unix)]
+#[test]
+fn on_the_device_an_app_plays_the_sound_files_added_to_it_and_loads_more_from_the_card_itself() {
+    const FADER_ALL_THE_WAY_UP: [u8; 3] = [0xB0, 20, 127];
+    const PAD_THREE_HIT: [u8; 6] = [0x89, 42, 0, 0x99, 42, 127];
+    const SAMPLE_SELECT_PRESSED: [u8; 3] = [0x90, 36, 127];
+    const DIAL_TURNED_TO_THE_THIRD_ROW: [u8; 3] = [0xB0, 100, 2];
+    const DIAL_PUSHED: [u8; 3] = [0x90, 111, 127];
+    const TIME_TO_READ_THE_CARD: Duration = Duration::from_millis(400);
+    let apps = PluginsFolder::empty("device-app-files");
+    let app_dir = sample_pads_in(&apps);
+    let its_sounds = apps.0.join("sounds");
+    SampleShelf::at(&its_sounds).add("kick.wav", &loud_tone(0.2)).unwrap();
+    write_trial_card(&apps.0.join("card")).unwrap();
+    let mut device = StandInSample::running(&app_dir, &its_sounds, &apps.0.join("card"));
+    device.controls.sent_to_them_once_it_ends_with(&LAST_LIGHT_SET);
+    device.controls.send(&[MAIN_VOLUME_ALL_THE_WAY_UP, FADER_ALL_THE_WAY_UP].concat());
+
+    device.controls.send(&PAD_ONE_HIT);
+    let the_sound_added_to_the_app = device.loudest_in_the_next(Duration::from_millis(300));
+    device.controls.send(&PAD_THREE_HIT);
+    let a_pad_with_no_sound = device.loudest_in_the_next(Duration::from_millis(600));
+    for touched_on_the_cards_page in [SAMPLE_SELECT_PRESSED, DIAL_TURNED_TO_THE_THIRD_ROW, DIAL_PUSHED] {
+        device.controls.send(&touched_on_the_cards_page);
+        std::thread::sleep(TIME_TO_READ_THE_CARD);
+    }
+    device.controls.send(&PAD_THREE_HIT);
+    let the_file_loaded_from_the_card = device.loudest_in_the_next(Duration::from_millis(300));
+
+    assert!(the_sound_added_to_the_app > 0.3, "the pad plays the sound added to the app, at {the_sound_added_to_the_app}");
+    assert_eq!(a_pad_with_no_sound, 0.0);
+    assert!(the_file_loaded_from_the_card > 0.3, "the pad plays tone.wav from the card, at {the_file_loaded_from_the_card}\n{}", device.notes());
+}
+
+/// A WAV file of a steady tone at most of full loudness.
+#[cfg(unix)]
+fn loud_tone(seconds: f32) -> Vec<u8> {
+    let frames = (seconds * 44_100.0) as usize;
+    let numbers: Vec<i16> = (0..frames).map(|frame| ((frame as f32 * 0.05).sin() * 0.8 * f32::from(i16::MAX)) as i16).collect();
+    sixteen_bit_wav(1, 44_100, &numbers)
+}
+
+#[cfg(unix)]
+#[test]
+fn on_the_device_an_app_that_stops_answering_is_left_so_the_device_is_never_stuck_in_it() {
+    const AN_APP_THAT_HANGS_WHEN_A_PAD_IS_HIT: &str = r#"
+        #include "mpc_sample_app.h"
+        class Hangs : public sample::App {
+        public:
+            void padHit(int, float) override { for (;;) stuck_ = stuck_ + 1; }
+            void makeSound(sample::Sound& sound) override { sound.silence(); }
+            void draw(sample::Screen& screen, sample::Lights&) override { screen.clear({0, 0, 0}); }
+        private:
+            volatile int stuck_ = 0;
+        };
+        MPC_SAMPLE_APP(Hangs)
+    "#;
+    let apps = PluginsFolder::empty("device-app-hangs");
+    let app_dir = apps.0.join("Hangs");
+    fs::create_dir_all(app_dir.join("src")).unwrap();
+    fs::write(app_dir.join("src/Hangs.cpp"), AN_APP_THAT_HANGS_WHEN_A_PAD_IS_HIT).unwrap();
+    let mut device = StandInSample::running(&app_dir, &apps.0.join("no-sounds"), &apps.0.join("no-card"));
+    device.controls.sent_to_them_once_it_ends_with(&LAST_LIGHT_SET);
+
+    let left_while_it_answers = device.has_ended_within(Duration::from_secs(1));
+    device.controls.send(&[PAD_ONE_HIT.as_slice(), &SHIFT_AND_STOP_HELD].concat());
+    let left_once_it_hangs = device.has_ended_within(Duration::from_secs(15));
+
+    assert!(!left_while_it_answers && left_once_it_hangs);
+    assert!(device.notes().contains("The app stopped answering, so it was left."), "{}", device.notes());
+}
+
+#[test]
+fn an_app_for_the_device_is_one_program_for_its_processor_in_a_folder_the_boot_menu_can_start() {
+    const STARTS_A_LINUX_PROGRAM: &[u8] = b"\x7FELF";
+    const WHERE_THE_PROCESSOR_IS_SAID: usize = 18;
+    const SIXTY_FOUR_BIT_ARM: u8 = 183;
+    let apps = PluginsFolder::empty("device-app-for-the-device");
+    let app_dir = sample_pads_in(&apps);
+    SampleShelf::of_plugin(&app_dir).add("kick.wav", &sixteen_bit_wav(1, 44_100, &[0, 1_000, 0, -1_000])).unwrap();
+    let where_the_boot_menu_looks = apps.0.join("card/autorun/mods");
+    fs::create_dir_all(&where_the_boot_menu_looks).unwrap();
+    let sdk = Sdk::at(sdk_dir()).unwrap_or_else(|not_found| panic!("{not_found}"));
+
+    let made = device_app::write_for_the_card_picked(&sdk, &app_dir, &apps.0.join("card"), Duration::from_secs(300)).unwrap_or_else(|not_made| panic!("{not_made}"));
+
+    let program = fs::read(made.folder.join("app")).unwrap();
+    let mut files: Vec<String> = fs::read_dir(&made.folder).unwrap().flatten().map(|entry| entry.file_name().to_string_lossy().into_owned()).collect();
+    files.sort();
+    assert_eq!((made.folder.as_path(), made.is_where_the_boot_menu_looks), (where_the_boot_menu_looks.join("Sample Pads").as_path(), true));
+    assert!(program.starts_with(STARTS_A_LINUX_PROGRAM));
+    assert_eq!(program[WHERE_THE_PROCESSOR_IS_SAID], SIXTY_FOUR_BIT_ARM);
+    assert!(!String::from_utf8_lossy(&program).contains("ld-musl"), "it asks for no library of the device's");
+    assert_eq!(files, ["app", "autorun.json", "sampleboot.txt", "sounds", "start-app.sh"], "nothing that starts the boot menu itself is among them");
+    assert_eq!(fs::read_to_string(made.folder.join("autorun.json")).unwrap(), r#"{"scripts":[{"path":"start-app.sh"}]}"#);
+    assert_eq!(fs::read_to_string(made.folder.join("sampleboot.txt")).unwrap(), "Sample Pads");
+    assert!(made.folder.join("sounds/kick.wav").is_file());
+    assert_eq!(fs::read_dir(&where_the_boot_menu_looks).unwrap().count(), 1, "nothing is left beside the app's folder");
+}
+
+#[cfg(unix)]
+const THE_DIAL_PUSHED: [u8; 3] = [0x90, 111, 127];
+#[cfg(unix)]
+const THE_WAITING_PICTURES_BAR: [u8; 4] = [31, 39, 181, 0];
+
+/// The folder of an app called Night Bus as it goes to a device, with a start script that only notes what it
+/// was told, in the place of one that starts a program built for the device.
+#[cfg(unix)]
+fn folder_of_night_bus_in(holder: &PluginsFolder) -> PathBuf {
+    const NOTES_WHAT_IT_WAS_TOLD: &str = "#!/bin/sh\necho \"$1\" > \"$(dirname -- \"$0\")/was-started.txt\"\n";
+    let folder = holder.0.join("Night Bus");
+    fs::create_dir_all(folder.join("sounds")).unwrap();
+    fs::write(folder.join("app"), vec![7u8; 200_000]).unwrap();
+    fs::write(folder.join("start-app.sh"), NOTES_WHAT_IT_WAS_TOLD).unwrap();
+    fs::write(folder.join("sampleboot.txt"), "Night Bus").unwrap();
+    fs::write(folder.join("sounds/kick.wav"), sixteen_bit_wav(1, 44_100, &[0, 1_000, 0, -1_000])).unwrap();
+    folder
+}
+
+/// What the stand-in start script of an app noted it was told, once it has run, or nothing after ten seconds.
+#[cfg(unix)]
+fn what_the_start_script_was_told_in(on_the_card: &Path) -> String {
+    let gives_up = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        match fs::read_to_string(on_the_card.join("was-started.txt")) {
+            Ok(told) if !told.is_empty() => return told,
+            _ if std::time::Instant::now() > gives_up => return String::new(),
+            _ => std::thread::sleep(Duration::from_millis(50)),
+        }
+    }
+}
+
+/// A computer at a stand-in device's door for apps, asking one thing at a time by its bytes.
+#[cfg(unix)]
+struct AtTheDoorForApps(std::net::TcpStream);
+
+#[cfg(unix)]
+impl AtTheDoorForApps {
+    fn of(device: &StandInDevice) -> Self {
+        use std::io::Read;
+        let mut link = std::net::TcpStream::connect(("127.0.0.1", device.port_for_apps)).unwrap();
+        let mut greeting = [0u8; 21];
+        link.read_exact(&mut greeting).unwrap();
+        assert_eq!(&greeting, b"MP FORGE LINK APPS 1\n");
+        link.write_all(b"MP FORGE SENDS AN APP\n").unwrap();
+        Self(link)
+    }
+
+    /// The link's answer to what is asked.
+    fn ask(&mut self, asked: &[u8]) -> char {
+        use std::io::Read;
+        let mut answer = [0u8; 1];
+        self.0.write_all(asked).unwrap();
+        self.0.read_exact(&mut answer).unwrap();
+        char::from(answer[0])
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn an_app_sent_over_the_link_lands_where_the_boot_menu_looks_and_runs_until_it_is_left() {
+    let holder = PluginsFolder::empty("app-sent-by-link");
+    let folder = folder_of_night_bus_in(&holder);
+    let device = StandInDevice::started_as_one_that(Takes::Apps, "device-takes-an-app");
+    device.first_dot_once_it_is(THE_WAITING_PICTURES_BAR);
+
+    let sent = device.with_the_musician_answering(&THE_DIAL_PUSHED, || app_sending::send_and_run(&device.doors(), &folder));
+    let on_the_card = device.folder_for_apps.join("Night Bus");
+    let told_when_first_run = what_the_start_script_was_told_in(&on_the_card);
+    let sent_again_without_being_asked = app_sending::send_and_run(&device.doors(), &folder);
+    let told_when_run_again = what_the_start_script_was_told_in(&on_the_card);
+
+    assert!(sent.is_ok(), "{sent:?}");
+    assert_eq!(device.names_where_the_boot_menu_looks(), ["Night Bus"], "nothing is left beside the app's folder");
+    assert_eq!(fs::read(on_the_card.join("app")).unwrap(), fs::read(folder.join("app")).unwrap());
+    assert_eq!(fs::read(on_the_card.join("sounds/kick.wav")).unwrap(), fs::read(folder.join("sounds/kick.wav")).unwrap());
+    assert_eq!(told_when_first_run, "from-mp-forge-link\n", "the app's script is told the link started it");
+    assert_eq!(told_when_run_again, told_when_first_run);
+    assert!(sent_again_without_being_asked.is_ok(), "the musician is asked once each time the link starts: {sent_again_without_being_asked:?}");
+    assert_eq!(device.first_dot_once_it_is(THE_WAITING_PICTURES_BAR), THE_WAITING_PICTURES_BAR, "the link is back once the app is left");
+}
+
+#[cfg(unix)]
+#[test]
+fn an_app_is_kept_off_the_card_when_the_musician_says_no_on_the_device() {
+    const PLAY_PRESSED: [u8; 3] = [0x90, 82, 127];
+    let holder = PluginsFolder::empty("app-not-allowed");
+    let folder = folder_of_night_bus_in(&holder);
+    let device = StandInDevice::started_as_one_that(Takes::Apps, "device-says-no");
+    device.first_dot_once_it_is(THE_WAITING_PICTURES_BAR);
+
+    let sent = device.with_the_musician_answering(&PLAY_PRESSED, || app_sending::send_and_run(&device.doors(), &folder));
+
+    assert!(matches!(sent, Err(NotSent::Refused(Refusal::NotAllowed))), "{sent:?}");
+    assert_eq!(device.names_where_the_boot_menu_looks(), Vec::<String>::new());
+}
+
+#[cfg(unix)]
+#[test]
+fn a_sending_that_breaks_off_leaves_no_half_an_app_on_the_card() {
+    const A_FILE_OF_A_THOUSAND_BYTES: &[u8] = b"F\x03\x00app\xe8\x03\x00\x00\x00\x00\x00\x00";
+    let device = StandInDevice::started_as_one_that(Takes::Apps, "device-sending-breaks-off");
+    device.first_dot_once_it_is(THE_WAITING_PICTURES_BAR);
+    let mut computer = AtTheDoorForApps::of(&device);
+
+    let begun = device.with_the_musician_answering(&THE_DIAL_PUSHED, || computer.ask(b"B\x09Night Bus"));
+    let while_it_arrives = device.names_where_the_boot_menu_looks();
+    computer.0.write_all(&[A_FILE_OF_A_THOUSAND_BYTES, b"only this much"].concat()).unwrap();
+    drop(computer);
+    let gives_up = std::time::Instant::now() + Duration::from_secs(10);
+    while !device.names_where_the_boot_menu_looks().is_empty() && std::time::Instant::now() < gives_up {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    assert_eq!(begun, 'K');
+    assert_eq!(while_it_arrives, ["_Night Bus.arriving"], "an app arrives in a folder the boot menu does not list");
+    assert_eq!(device.names_where_the_boot_menu_looks(), Vec::<String>::new());
+}
+
+#[cfg(unix)]
+#[test]
+fn the_link_writes_nowhere_but_inside_its_folder_for_apps() {
+    const A_FILE_THAT_WOULD_LEAVE_THE_FOLDER: &[u8] = b"F\x0d\x00../escape.txt\x00\x00\x00\x00\xc5\x9d\x1c\x81";
+    const A_FILE_THAT_NAMES_THE_CARDS_TOP: &[u8] = b"F\x0b\x00/escape.txt\x00\x00\x00\x00\xc5\x9d\x1c\x81";
+    let device = StandInDevice::started_as_one_that(Takes::Apps, "device-keeps-to-its-folder");
+    device.first_dot_once_it_is(THE_WAITING_PICTURES_BAR);
+    let beside_the_folder = || fs::read_dir(device.folder_for_apps.parent().unwrap()).unwrap().count();
+    let beside_it_before = beside_the_folder();
+
+    let a_name_that_leaves = AtTheDoorForApps::of(&device).ask(b"B\x09../Escape");
+    let a_name_with_a_way_in_it = AtTheDoorForApps::of(&device).ask(b"B\x07mods/In");
+    let a_name_the_menu_hides = AtTheDoorForApps::of(&device).ask(b"B\x07_Hidden");
+    let mut computer = AtTheDoorForApps::of(&device);
+    let begun = device.with_the_musician_answering(&THE_DIAL_PUSHED, || computer.ask(b"B\x09Night Bus"));
+    let a_path_that_leaves = computer.ask(A_FILE_THAT_WOULD_LEAVE_THE_FOLDER);
+    let mut computer = AtTheDoorForApps::of(&device);
+    let begun_again = computer.ask(b"B\x09Night Bus");
+    let a_path_from_the_top = computer.ask(A_FILE_THAT_NAMES_THE_CARDS_TOP);
+    let run_what_is_not_there = AtTheDoorForApps::of(&device).ask(b"R\x09Night Bus");
+
+    assert_eq!([a_name_that_leaves, a_name_with_a_way_in_it, a_name_the_menu_hides], ['B', 'B', 'B']);
+    assert_eq!([begun, a_path_that_leaves, begun_again, a_path_from_the_top], ['K', 'B', 'K', 'B']);
+    assert_eq!(run_what_is_not_there, 'S');
+    assert_eq!(beside_the_folder(), beside_it_before, "nothing was written beside the folder for apps");
+    assert!(!device.folder_for_apps.join("Night Bus").exists(), "an app that did not arrive whole has no folder");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_folder_on_the_card_that_mp_forge_did_not_make_is_never_written_over_or_run() {
+    let holder = PluginsFolder::empty("app-name-taken");
+    let folder = folder_of_night_bus_in(&holder);
+    let device = StandInDevice::started_as_one_that(Takes::Apps, "device-name-taken");
+    let somebody_elses = device.folder_for_apps.join("Night Bus");
+    fs::create_dir_all(&somebody_elses).unwrap();
+    fs::write(somebody_elses.join("autorun.sh"), "#!/bin/sh\n").unwrap();
+    device.first_dot_once_it_is(THE_WAITING_PICTURES_BAR);
+
+    let sent = app_sending::send_and_run(&device.doors(), &folder);
+    let asked_to_run_it = AtTheDoorForApps::of(&device).ask(b"R\x09Night Bus");
+
+    assert!(matches!(sent, Err(NotSent::Refused(Refusal::NameIsTaken))), "{sent:?}");
+    assert_eq!(asked_to_run_it, 'T');
+    assert_eq!(fs::read_dir(&somebody_elses).unwrap().count(), 1, "the folder is as it was");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_link_that_is_not_on_a_card_takes_no_apps_and_one_from_before_apps_is_told_from_no_link() {
+    let holder = PluginsFolder::empty("app-no-card");
+    let folder = folder_of_night_bus_in(&holder);
+    let not_on_a_card = StandInDevice::started_as_one_that(Takes::AppsButIsNotOnACard, "device-not-on-a-card");
+    let from_before_apps = StandInDevice::started("device-from-before-apps");
+    not_on_a_card.first_dot_once_it_is(THE_WAITING_PICTURES_BAR);
+    from_before_apps.first_dot_once_it_is(THE_WAITING_PICTURES_BAR);
+
+    let sent_to_the_devices_own_storage = app_sending::send_and_run(&not_on_a_card.doors(), &folder);
+    let sent_to_an_older_link = app_sending::send_and_run(&from_before_apps.doors(), &folder);
+    drop(from_before_apps);
+    let sent_to_nothing = app_sending::send_and_run(&not_on_a_card.doors_of_nothing(), &folder);
+
+    assert!(matches!(sent_to_the_devices_own_storage, Err(NotSent::Refused(Refusal::NotOnACard))), "{sent_to_the_devices_own_storage:?}");
+    assert_eq!(not_on_a_card.names_where_the_boot_menu_looks(), Vec::<String>::new());
+    assert!(matches!(sent_to_an_older_link, Err(NotSent::OlderLink)), "{sent_to_an_older_link:?}");
+    assert!(matches!(sent_to_nothing, Err(NotSent::NoDeviceLinked)), "{sent_to_nothing:?}");
+}
+
+/// Pocket Pads with a line added that starts another program, which no app may do.
+#[cfg(unix)]
+fn pocket_pads_that_start_a_program_in(apps: &PluginsFolder) -> &'static str {
+    const NAME: &str = "Shell Pads";
+    let (safe, changed) = (pocket_pads_in(apps), apps.0.join(NAME));
+    fs::create_dir_all(changed.join("src")).unwrap();
+    fs::copy(safe.join("plugin.json"), changed.join("plugin.json")).unwrap();
+    let code = fs::read_to_string(safe.join("src/PocketPads.cpp")).unwrap();
+    fs::write(changed.join("src/PocketPads.cpp"), format!("#include <cstdlib>\nstatic int started = system(\"true\");\n{code}")).unwrap();
+    NAME
+}
+
+#[cfg(unix)]
+#[test]
+fn an_app_that_passes_the_safety_check_is_built_for_the_device_sent_over_the_link_and_run_there() {
+    let apps = PluginsFolder::empty("maker-sends-an-app");
+    pocket_pads_in(&apps);
+    let unsafe_app = pocket_pads_that_start_a_program_in(&apps);
+    let sdk = Sdk::at(sdk_dir()).unwrap_or_else(|not_found| panic!("{not_found}"));
+    let maker = Maker::new(sdk, &apps.0).hosting_plugins_with(env!("CARGO_BIN_EXE_workbench"));
+    let device = StandInDevice::started_as_one_that(Takes::Apps, "device-takes-a-real-app");
+    device.first_dot_once_it_is(THE_WAITING_PICTURES_BAR);
+
+    let sent = device.with_the_musician_answering(&THE_DIAL_PUSHED, || maker.send_sample_app_by_link("Pocket Pads", &device.doors()));
+    let held_back = maker.send_sample_app_by_link(unsafe_app, &device.doors());
+    let with_no_device = maker.send_sample_app_by_link("Pocket Pads", &device.doors_of_nothing());
+
+    let on_the_card = device.folder_for_apps.join("Pocket Pads");
+    assert!(matches!(sent, Ok(SentToTheSample::Sent(_))), "{:?}", sent.err().map(|not_sent| not_sent.to_string()));
+    assert!(matches!(held_back, Ok(SentToTheSample::HeldBack(report)) if !report.may_be_sent()));
+    assert!(with_no_device.is_err_and(|not_sent| not_sent.to_string().starts_with("No MPC Sample is linked.")));
+    assert_eq!(device.names_where_the_boot_menu_looks(), ["Pocket Pads"], "the app the check stopped is not on the card");
+    assert_eq!(fs::read(on_the_card.join("app")).unwrap(), fs::read(apps.0.join("Pocket Pads/build/device/app")).unwrap());
+    assert!(on_the_card.join("start-app.sh").is_file() && on_the_card.join("autorun.json").is_file());
+    assert_eq!(device.first_dot_once_it_is(THE_WAITING_PICTURES_BAR), THE_WAITING_PICTURES_BAR, "the link is back once the app's script has ended");
+}
+
+#[test]
+fn an_app_goes_onto_a_picked_card_only_once_it_has_passed_the_safety_check() {
+    let apps = PluginsFolder::empty("maker-writes-an-app-to-a-card");
+    pocket_pads_in(&apps);
+    let where_the_boot_menu_looks = apps.0.join("card/autorun/mods");
+    fs::create_dir_all(&where_the_boot_menu_looks).unwrap();
+    let sdk = Sdk::at(sdk_dir()).unwrap_or_else(|not_found| panic!("{not_found}"));
+    let maker = Maker::new(sdk, &apps.0).hosting_plugins_with(env!("CARGO_BIN_EXE_workbench"));
+    fs::create_dir_all(apps.0.join("Touch Plugin")).unwrap();
+    fs::write(apps.0.join("Touch Plugin/plugin.json"), r#"{ "name": "Touch Plugin" }"#).unwrap();
+
+    let written = maker.put_sample_app_on_card("Pocket Pads", &apps.0.join("card"));
+    let a_plugin_for_other_mpcs = maker.put_sample_app_on_card("Touch Plugin", &apps.0.join("card"));
+
+    let Ok(PutOnACard::Written { report, made }) = written else { panic!("{:?}", written.err().map(|not_written| not_written.to_string())) };
+    assert!(report.may_be_sent() && made.is_where_the_boot_menu_looks);
+    assert_eq!(made.folder, where_the_boot_menu_looks.join("Pocket Pads"));
+    assert!(made.folder.join("app").is_file());
+    assert!(a_plugin_for_other_mpcs.is_err_and(|refused| refused.to_string().contains("Only an app made for the MPC Sample")));
 }

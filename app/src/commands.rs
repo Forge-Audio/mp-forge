@@ -25,12 +25,14 @@ use workbench_engine::chat_model::{ChatModel, ChosenModel};
 use workbench_engine::plan_model::PlanModel;
 use workbench_engine::claude::Claude;
 use workbench_engine::codex::{self, CodexChoices, SignIn};
+use workbench_engine::app_sending::Doors;
 use workbench_engine::delivery::Mpc;
 use workbench_engine::fonts;
 use workbench_engine::guide::{self, Facts, GuideError, Words};
 use workbench_engine::history;
 use workbench_engine::layers::layer_from;
 use workbench_engine::library;
+use workbench_engine::link_program;
 use workbench_engine::look::{look_from, look_of};
 use workbench_engine::lucky_find::{self, Find, Hunt};
 use workbench_engine::ollama;
@@ -44,7 +46,7 @@ use workbench_engine::pictures::Picture;
 use workbench_engine::process::command_for;
 use workbench_engine::project_file::{NotTakenIn, PROJECT_FILE_ENDING};
 use workbench_engine::readiness;
-use workbench_engine::maker::{Connection, Delivery, Listed, MakeError, Maker, PluginRequest, Sending};
+use workbench_engine::maker::{Connection, Delivery, Listed, MakeError, Maker, PluginRequest, PutOnACard, Sending, SentToTheSample};
 use workbench_engine::providers::{ANTHROPIC, Provider};
 use workbench_engine::samples::SampleShelf;
 use workbench_engine::sdk::{PluginIdentity, PluginKind, Sdk, built_screen_file, built_skin_image};
@@ -55,6 +57,7 @@ use workbench_engine::ai_settings::AiSettings;
 use crate::accounts::{CODEX_ACCOUNT, MPC_ACCOUNT, has_key_for, key_for, service_called};
 use crate::chatgpt;
 use crate::key_store;
+use crate::picked_card::PickedCard;
 use crate::payloads::{self, AiChoice, AiPicks, ChangeAsked, HuntAsked, IdeaAsked, ListingAsked, MpcAsked, NewPlugin};
 use crate::player::{LivePlayer, Played};
 use crate::sample_player::SamplePlayer;
@@ -82,6 +85,7 @@ const CHOOSE_A_TEST_SOUND: &str = "Choose a sound to play through the effect";
 const SAVE_THE_PLUGIN_AS: &str = "Save this plugin to hand to somebody else";
 const CHOOSE_A_PLUGIN_TO_IMPORT: &str = "Choose the plugin to bring in";
 const CHOOSE_WHERE_THE_LISTING_GOES: &str = "Choose where to put the folder for Open MPC";
+const CHOOSE_THE_MPC_SAMPLES_CARD: &str = "Choose your MPC Sample's SD card";
 const PACKED_PLUGINS: &str = "MP Forge plugin";
 const NOT_OF_THE_CATALOG: &str = "That is not a plugin of the Open MPC catalog.";
 const ONLY_SDK_PLUGINS_ARE_TAKEN_IN: &str = "Only a plugin written with Akai's SDK, kept at the top of its repository, can be taken in as it is. You can still remix it.";
@@ -703,6 +707,52 @@ pub fn player_stop(player: State<LivePlayer>) {
 pub fn sample_app_start(name: String, workbench: State<Workbench>, player: State<SamplePlayer>) -> Result<(), String> {
     let app_dir = workbench.maker()?.build_sample_app(&name).map_err(explain)?;
     player.start(&name, &app_dir)
+}
+
+/// Lets the musician pick their MPC Sample's SD card, or any folder, and makes MP Forge Link there: the small
+/// program that turns the device into the screen and the controls of an app that runs here. On a card that has
+/// the boot menu it goes where the boot menu looks. Nothing else on the card is touched. Answers with where it
+/// was made, or with nothing when they picked no folder.
+#[tauri::command(async)]
+pub fn make_link_for_mpc_sample(app: AppHandle, workbench: State<Workbench>) -> Result<Option<Value>, String> {
+    let Some(picked) = app.dialog().file().set_title(CHOOSE_THE_MPC_SAMPLES_CARD).blocking_pick_folder() else { return Ok(None) };
+    let picked = picked.into_path().map_err(|problem| format!("That place cannot be used: {problem}."))?;
+    let made = link_program::write_for_the_card_picked(&workbench.sdk()?, &picked, link_program::TIME_ALLOWED_TO_BUILD);
+    made.map(|made| Some(payloads::made_for_the_card(&made))).map_err(|not_made| format!("MP Forge Link was not made. {not_made}"))
+}
+
+/// Lets the musician pick their MPC Sample's SD card, or any folder, for an app to be written to. The place is
+/// kept here for `put_sample_app_on_card` and never handed to the screen. Answers with whether they picked one.
+#[tauri::command(async)]
+pub fn choose_card_for_sample_app(app: AppHandle, picked_card: State<PickedCard>) -> Result<bool, String> {
+    let Some(picked) = app.dialog().file().set_title(CHOOSE_THE_MPC_SAMPLES_CARD).blocking_pick_folder() else { return Ok(false) };
+    picked_card.keep(picked.into_path().map_err(|problem| format!("That place cannot be used: {problem}."))?);
+    Ok(true)
+}
+
+/// Writes a Sample app, built for the MPC Sample, onto the card the musician just picked. The safety check is
+/// run on the app as it stands first, and an app it stops is not written. On a card that has the boot menu
+/// the app goes where the boot menu looks. Nothing else on the card is touched.
+#[tauri::command(async)]
+pub fn put_sample_app_on_card(name: String, workbench: State<Workbench>, picked_card: State<PickedCard>) -> Result<Value, String> {
+    let picked = picked_card.take().ok_or("Choose the card first.")?;
+    let _claim = workbench.claim_to_check(&name)?;
+    match workbench.maker()?.put_sample_app_on_card(&name, &picked).map_err(explain)? {
+        PutOnACard::HeldBack(report) => Ok(json!({ "done": false, "report": payloads::report(&report) })),
+        PutOnACard::Written { report, made } => Ok(json!({ "done": true, "report": payloads::report(&report), "made": payloads::made_for_the_card(&made) })),
+    }
+}
+
+/// Sends a Sample app, built for the MPC Sample, to a linked MPC Sample over MP Forge Link, which puts it on
+/// the card in the device and runs it. The safety check is run on the app as it stands first, and an app it
+/// stops is not sent.
+#[tauri::command(async)]
+pub fn send_sample_app_by_link(name: String, workbench: State<Workbench>) -> Result<Value, String> {
+    let _claim = workbench.claim_to_check(&name)?;
+    match workbench.maker()?.send_sample_app_by_link(&name, &Doors::of_the_mpc_sample()).map_err(explain)? {
+        SentToTheSample::HeldBack(report) => Ok(json!({ "done": false, "report": payloads::report(&report) })),
+        SentToTheSample::Sent(report) => Ok(json!({ "done": true, "report": payloads::report(&report) })),
+    }
 }
 
 /// Shows the blacksmith on the drawing of the MPC Sample, and on a real one that is linked, in place of an app

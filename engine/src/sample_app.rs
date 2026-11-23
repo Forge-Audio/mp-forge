@@ -172,7 +172,8 @@ fn target_flags() -> Vec<&'static str> {
     if cfg!(windows) { vec!["-target", WINDOWS_TARGET] } else { Vec::new() }
 }
 
-fn code_files_of(app_dir: &Path) -> io::Result<Vec<PathBuf>> {
+/// The files of the app's own code, in the order of their names.
+pub(crate) fn code_files_of(app_dir: &Path) -> io::Result<Vec<PathBuf>> {
     let mut code: Vec<PathBuf> = fs::read_dir(app_dir.join(CODE_FOLDER))?.flatten().map(|entry| entry.path()).collect();
     code.retain(|file| file.extension().is_some_and(|ending| ending == CODE_FILE_ENDING));
     code.sort();

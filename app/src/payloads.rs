@@ -17,6 +17,7 @@ use workbench_engine::arranged_screen::{ArrangedItem, ArrangedLayer, ArrangedPag
 use workbench_engine::control_parts::parts_as_json;
 use workbench_engine::gate::GateReport;
 use workbench_engine::library::{self, PluginSummary};
+use workbench_engine::link_program::MadeForTheCard;
 use workbench_engine::lucky_find::{Find, Hunt, Roll};
 use workbench_engine::online::Stream;
 use workbench_engine::open_mpc::{self, Listed};
@@ -310,6 +311,12 @@ pub fn progress(event: &Event) -> Option<Value> {
         Event::WaitingToAskAgain { wait } => Some(json!({ "kind": "step", "text": said_while_waiting(*wait) })),
         Event::ToolFinished { .. } | Event::ContextUsed { .. } => None,
     }
+}
+
+/// Where a folder for the MPC Sample was made, and whether the boot menu will find it there or it has still
+/// to be copied.
+pub fn made_for_the_card(made: &MadeForTheCard) -> Value {
+    json!({ "folder": made.folder, "isWhereTheBootMenuLooks": made.is_where_the_boot_menu_looks })
 }
 
 /// A step in the conversation saying what is being fetched before the build can begin.

@@ -20,7 +20,7 @@ use crate::sample_app::{Input, SCREEN_HEIGHT, SCREEN_WIDTH, Shown};
 use crate::sample_surface::{Lights, SurfaceReader};
 
 /// The address the MPC Sample has on the network it makes of its USB-C cable, as Akai's own guide gives it.
-const ADDRESS_OF_THE_DEVICE: Ipv4Addr = Ipv4Addr::new(192, 168, 155, 1);
+pub(crate) const ADDRESS_OF_THE_DEVICE: Ipv4Addr = Ipv4Addr::new(192, 168, 155, 1);
 /// The port MP Forge's program on the device waits at.
 pub const PORT_OF_THE_PROGRAM: u16 = 47_373;
 /// What the program says first, so that nothing else at that address is taken for it. The number at the end
@@ -165,7 +165,7 @@ fn bytes_for_the_controls(bytes: &[u8]) -> Vec<u8> {
 
 /// Whether the address is on a network this computer is itself on, as the device's is while its cable is in.
 /// The computer is only asked which of its own addresses it would reach it from: nothing is sent.
-fn is_on_a_network_of_this_computer(program: SocketAddr) -> bool {
+pub(crate) fn is_on_a_network_of_this_computer(program: SocketAddr) -> bool {
     let reached_from = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).and_then(|asking| {
         asking.connect(program)?;
         asking.local_addr()

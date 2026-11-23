@@ -12,14 +12,17 @@ use std::time::Duration;
 use serde_json::Value;
 
 use crate::agent::{Agent, AgentError, Event, Model, ModelError, Toolbox, Worker};
+use crate::app_sending::{self, Doors, NotSent};
 use crate::ai_settings::AiSettings;
 use crate::arranged_screen::ArrangedPage;
 use crate::art_shelf::{ArtError, ArtShelf};
 use crate::attachments::{AttachmentError, AttachmentShelf};
+use crate::boot_menu::MadeForTheCard;
 use crate::claude_code::{ClaudeCode, ToolServer};
 use crate::codex::{Codex, CodexChoices};
 use crate::conversation;
 use crate::delivery::{self, DeliveryError, Mpc};
+use crate::device_app::{self, NotMade};
 use crate::gate::{Gate, GateReport};
 use crate::history::{self, Version};
 use crate::instructions;
@@ -86,6 +89,19 @@ pub enum Sending {
     HeldBack(GateReport),
 }
 
+/// How writing a Sample app onto a card in this computer ended. Either way the gate's report comes with it.
+pub enum PutOnACard {
+    Written { report: GateReport, made: MadeForTheCard },
+    HeldBack(GateReport),
+}
+
+/// How sending a Sample app to a linked MPC Sample ended. Either way the gate's report comes with it.
+pub enum SentToTheSample {
+    /// It is on the device's card, and the device is running it.
+    Sent(GateReport),
+    HeldBack(GateReport),
+}
+
 /// How getting a plugin ready for the Open MPC catalog ended. Either way the gate's report comes with it.
 pub enum Listed {
     /// Everything the listing needs is in this folder.
@@ -128,6 +144,10 @@ pub enum MakeError {
     NotListed(NotListed),
     /// A Sample app could not be built for this computer, for this reason.
     SampleAppNotBuilt(NotBuilt),
+    /// Only an app for the MPC Sample goes onto an MPC Sample, and this is a plugin for the other MPCs.
+    NotASampleApp(String),
+    NotMadeForTheSample(NotMade),
+    NotSentToTheSample(NotSent),
     Io(io::Error),
 }
 
@@ -157,6 +177,9 @@ impl fmt::Display for MakeError {
             MakeError::NotSent(problem) => write!(formatter, "{problem}"),
             MakeError::NotListed(problem) => write!(formatter, "{problem}"),
             MakeError::SampleAppNotBuilt(problem) => write!(formatter, "{problem}"),
+            MakeError::NotASampleApp(name) => write!(formatter, "`{name}` is a plugin for the touch-screen MPCs. Only an app made for the MPC Sample can go onto one."),
+            MakeError::NotMadeForTheSample(problem) => write!(formatter, "{problem}"),
+            MakeError::NotSentToTheSample(problem) => write!(formatter, "{problem}"),
             MakeError::Io(cause) => write!(formatter, "A file could not be used: {cause}"),
         }
     }
@@ -171,6 +194,18 @@ impl From<AttachmentError> for MakeError {
 impl From<DeliveryError> for MakeError {
     fn from(problem: DeliveryError) -> Self {
         MakeError::NotSent(problem)
+    }
+}
+
+impl From<NotMade> for MakeError {
+    fn from(problem: NotMade) -> Self {
+        MakeError::NotMadeForTheSample(problem)
+    }
+}
+
+impl From<NotSent> for MakeError {
+    fn from(problem: NotSent) -> Self {
+        MakeError::NotSentToTheSample(problem)
     }
 }
 
@@ -383,6 +418,44 @@ impl Maker {
         }
         let onto_drive = delivery::install(&self.sdk, &plugin_dir, mpc)?;
         Ok(Sending::Sent { report, onto_drive })
+    }
+
+    /// Writes a Sample app, built for the MPC Sample, into the card or the folder the musician picked, but
+    /// only once the gate has passed it as it stands right now.
+    pub fn put_sample_app_on_card(&self, app_name: &str, picked: &Path) -> Result<PutOnACard, MakeError> {
+        let app_dir = self.existing_sample_app(app_name)?;
+        let report = self.gate.inspect(&app_dir);
+        if !report.may_be_sent() {
+            return Ok(PutOnACard::HeldBack(report));
+        }
+        let made = device_app::write_for_the_card_picked(&self.sdk, &app_dir, picked, device_app::TIME_ALLOWED_TO_BUILD)?;
+        Ok(PutOnACard::Written { report, made })
+    }
+
+    /// Sends a Sample app, built for the MPC Sample, over MP Forge Link to the device behind `doors`, and has
+    /// it run there, but only once the gate has passed it as it stands right now. The link is looked for
+    /// first, so that a musician with no device linked is told so at once.
+    pub fn send_sample_app_by_link(&self, app_name: &str, doors: &Doors) -> Result<SentToTheSample, MakeError> {
+        let app_dir = self.existing_sample_app(app_name)?;
+        app_sending::look_for_the_door(doors)?;
+        let report = self.gate.inspect(&app_dir);
+        if !report.may_be_sent() {
+            return Ok(SentToTheSample::HeldBack(report));
+        }
+        let made_in = std::env::temp_dir().join(format!("mp-forge-app-to-send-{}", std::process::id()));
+        let sent = self.send_as_made_in(&made_in, &app_dir, doors);
+        let _ = fs::remove_dir_all(&made_in);
+        sent.map(|()| SentToTheSample::Sent(report))
+    }
+
+    fn send_as_made_in(&self, made_in: &Path, app_dir: &Path, doors: &Doors) -> Result<(), MakeError> {
+        let folder = device_app::write_folder_for_the_boot_menu(&self.sdk, app_dir, made_in, device_app::TIME_ALLOWED_TO_BUILD)?;
+        Ok(app_sending::send_and_run(doors, &folder)?)
+    }
+
+    fn existing_sample_app(&self, app_name: &str) -> Result<PathBuf, MakeError> {
+        let app_dir = self.existing_plugin(app_name)?;
+        if sample_app::is_one(&app_dir) { Ok(app_dir) } else { Err(MakeError::NotASampleApp(app_name.to_string())) }
     }
 
     /// How the plugin would be listed in the Open MPC catalog, for the musician to see before they decide.

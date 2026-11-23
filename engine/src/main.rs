@@ -12,7 +12,6 @@ use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
-use std::time::Duration;
 
 use workbench_engine::agent::{self, Event};
 use workbench_engine::ai_settings::AiSettings;
@@ -46,7 +45,6 @@ const DEFAULT_PLUGINS_DIR: &str = "plugins";
 const SDK_DIR_VARIABLE: &str = "MPC_SDK_DIR";
 const NOT_SAFE_TO_SEND: u8 = 1;
 const COULD_NOT_RUN: u8 = 2;
-const TIME_TO_BUILD_THE_LINK: Duration = Duration::from_secs(300);
 
 /// The command line, split into `--option value` pairs and everything else.
 struct Arguments {
@@ -124,7 +122,7 @@ fn run_gate(sdk: Sdk, plugin_dir: &str, online_plugins: bool) -> ExitCode {
 
 /// Makes what a listing in the Open MPC catalog needs, once the gate has passed the plugin, and says where it is.
 fn write_link_for_the_card(sdk: &Sdk, into: &str) -> Result<ExitCode, String> {
-    let folder = link_program::write_folder_for_the_boot_menu(sdk, Path::new(into), TIME_TO_BUILD_THE_LINK);
+    let folder = link_program::write_folder_for_the_boot_menu(sdk, Path::new(into), link_program::TIME_ALLOWED_TO_BUILD);
     println!("{}", folder.map_err(|not_built| format!("MP Forge Link was not made. {not_built}"))?.display());
     Ok(ExitCode::SUCCESS)
 }

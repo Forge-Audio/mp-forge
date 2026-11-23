@@ -3,10 +3,10 @@
 //! The device's pads, knobs, fader, dial and buttons speak MIDI on a port of their own, apart from its MIDI
 //! sockets. This reads that stream of bytes as the things an app is told of, and writes the bytes that set the
 //! lights of the pads and the buttons. Which number is which control comes from public notes by people who
-//! measured their own devices. The messages that set the lights come from the same notes, whose writers found
-//! them by watching what the controls are sent.
+//! measured their own devices. The messages that set the lights, and the one that asks the knobs where they
+//! stand, come from the same notes, whose writers found them by watching what the controls are sent.
 
-use crate::controls_stream::{CHANNEL_OF_MESSAGE, KIND_OF_MESSAGE, Message, MessageReader, is_pressed, pad_that_sends};
+use crate::controls_stream::{CHANNEL_OF_MESSAGE, KIND_OF_MESSAGE, Message, MessageReader, NOTES_OF_THE_PADS, is_pressed, pad_that_sends};
 use crate::sample_app::{BUTTONS, CONTROLLER, HARDEST_HIT, Input, PADS, Shown};
 
 /// The pads send notes on a channel of their own, so a button's note is never taken for a pad's.
@@ -17,6 +17,8 @@ const NOTES_OF_THE_BUTTONS: [u8; BUTTONS.len()] = [12, 13, 14, 6, 7, 1, 0, 49, 3
 const CONTROLLER_OF_THE_FIRST_KNOB: u8 = 16;
 const CONTROLLER_OF_THE_LAST_KNOB: u8 = 18;
 const CONTROLLER_OF_THE_FADER: u8 = 20;
+/// The main volume knob. The device does not turn its sound down by itself: whatever makes the sound follows it.
+const CONTROLLER_OF_THE_MAIN_VOLUME: u8 = 19;
 const CONTROLLER_OF_THE_DIAL: u8 = 100;
 /// The dial says how many clicks it was turned: up to this many to the right as they are, and to the left
 /// counted down from 128.
@@ -36,6 +38,9 @@ const SETS_A_BUTTON_LIGHT: u8 = CONTROLLER;
 const LIGHT_ON: u8 = 2;
 const LIGHT_OFF: u8 = 0;
 const BUTTONS_WITHOUT_A_LIGHT: [&str; 7] = ["B1", "B2", "B3", "SHIFT", "MINUS", "PLUS", "ENCODER"];
+/// Sent to the controls, this has the knobs, the fader and the main volume say where they stand, as if each
+/// had just been moved. It comes from the same public notes as the lights, found the same way.
+const ASKS_WHERE_THE_KNOBS_STAND: [u8; 8] = [0xF0, 0x47, 0x7F, 0x5C, 0x42, 0x00, 0x00, 0xF7];
 
 /// Reads the bytes of the controls as they arrive, in whatever pieces they arrive in.
 #[derive(Debug, Default)]
@@ -142,10 +147,63 @@ fn sets_the_light_of(button: usize, is_lit: bool) -> Vec<u8> {
     vec![SETS_A_BUTTON_LIGHT, NOTES_OF_THE_BUTTONS[button], if is_lit { LIGHT_ON } else { LIGHT_OFF }]
 }
 
+// ---------------------------------------------------------------------------
+// The same, for the programs that run on the device
+// ---------------------------------------------------------------------------
+
+/// What is known here of the device's controls and lights, as a file of code for the programs MP Forge builds
+/// for the device. It is written from the numbers above, so the device and the computer always read the
+/// controls alike.
+pub fn as_code_for_the_device() -> String {
+    let has_a_light = BUTTONS.map(|button| !BUTTONS_WITHOUT_A_LIGHT.contains(&button));
+    format!(
+        "// Which number is which control of the MPC Sample. MP Forge writes this file: do not change it.\n\
+         #pragma once\n\
+         #include <cstdint>\n\
+         namespace device_map {{\n\
+         constexpr uint8_t kNotesOfThePads[{PADS}] = {{{pads}}};\n\
+         constexpr uint8_t kNotesOfTheButtons[{buttons}] = {{{notes_of_the_buttons}}};\n\
+         constexpr bool kButtonHasALight[{buttons}] = {{{has_a_light}}};\n\
+         constexpr int kChannelOfThePads = {CHANNEL_OF_THE_PADS}, kChannelOfTheOtherControls = {CHANNEL_OF_THE_OTHER_CONTROLS};\n\
+         constexpr uint8_t kFirstKnob = {CONTROLLER_OF_THE_FIRST_KNOB}, kLastKnob = {CONTROLLER_OF_THE_LAST_KNOB}, kFader = {CONTROLLER_OF_THE_FADER};\n\
+         constexpr uint8_t kMainVolume = {CONTROLLER_OF_THE_MAIN_VOLUME}, kDial = {CONTROLLER_OF_THE_DIAL}, kMostClicksToTheRight = {MOST_CLICKS_TO_THE_RIGHT};\n\
+         constexpr uint8_t kStartsAPadColour[{starts_length}] = {{{starts_a_pad_colour}}};\n\
+         constexpr uint8_t kEndsAPadColour = {ENDS_A_PAD_COLOUR}, kLightOn = {LIGHT_ON}, kLightOff = {LIGHT_OFF};\n\
+         constexpr float kFallOfAScreensLight = {FALL_OF_A_SCREENS_LIGHT:?}f;\n\
+         constexpr uint8_t kAsksWhereTheKnobsStand[{asks_length}] = {{{asks_where_the_knobs_stand}}};\n\
+         }}  // namespace device_map\n",
+        buttons = BUTTONS.len(),
+        pads = listed(&NOTES_OF_THE_PADS),
+        notes_of_the_buttons = listed(&NOTES_OF_THE_BUTTONS),
+        has_a_light = listed(&has_a_light),
+        starts_length = STARTS_A_PAD_COLOUR.len(),
+        starts_a_pad_colour = listed(&STARTS_A_PAD_COLOUR),
+        asks_length = ASKS_WHERE_THE_KNOBS_STAND.len(),
+        asks_where_the_knobs_stand = listed(&ASKS_WHERE_THE_KNOBS_STAND),
+    )
+}
+
+fn listed(values: &[impl ToString]) -> String {
+    values.iter().map(ToString::to_string).collect::<Vec<String>>().join(", ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::sample_app::{SCREEN_HEIGHT, SCREEN_WIDTH};
+
+    #[test]
+    fn the_programs_on_the_device_are_told_the_controls_as_they_are_known_here() {
+        let code = as_code_for_the_device();
+
+        assert!(code.contains("constexpr uint8_t kNotesOfThePads[16] = {37, 36, 42, 82, 40, 38, 46, 44, 48, 47, 45, 43, 49, 55, 51, 53};"), "{code}");
+        assert!(code.contains("constexpr uint8_t kNotesOfTheButtons[24] = {12, 13, 14, 6, 7, 1, 0, 49, 35, 9, 11, 75, 43, 74, 40, 36, 53, 55, 54, 73, 80, 81, 82, 111};"), "{code}");
+        assert!(code.contains("constexpr bool kButtonHasALight[24] = {false, false, false, true, true, true, true, false, true,"), "{code}");
+        assert!(code.contains("constexpr uint8_t kMainVolume = 19, kDial = 100, kMostClicksToTheRight = 63;"), "{code}");
+        assert!(code.contains("constexpr uint8_t kStartsAPadColour[7] = {240, 71, 127, 92, 101, 0, 4};"), "{code}");
+        assert!(code.contains("constexpr float kFallOfAScreensLight = 2.2f;"), "{code}");
+        assert!(code.contains("constexpr uint8_t kAsksWhereTheKnobsStand[8] = {240, 71, 127, 92, 66, 0, 0, 247};"), "{code}");
+    }
 
     fn lights(pad_colours: [[u8; 3]; PADS], lit_buttons: &[&'static str]) -> Lights {
         Lights::of(&Shown { picture: vec![0; SCREEN_WIDTH * SCREEN_HEIGHT * 4], pad_colours, lit_buttons: lit_buttons.to_vec() })

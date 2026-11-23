@@ -12,6 +12,7 @@ mod chatgpt;
 mod commands;
 mod key_store;
 mod payloads;
+mod picked_card;
 mod player;
 mod sample_player;
 mod updates;
@@ -155,6 +156,7 @@ fn open_window() -> ExitCode {
         })
         .manage(LivePlayer::default())
         .manage(SamplePlayer::default())
+        .manage(picked_card::PickedCard::default())
         .manage(Offer::default())
         .invoke_handler(tauri::generate_handler![
             commands::library,
@@ -219,6 +221,10 @@ fn open_window() -> ExitCode {
             commands::sample_app_shown,
             commands::sample_app_stop,
             commands::sample_smith_start,
+            commands::make_link_for_mpc_sample,
+            commands::choose_card_for_sample_app,
+            commands::put_sample_app_on_card,
+            commands::send_sample_app_by_link,
             commands::begin_editing,
             commands::keep_look,
             commands::add_artwork,
