@@ -520,8 +520,8 @@
       // The stand-in's Claude Code is ready. Keeping another word under "demoClaudeCode" shows how the menu reads then.
       // The stand-in is the newest version and can update itself. Keeping "newer" or "nothingForThisCopy" under
       // "demoUpdate", or "asAPackage" or "fromSource" under "demoUpdating", shows how the settings read then.
-      this_copy: () => ({ version: "0.1.7", builtFrom: "the stand-in", updating: window.helpers.recall("demoUpdating") || "byItself" }),
-      newest_version: () => ({ standing: window.helpers.recall("demoUpdate") || "newest", version: "0.1.8" }),
+      this_copy: () => ({ version: "0.1.8", builtFrom: "the stand-in", updating: window.helpers.recall("demoUpdating") || "byItself" }),
+      newest_version: () => ({ standing: window.helpers.recall("demoUpdate") || "newest", version: "0.1.9" }),
       install_update: () => pretendToUpdate(),
       open_download_page: () => {},
       claude_code_standing: () => window.helpers.recall("demoClaudeCode") || "ready",
