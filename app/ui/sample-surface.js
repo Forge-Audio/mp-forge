@@ -98,14 +98,18 @@
   const BYTES_A_PAD = 3;
   const BYTES_OF_PADS = PADS.length * BYTES_A_PAD;
   const BYTES_OF_BUTTONS = BUTTONS_AS_THE_KIT_COUNTS.length;
-  const BYTES_SHOWN = BYTES_OF_PICTURE + BYTES_OF_PADS + BYTES_OF_BUTTONS + 1;
+  // The two strips of lights beside the screen, the left and the right: a byte each, for how many are lit.
+  const LEVEL_STRIPS = 2;
+  const WHERE_THE_LEVELS_START = BYTES_OF_PICTURE + BYTES_OF_PADS + BYTES_OF_BUTTONS;
+  const BYTES_SHOWN = WHERE_THE_LEVELS_START + LEVEL_STRIPS + 1;
 
   function colourAt(bytes, place) {
     return `rgb(${bytes[place]}, ${bytes[place + 1]}, ${bytes[place + 2]})`;
   }
 
-  // The picture, the colour of each pad, the names of the lit buttons and whether the app waits for a file,
-  // read from the bytes an app showed. Nothing when the bytes are not a whole showing.
+  // The picture, the colour of each pad, the names of the lit buttons, how many lights of each strip beside the
+  // screen are lit, and whether the app waits for a file, read from the bytes an app showed. Nothing when the
+  // bytes are not a whole showing.
   function readShown(arrived) {
     const bytes = new Uint8Array(arrived);
     if (bytes.length !== BYTES_SHOWN) return null;
@@ -114,16 +118,18 @@
       pixels: new Uint8ClampedArray(bytes.buffer, bytes.byteOffset, BYTES_OF_PICTURE),
       padColours: PADS.map((pad, index) => colourAt(bytes, BYTES_OF_PICTURE + index * BYTES_A_PAD)),
       litButtons: BUTTONS_AS_THE_KIT_COUNTS.filter((name, index) => lit[index] === 1),
+      levelLights: Array.from(bytes.subarray(WHERE_THE_LEVELS_START, WHERE_THE_LEVELS_START + LEVEL_STRIPS)),
       waitsForAFile: bytes[BYTES_SHOWN - 1] === 1,
     };
   }
 
   // The same the other way round, for the demo's stand-in app: `padColours` are red, green and blue each.
-  function writeShown({ pixels, padColours, litButtons, waitsForAFile }) {
+  function writeShown({ pixels, padColours, litButtons, levelLights = [0, 0], waitsForAFile }) {
     const bytes = new Uint8Array(BYTES_SHOWN);
     bytes.set(pixels, 0);
     padColours.forEach((colour, index) => bytes.set(colour, BYTES_OF_PICTURE + index * BYTES_A_PAD));
     BUTTONS_AS_THE_KIT_COUNTS.forEach((name, index) => { bytes[BYTES_OF_PICTURE + BYTES_OF_PADS + index] = litButtons.includes(name) ? 1 : 0; });
+    bytes.set(levelLights, WHERE_THE_LEVELS_START);
     bytes[BYTES_SHOWN - 1] = waitsForAFile ? 1 : 0;
     return bytes.buffer;
   }

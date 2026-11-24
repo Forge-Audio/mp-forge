@@ -59,6 +59,8 @@ An app that works on sound coming in, such as an effect, a looper or anything th
 - An app hears nothing until it says where to listen. Call `hearFrom(sample::SoundIn::LineIn)` in `start`, or another input when the musician asked for one.
 - Show where sound comes in from on the app's own screen, in a few capitals, and say which button changes it.
 - An app that takes no sound in does not need the page. Leave it out.
+- On the MPC Sample itself an app hears the jacks and the built-in microphone, and not yet USB. For recording from the microphone, keep what comes in and play it afterwards: the app holds it only while it runs. Do not play the microphone straight back out unless the musician asked to hear it, since the built-in speaker would howl.
+- While an app records, show how loud the sound coming in is on the two strips of lights beside the screen, with `lights.level`. The rest of the time MP Forge shows the app's own loudness there by itself.
 - In MP Forge the musician's computer stands in for the device: while the app listens at any input, it hears their computer's own sound input, which is usually its microphone. Nothing in MP Forge's window turns that on or off. It follows the app, so choosing `OFF` on the kit's page closes it. The check feeds the app a steady note there. Say in your closing words that the app listens to their computer's sound input here, and that the page on the app's button is where it is changed or turned off.
 
 ## MIDI
@@ -88,7 +90,7 @@ A game controller plugged into the device's USB socket can play an app: its butt
 
 Say so plainly when the musician asks for one of these, and offer the closest thing that can be done.
 
-- It cannot record a sample or save anything, and it cannot write to the card. It plays the sound files the musician added in MP Forge and WAV or MP3 files picked from the card, and nothing it holds is kept after it is closed: a file picked from the card has to be picked again the next time. Every other sound is made in code: oscillators, noise, and tables worked out when the app starts.
+- It cannot save anything, and it cannot write to the card. It can record what comes in at an input and play it back, but it holds that only while it runs. It plays the sound files the musician added in MP Forge and WAV or MP3 files picked from the card, and nothing it holds is kept after it is closed: a file picked from the card has to be picked again the next time. Every other sound is made in code: oscillators, noise, and tables worked out when the app starts.
 - It cannot send MIDI, and it is not told a MIDI clock, so it cannot keep time with other gear. It is told of notes, controllers and the pitch wheel coming in, and nothing else of MIDI.
 - It cannot choose where its sound goes out. That goes to the jacks, the headphones and USB together.
 - You cannot put an app onto a real MPC Sample yourself. The musician does that with the send button in MP Forge, once the app has passed its check. Do not describe other ways of installing it.

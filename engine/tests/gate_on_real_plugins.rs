@@ -1042,6 +1042,57 @@ fn an_app_is_told_what_is_done_on_a_game_controller_and_stands_up_to_one_being_p
     assert!(gate().inspect(&app_dir).may_be_sent(), "the check plays a game controller too");
 }
 
+/// An app that is as loud as can be on the left and quiet on the right. Pad 1 has it show levels of its own on
+/// the strips beside the screen, and pad 2 gives the strips back to MP Forge.
+const LOUD_ON_THE_LEFT: &str = r#"#include "mpc_sample_app.h"
+
+class LoudOnTheLeft : public sample::App {
+public:
+    void padHit(int pad, float) override {
+        if (pad == 1) showsItsOwnLevels_ = true;
+        if (pad == 2) showsItsOwnLevels_ = false;
+    }
+    void makeSound(sample::Sound& sound) override {
+        std::fill(sound.outLeft, sound.outLeft + sound.frames, 1.0f);
+        std::fill(sound.outRight, sound.outRight + sound.frames, 0.1f);
+    }
+    void draw(sample::Screen&, sample::Lights& lights) override {
+        if (showsItsOwnLevels_) lights.level(1, 4); else lights.levelOfTheSound();
+    }
+
+private:
+    bool showsItsOwnLevels_ = false;
+};
+
+MPC_SAMPLE_APP(LoudOnTheLeft)
+"#;
+
+#[test]
+fn the_strips_beside_the_screen_show_how_loud_an_app_is_unless_it_shows_levels_of_its_own() {
+    const FRAMES: usize = 128;
+    let apps = PluginsFolder::empty("sample-app-level-lights");
+    let app_dir = pocket_pads_in(&apps);
+    fs::write(app_dir.join("src/PocketPads.cpp"), LOUD_ON_THE_LEFT).unwrap();
+    let sdk = Sdk::at(sdk_dir()).unwrap_or_else(|not_found| panic!("{not_found}"));
+    let library = sample_app::build_for_this_computer(&sdk, &app_dir, Duration::from_secs(300)).unwrap_or_else(|not_built| panic!("{not_built}"));
+    let mut app = RunningApp::load(&library, 44_100.0, Vec::new()).unwrap();
+    let silence = [0.0f32; FRAMES];
+    let (mut left, mut right) = ([0.0f32; FRAMES], [0.0f32; FRAMES]);
+
+    app.make_sound(&silence, &silence, &mut left, &mut right);
+    let while_it_sounds = app.show().level_lights;
+    let a_moment_after = app.show().level_lights;
+    app.tell(Input::pad_hit(1, 1.0));
+    let of_its_own = app.show().level_lights;
+    app.tell(Input::pad_hit(2, 1.0));
+    let given_back = app.show().level_lights;
+
+    assert_eq!(while_it_sounds, [5, 2], "full on the left lights the whole strip, and a quiet right its bottom two");
+    assert_eq!(a_moment_after, [4, 1], "with no more sound a strip falls a light at a time");
+    assert_eq!(of_its_own, [1, 4]);
+    assert_eq!(given_back, [2, 0], "the strips went on falling while the app showed its own");
+}
+
 #[test]
 fn a_sample_app_whose_code_does_not_build_says_what_the_compiler_said() {
     let apps = PluginsFolder::empty("sample-app-broken");
@@ -1666,7 +1717,7 @@ fn a_linked_device_shows_the_apps_picture_and_plays_the_app_with_its_own_control
     let link = DeviceLink::to(device.address(), move |touched| {
         let _ = tell.send(touched);
     });
-    link.show(&Shown { picture: A_DOT.repeat(sample_app::SCREEN_WIDTH * sample_app::SCREEN_HEIGHT), pad_colours: [[0; 3]; sample_app::PADS], lit_buttons: vec!["PLAY"] });
+    link.show(&Shown { picture: A_DOT.repeat(sample_app::SCREEN_WIDTH * sample_app::SCREEN_HEIGHT), pad_colours: [[0; 3]; sample_app::PADS], lit_buttons: vec!["PLAY"], level_lights: [0; 2] });
     let shown = device.first_dot_once_it_is(THE_DOT_ON_THE_SCREEN);
     device.touch(&PAD_ONE_HIT_THEN_PLAY_PRESSED);
     let touched: Vec<Input> = (0..2).map(|_| told.recv_timeout(Duration::from_secs(10)).unwrap()).collect();
@@ -1847,8 +1898,9 @@ const PLAY_PRESSED: [u8; 3] = [0x90, 82, 127];
 const SHIFT_AND_STOP_HELD: [u8; 6] = [0x90, 49, 127, 0x90, 81, 127];
 #[cfg(unix)]
 const MAIN_VOLUME_ALL_THE_WAY_UP: [u8; 3] = [0xB0, 19, 127];
+/// The lights are set pads first, then buttons, then the two strips beside the screen: the right strip, dark, is the last.
 #[cfg(unix)]
-const LAST_LIGHT_SET: [u8; 3] = [0xB0, 82, 0];
+const LAST_LIGHT_SET: [u8; 3] = [0xB0, 84, 0];
 
 /// What Pocket Pads shows on a computer before anything is touched, and once PLAY is pressed.
 #[cfg(unix)]

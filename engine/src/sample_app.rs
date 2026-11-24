@@ -53,7 +53,7 @@ const MARKS_THE_KIT_CAN_WRITE: [char; 5] = [' ', '-', '+', ':', '.'];
 const KIT_FILE: &str = "mpc_sample_app.h";
 const KIT: &str = include_str!("../helpers/sample/mpc_sample_app.h");
 /// The kit an app has to have been built with. An app built with another is not run.
-const KIT_NUMBER: i32 = 6;
+const KIT_NUMBER: i32 = 7;
 const NO_ROOM_FOR_IT: &CStr = c"NO ROOM LEFT FOR IT";
 const LONGEST_PATH_ON_THE_CARD: usize = 255;
 const ASKED_FOR_A_FOLDER: i32 = 1;
@@ -68,6 +68,9 @@ const CODE_FILE_ENDING: &str = "cpp";
 const BUILT_FOR_THIS_COMPUTER: &str = "build/native";
 const BYTES_A_DOT: usize = 4;
 const COLOURS_A_PAD: usize = 3;
+/// The two strips of lights beside the screen, the left and the right, and how many lights each has.
+pub const LEVEL_STRIPS: usize = 2;
+pub const LIGHTS_A_STRIP: u8 = 5;
 pub(crate) const HARDEST_HIT: f32 = 127.0;
 const COMPILER_FLAGS: [&str; 8] = ["-std=c++17", "-fPIC", "-shared", "-O2", "-fvisibility=hidden", "-fvisibility-inlines-hidden", "-Wall", "-Wextra"];
 /// On Windows the compiler is told which way of calling functions to use, as Akai's own build does.
@@ -340,6 +343,7 @@ type Free = unsafe extern "C" fn(*mut c_void);
 type Told = unsafe extern "C" fn(*mut c_void, i32, i32, f32);
 type Sound = unsafe extern "C" fn(*mut c_void, *const f32, *const f32, *mut f32, *mut f32, i32);
 type Show = unsafe extern "C" fn(*mut c_void, *mut u8, *mut u8, *mut u8);
+type Levels = unsafe extern "C" fn(*mut c_void, *mut u8);
 type KitNumber = unsafe extern "C" fn() -> i32;
 type Asked = unsafe extern "C" fn(*mut c_void, *mut c_char, *mut i32) -> i32;
 type Listed = unsafe extern "C" fn(*mut c_void, *const EntryGiven, i32, i32);
@@ -396,6 +400,8 @@ pub struct Shown {
     pub picture: Vec<u8>,
     pub pad_colours: [[u8; COLOURS_A_PAD]; PADS],
     pub lit_buttons: Vec<&'static str>,
+    /// How many lights of each strip beside the screen are lit, from the bottom: the left strip, then the right.
+    pub level_lights: [u8; LEVEL_STRIPS],
 }
 
 /// A built app, loaded and started. Whoever holds it calls it from one place at a time, as the kit promises
@@ -405,6 +411,7 @@ pub struct RunningApp {
     told: Told,
     sound: Sound,
     show: Show,
+    levels: Levels,
     free: Free,
     asked: Asked,
     listed: Listed,
@@ -440,6 +447,7 @@ impl RunningApp {
             told: unsafe { std::mem::transmute::<*const c_void, Told>(function(b"mp_forge_sample_told")?) },
             sound: unsafe { std::mem::transmute::<*const c_void, Sound>(function(b"mp_forge_sample_sound")?) },
             show: unsafe { std::mem::transmute::<*const c_void, Show>(function(b"mp_forge_sample_show")?) },
+            levels: unsafe { std::mem::transmute::<*const c_void, Levels>(function(b"mp_forge_sample_levels")?) },
             free: unsafe { std::mem::transmute::<*const c_void, Free>(function(b"mp_forge_sample_free")?) },
             asked: unsafe { std::mem::transmute::<*const c_void, Asked>(function(b"mp_forge_sample_asked")?) },
             listed: unsafe { std::mem::transmute::<*const c_void, Listed>(function(b"mp_forge_sample_listed")?) },
@@ -485,9 +493,11 @@ impl RunningApp {
         let mut picture = vec![0u8; SCREEN_WIDTH * SCREEN_HEIGHT * BYTES_A_DOT];
         let mut pad_colours = [[0u8; COLOURS_A_PAD]; PADS];
         let mut lit = [0u8; BUTTONS.len()];
+        let mut level_lights = [0u8; LEVEL_STRIPS];
         unsafe { (self.show)(self.made, picture.as_mut_ptr(), pad_colours.as_mut_ptr().cast(), lit.as_mut_ptr()) };
+        unsafe { (self.levels)(self.made, level_lights.as_mut_ptr()) };
         let lit_buttons = BUTTONS.iter().zip(lit).filter(|(_, is_lit)| *is_lit != 0).map(|(button, _)| *button).collect();
-        Shown { picture, pad_colours, lit_buttons }
+        Shown { picture, pad_colours, lit_buttons, level_lights: level_lights.map(|lit| lit.min(LIGHTS_A_STRIP)) }
     }
 }
 

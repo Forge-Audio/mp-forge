@@ -129,6 +129,9 @@ void soundInChosen(sample::SoundIn from) override {
 - With `SoundIn::Off`, `inLeft` and `inRight` hold silence. MP Forge sees to that, so the app reads them as always.
 - The app's sound goes out at the jacks, the headphones and USB together, and at the built-in speaker when nothing is plugged into the jacks or the headphones. There is nothing to choose there. With the microphone in use the speaker would be heard by it, so an app that listens at `SoundIn::Mic` should say on its screen to use headphones.
 - Nothing is kept: the app starts at the jacks again each time it is opened.
+- On the MPC Sample itself the app hears the jacks and the built-in microphone. Sound from USB is not listened to there yet: an app that chooses `USB` hears silence on the device, though it hears the computer in MP Forge. Say so in your closing words when the musician asked for USB.
+- The built-in microphone is one sound, so `inLeft` and `inRight` hold the same.
+- Never pass the microphone straight on to the output unless the musician asked to hear it: with the built-in speaker on, it howls. An app that records from the microphone keeps what it hears and plays it afterwards.
 
 `mp-forge/examples/SampleEcho.cpp` is a whole app that works on sound coming in and has this page.
 
@@ -215,6 +218,7 @@ void gamepadTriggerPulled(sample::GamepadSide trigger, float pulled) override {
 
 - `lights.pad(pad, colour)` sets a pad's light. Set all sixteen in `draw`. A dark colour is a pad at rest, a bright one a pad that was hit or is on.
 - `lights.glow(Button::Play, isOn)` lights a button or puts it out.
+- The two strips of five lights beside the screen show how loud the app's sound is, left and right. MP Forge sees to that itself, so an app does nothing for it. An app with something better to show there, such as how loud the microphone is while it records, calls `lights.level(left, right)` in `draw` with how many lights of each strip are lit, counted from the bottom, 0 to 5: three green, a yellow and a red. `sample::levelLightsFor(loudness)` turns a loudness from 0 to 1 into that number. `lights.levelOfTheSound()` gives the strips back to MP Forge.
 - The lights stay as the app last left them, like the screen, so set them every time `draw` is called.
 
 ## What the check does

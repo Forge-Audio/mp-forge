@@ -63,7 +63,7 @@ fn frame_after(elapsed: Duration) -> usize {
 }
 
 fn with_every_light_dark(picture: &[u8]) -> Shown {
-    Shown { picture: picture.to_vec(), pad_colours: [[0; 3]; PADS], lit_buttons: Vec::new() }
+    Shown { picture: picture.to_vec(), pad_colours: [[0; 3]; PADS], lit_buttons: Vec::new(), level_lights: [0; 2] }
 }
 
 /// Each frame of the strip as a picture for the Sample's screen.

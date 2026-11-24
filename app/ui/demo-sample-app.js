@@ -42,6 +42,8 @@
     return from.map((part, index) => Math.round(part + (to[index] - part) * howFar));
   }
 
+  const LIGHTS_A_STRIP = 5;
+
   function colourOfPad(index, glow) {
     const bright = ROW_COLOURS[Math.floor(index / 4)];
     return between(between(DARK, bright, 0.28), between(bright, INK, 0.35), glow);
@@ -114,14 +116,22 @@
       return drawn.pixels;
     }
 
-    // What the app shows `seconds` after it started: its picture, the colour of each pad (red, green and blue)
-    // and the buttons it lights.
+    // The stand-in makes no sound, so the strips beside the screen follow the pad that glows most, as loud as
+    // the fader says, the same on both sides.
+    function levelLights() {
+      const lit = Math.round(Math.max(...stands.glows) * stands.fader * LIGHTS_A_STRIP);
+      return [lit, lit];
+    }
+
+    // What the app shows `seconds` after it started: its picture, the colour of each pad (red, green and blue),
+    // the buttons it lights and how many lights of each strip beside the screen are lit.
     function frame(seconds) {
       letTimePass(seconds);
       return {
         pixels: picture(),
         padColours: stands.glows.map((glow, index) => colourOfPad(index, glow)),
         litButtons: stands.isPlaying ? ["PLAY"] : [],
+        levelLights: levelLights(),
       };
     }
 

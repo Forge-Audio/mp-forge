@@ -3,7 +3,8 @@
 // MP Forge builds this together with the app's own code into one program for the device. It does there what
 // MP Forge's player does on a computer: it tells the app what the musician touches, plays the app's sound,
 // shows its picture and its lights, and reads the files the app asks for. A game controller plugged into the
-// device is read for the app too. The app's code is the same on both.
+// device is read for the app too, and the app hears the microphone or the line in when it listens there. The
+// app's code is the same on both.
 //
 //   app <screen> <controls> <sound> <sound switches> <the app's sounds> <the card>
 //
@@ -14,6 +15,7 @@
 #include "mp_forge_device_map.h"
 #include "mp_forge_host_files.h"
 #include "mp_forge_host_gamepad.h"
+#include "mp_forge_host_listening.h"
 #include "mp_forge_host_sound.h"
 #include "mp_forge_host_surface.h"
 #include "mpc_sample_app.h"
@@ -35,6 +37,8 @@ void* mp_forge_sample_make(double framesASecond, const sample::SampleGiven* samp
 void mp_forge_sample_told(void* made, int32_t touched, int32_t number, float value);
 void mp_forge_sample_sound(void* made, const float* inLeft, const float* inRight, float* outLeft, float* outRight, int32_t frames);
 void mp_forge_sample_show(void* made, uint8_t* picture, uint8_t* padColours, uint8_t* litButtons);
+void mp_forge_sample_levels(void* made, uint8_t* lit);
+int32_t mp_forge_sample_sound_in(void* made);
 int32_t mp_forge_sample_asked(void* made, char* path, int32_t* intoSample);
 void mp_forge_sample_listed(void* made, const sample::CardEntryGiven* found, int32_t count, int32_t cardIs);
 void mp_forge_sample_loaded(void* made, int32_t number, const sample::SampleGiven* loaded, const char* whyNot);
@@ -44,7 +48,7 @@ namespace mp_forge_host {
 
 using Clock = std::chrono::steady_clock;
 
-constexpr int kKitThisProgramSpeaks = 6;
+constexpr int kKitThisProgramSpeaks = 7;
 constexpr auto kAFrameOfThePicture = std::chrono::milliseconds(33);
 constexpr auto kHeldToLeave = std::chrono::seconds(1);
 constexpr auto kLongestAnAppMayTakeToAnswer = std::chrono::seconds(5);
@@ -59,6 +63,13 @@ struct Shown {
     std::array<uint8_t, sample::Screen::kByteCount> picture{};
     std::array<uint8_t, DeviceLights::kPadBytes> padColours{};
     std::array<uint8_t, sample::kButtons> litButtons{};
+    std::array<uint8_t, sample::kLevelStrips> levelLights{};
+};
+
+// One stretch of what came in at the device's inputs, a side at a time.
+struct HeardAtTheInputs {
+    const float* left;
+    const float* right;
 };
 
 // The app, reached from one place at a time, as the kit promises it. When each call began is kept, so that
@@ -79,14 +90,21 @@ public:
         mp_forge_sample_told(made_, static_cast<int32_t>(what), number, value);
     }
 
-    void makeSound(const float* silence, float* left, float* right, int frames) {
+    void makeSound(const HeardAtTheInputs& heard, float* left, float* right, int frames) {
         const Call call(*this);
-        mp_forge_sample_sound(made_, silence, silence, left, right, frames);
+        mp_forge_sample_sound(made_, heard.left, heard.right, left, right, frames);
     }
 
     void show(Shown& shown) {
         const Call call(*this);
         mp_forge_sample_show(made_, shown.picture.data(), shown.padColours.data(), shown.litButtons.data());
+        mp_forge_sample_levels(made_, shown.levelLights.data());
+    }
+
+    // Where the app has its inputs listen.
+    sample::SoundIn soundIn() {
+        const Call call(*this);
+        return static_cast<sample::SoundIn>(mp_forge_sample_sound_in(made_));
     }
 
     sample::Asked askedOfTheCard(char* path, int32_t* intoSample) {
@@ -237,10 +255,17 @@ void watchOver(const RunningApp& app) {
     }
 }
 
+// The device's sound: where the app's goes, and where what the app hears comes from.
+struct Sounds {
+    SoundOut& goingOut;
+    Listening& comingIn;
+};
+
 // The whole of a run: the app with the device's screen, controls, lights, sound and card around it.
 class Run : private HearsTheControls, private HearsTheGamepad {
 public:
-    Run(int screen, int controls, SoundOut& sound, SdCard card) : panel_(screen), controls_(controls), lights_(controls), sound_(sound), card_(std::move(card)) {}
+    Run(int screen, int controls, Sounds sounds, SdCard card)
+        : panel_(screen), controls_(controls), lights_(controls), sound_(sounds.goingOut), listening_(sounds.comingIn), card_(std::move(card)) {}
 
     void start(std::vector<HeldSound> sounds) {
         app_.start(std::move(sounds));
@@ -255,6 +280,7 @@ public:
         while (!wayOut_.isAsked() && !gWasToldToEnd && hearTheControlsUntil(nextPicture)) {
             if (Clock::now() < nextPicture) continue;
             answerWhatWasAskedOfTheCard();
+            listening_.listenAt(app_.soundIn());
             showWhatTheAppShows();
             nextPicture = std::max(nextPicture + kAFrameOfThePicture, Clock::now());
         }
@@ -317,20 +343,20 @@ private:
     void showWhatTheAppShows() {
         app_.show(shown_);
         panel_.show(shown_.picture);
-        lights_.show(shown_.padColours, shown_.litButtons);
+        lights_.show(shown_.padColours, shown_.litButtons, shown_.levelLights);
     }
 
     // The sound is made on a thread of its own, which the device is asked to put before everything else. At
-    // its inputs the app hears silence: listening on the device is still to come.
+    // its inputs the app hears what comes in where it listens, a stretch for each stretch it makes.
     void keepMakingSound() {
         sched_param first{};
         first.sched_priority = kPlaceOfTheSoundAmongTheDevicesWork;
         pthread_setschedparam(pthread_self(), SCHED_FIFO, &first);
         const size_t frames = static_cast<size_t>(sound_.framesAStretch());
-        const std::vector<float> silence(frames, 0.0f);
-        std::vector<float> left(frames), right(frames);
+        std::vector<float> heardLeft(frames), heardRight(frames), left(frames), right(frames);
         for (;;) {
-            app_.makeSound(silence.data(), left.data(), right.data(), static_cast<int>(frames));
+            listening_.hear(heardLeft.data(), heardRight.data(), static_cast<int>(frames));
+            app_.makeSound({heardLeft.data(), heardRight.data()}, left.data(), right.data(), static_cast<int>(frames));
             sound_.play(left.data(), right.data(), mainVolume_);
         }
     }
@@ -342,6 +368,7 @@ private:
     Gamepad gamepad_;
     DeviceLights lights_;
     SoundOut& sound_;
+    Listening& listening_;
     SdCard card_;
     WayOut wayOut_;
     Shown shown_;
@@ -367,7 +394,8 @@ int run(char** places) {
     if (controls < 0) return couldNotStart("the controls could not be opened:", places[2]);
     standUpToWhatEndsAProgram();
     SoundOut sound(places[3], places[4]);
-    Run theRun(screen, controls, sound, SdCard(places[6]));
+    Listening listening(places[3], places[4]);
+    Run theRun(screen, controls, Sounds{sound, listening}, SdCard(places[6]));
     theRun.start(soundsAddedToTheApp(places[5], kFramesASecond));
     theRun.keepGoing();
     return kLeftAsAsked;

@@ -34,15 +34,16 @@ use crate::app_sounds::sounds_of;
 use crate::device_link::DeviceLink;
 use crate::live_player::{Speakers, private_copy_of};
 use crate::midi_in;
-use crate::sample_app::{BUTTONS, Input, PADS, RunningApp, SCREEN_HEIGHT, SCREEN_WIDTH, Shown, SoundIn, library_of};
+use crate::sample_app::{BUTTONS, Input, LEVEL_STRIPS, PADS, RunningApp, SCREEN_HEIGHT, SCREEN_WIDTH, Shown, SoundIn, library_of};
 use crate::sd_card::{self, SdCard};
 use crate::sound_in::{self, Listener, SharedWaitingSound, WaitingSound};
 
 /// The workbench command that starts the player for the Sample app built in a folder.
 pub const PLAY_SAMPLE_APP_COMMAND: &str = "play-sample-app";
-/// How many bytes say what an app shows: its picture, the colour of each pad, which buttons are lit, and one
-/// more that is 1 while the app waits for the musician to pick a sound file on the computer.
-pub const BYTES_SHOWN: usize = SCREEN_WIDTH * SCREEN_HEIGHT * 4 + PADS * 3 + BUTTONS.len() + 1;
+/// How many bytes say what an app shows: its picture, the colour of each pad, which buttons are lit, how many
+/// lights of each strip beside the screen are lit, and one more that is 1 while the app waits for the musician
+/// to pick a sound file on the computer.
+pub const BYTES_SHOWN: usize = SCREEN_WIDTH * SCREEN_HEIGHT * 4 + PADS * 3 + BUTTONS.len() + LEVEL_STRIPS + 1;
 
 const RATE_WITHOUT_SPEAKERS: u32 = 44_100;
 /// About as often as a screen is drawn again.
@@ -203,10 +204,12 @@ fn shown_by(app: &mut RunningApp) -> (Shown, bool) {
 }
 
 /// What an app shows, as the bytes the drawing reads: the picture, three bytes for each pad's colour, a byte
-/// for each button that is 1 when it is lit, and last a byte that is 1 while the app waits for a file.
+/// for each button that is 1 when it is lit, a byte for each strip beside the screen that says how many of its
+/// lights are lit, and last a byte that is 1 while the app waits for a file.
 pub fn as_bytes(shown: &Shown, waits_for_a_file: bool) -> Vec<u8> {
     let lit = BUTTONS.iter().map(|button| u8::from(shown.lit_buttons.contains(button)));
-    shown.picture.iter().copied().chain(shown.pad_colours.iter().flatten().copied()).chain(lit).chain([u8::from(waits_for_a_file)]).collect()
+    let lights = shown.pad_colours.iter().flatten().copied().chain(lit).chain(shown.level_lights);
+    shown.picture.iter().copied().chain(lights).chain([u8::from(waits_for_a_file)]).collect()
 }
 
 #[cfg(test)]
@@ -215,7 +218,7 @@ mod tests {
 
     #[test]
     fn what_an_app_shows_is_written_as_the_picture_then_the_lights_then_whether_it_waits_for_a_file() {
-        let mut shown = Shown { picture: vec![7; SCREEN_WIDTH * SCREEN_HEIGHT * 4], pad_colours: [[0; 3]; PADS], lit_buttons: vec!["PLAY"] };
+        let mut shown = Shown { picture: vec![7; SCREEN_WIDTH * SCREEN_HEIGHT * 4], pad_colours: [[0; 3]; PADS], lit_buttons: vec!["PLAY"], level_lights: [2, 5] };
         shown.pad_colours[15] = [1, 2, 3];
 
         let bytes = as_bytes(&shown, true);
@@ -224,6 +227,7 @@ mod tests {
         assert_eq!(bytes.len(), BYTES_SHOWN);
         assert_eq!(lights[15 * 3..16 * 3], [1, 2, 3]);
         assert_eq!(lights[PADS * 3..].iter().position(|is_lit| *is_lit == 1), BUTTONS.iter().position(|button| *button == "PLAY"));
+        assert_eq!(bytes[BYTES_SHOWN - 1 - LEVEL_STRIPS..BYTES_SHOWN - 1], [2, 5], "the strips beside the screen come after the buttons");
         assert_eq!((bytes[BYTES_SHOWN - 1], as_bytes(&shown, false)[BYTES_SHOWN - 1]), (1, 0));
     }
 

@@ -156,26 +156,52 @@ public:
 
     explicit DeviceLights(int controls) : controls_(controls) {}
 
-    void show(const std::array<uint8_t, kPadBytes>& padColours, const std::array<uint8_t, sample::kButtons>& litButtons) {
+    using PadColours = std::array<uint8_t, kPadBytes>;
+    using LitButtons = std::array<uint8_t, sample::kButtons>;
+    using LevelLights = std::array<uint8_t, sample::kLevelStrips>;
+
+    // Only the lights that changed are set, and all of them while nothing is known of how they stand.
+    void show(const PadColours& padColours, const LitButtons& litButtons, const LevelLights& levelLights) {
         std::vector<uint8_t> sent;
-        for (int pad = 0; pad < sample::kPads; ++pad)
-            if (!isKnown_ || !isTheSameColour(padColours, pad)) addColourOf(pad, &padColours[static_cast<size_t>(pad) * 3], sent);
-        for (int button = 0; button < sample::kButtons; ++button)
-            if (!isKnown_ || litButtons[static_cast<size_t>(button)] != litButtons_[static_cast<size_t>(button)])
-                addLightOf(button, litButtons[static_cast<size_t>(button)] != 0, sent);
+        addPadsThatChanged(padColours, sent);
+        addButtonsThatChanged(litButtons, sent);
+        addStripsThatChanged(levelLights, sent);
         writeAll(controls_, sent.data(), sent.size());
         padColours_ = padColours;
         litButtons_ = litButtons;
+        levelLights_ = levelLights;
         isKnown_ = true;
     }
 
     void goDark() {
         isKnown_ = false;
-        show({}, {});
+        show({}, {}, {});
     }
 
 private:
     static constexpr uint8_t kSetsAButtonLight = 0xB0;
+    static constexpr uint8_t kSetsALevelStrip = 0xB0;
+
+    void addPadsThatChanged(const PadColours& padColours, std::vector<uint8_t>& sent) const {
+        for (int pad = 0; pad < sample::kPads; ++pad)
+            if (!isKnown_ || !isTheSameColour(padColours, pad)) addColourOf(pad, &padColours[static_cast<size_t>(pad) * 3], sent);
+    }
+
+    void addButtonsThatChanged(const LitButtons& litButtons, std::vector<uint8_t>& sent) const {
+        for (size_t button = 0; button < litButtons.size(); ++button)
+            if (!isKnown_ || litButtons[button] != litButtons_[button]) addLightOf(static_cast<int>(button), litButtons[button] != 0, sent);
+    }
+
+    void addStripsThatChanged(const LevelLights& levelLights, std::vector<uint8_t>& sent) const {
+        for (size_t strip = 0; strip < levelLights.size(); ++strip)
+            if (!isKnown_ || levelLights[strip] != levelLights_[strip]) addLevelOf(strip, levelLights[strip], sent);
+    }
+
+    // A strip is sent one bit for each of its lights that is lit, the bottom light the lowest bit.
+    static void addLevelOf(size_t strip, uint8_t lit, std::vector<uint8_t>& sent) {
+        const int litFromTheBottom = (1 << std::min<int>(lit, sample::kLightsAStrip)) - 1;
+        sent.insert(sent.end(), {kSetsALevelStrip, device_map::kLevelStrips[strip], static_cast<uint8_t>(litFromTheBottom)});
+    }
     static constexpr float kBrightestAnAppSays = 255.0f, kBrightestAPadTakes = 127.0f;
 
     bool isTheSameColour(const std::array<uint8_t, kPadBytes>& padColours, int pad) const {
@@ -208,8 +234,9 @@ private:
 
     int controls_;
     bool isKnown_ = false;
-    std::array<uint8_t, kPadBytes> padColours_{};
-    std::array<uint8_t, sample::kButtons> litButtons_{};
+    PadColours padColours_{};
+    LitButtons litButtons_{};
+    LevelLights levelLights_{};
 };
 
 }  // namespace mp_forge_host

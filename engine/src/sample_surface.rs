@@ -7,7 +7,7 @@
 //! stand, come from the same notes, whose writers found them by watching what the controls are sent.
 
 use crate::controls_stream::{CHANNEL_OF_MESSAGE, KIND_OF_MESSAGE, Message, MessageReader, NOTES_OF_THE_PADS, is_pressed, pad_that_sends};
-use crate::sample_app::{BUTTONS, CONTROLLER, HARDEST_HIT, Input, PADS, Shown};
+use crate::sample_app::{BUTTONS, CONTROLLER, HARDEST_HIT, Input, LEVEL_STRIPS, LIGHTS_A_STRIP, PADS, Shown};
 
 /// The pads send notes on a channel of their own, so a button's note is never taken for a pad's.
 const CHANNEL_OF_THE_PADS: u8 = 10;
@@ -37,6 +37,9 @@ const FALL_OF_A_SCREENS_LIGHT: f32 = 2.2;
 const SETS_A_BUTTON_LIGHT: u8 = CONTROLLER;
 const LIGHT_ON: u8 = 2;
 const LIGHT_OFF: u8 = 0;
+/// Each strip of lights beside the screen is set by a controller of its own, the left and then the right. Its
+/// value lights one of the strip's lights for each of its bits, the lowest bit the bottom light.
+const CONTROLLERS_OF_THE_LEVEL_STRIPS: [u8; LEVEL_STRIPS] = [83, 84];
 const BUTTONS_WITHOUT_A_LIGHT: [&str; 7] = ["B1", "B2", "B3", "SHIFT", "MINUS", "PLUS", "ENCODER"];
 /// Sent to the controls, this has the knobs, the fader and the main volume say where they stand, as if each
 /// had just been moved. It comes from the same public notes as the lights, found the same way.
@@ -102,16 +105,18 @@ fn clicks_turned(value: u8) -> Option<i32> {
 // The lights
 // ---------------------------------------------------------------------------
 
-/// The lights an app sets: the colour of each pad, and whether the light of each button is on.
+/// The lights an app sets: the colour of each pad, whether the light of each button is on, and how many lights
+/// of each strip beside the screen are lit.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Lights {
     pad_colours: [[u8; 3]; PADS],
     lit_buttons: [bool; BUTTONS.len()],
+    level_lights: [u8; LEVEL_STRIPS],
 }
 
 impl Lights {
     pub fn of(shown: &Shown) -> Lights {
-        Lights { pad_colours: shown.pad_colours, lit_buttons: BUTTONS.map(|button| shown.lit_buttons.contains(&button)) }
+        Lights { pad_colours: shown.pad_colours, lit_buttons: BUTTONS.map(|button| shown.lit_buttons.contains(&button)), level_lights: shown.level_lights }
     }
 
     /// The bytes that bring the device's lights to these, when they stand as `on_the_device` says: only the
@@ -119,8 +124,20 @@ impl Lights {
     pub fn bytes_to_set_from(&self, on_the_device: Option<&Lights>) -> Vec<u8> {
         let pads = (0..PADS).filter(|pad| on_the_device.is_none_or(|there| there.pad_colours[*pad] != self.pad_colours[*pad]));
         let buttons = (0..BUTTONS.len()).filter(|button| on_the_device.is_none_or(|there| there.lit_buttons[*button] != self.lit_buttons[*button]));
-        pads.flat_map(|pad| sets_the_colour_of(pad, self.pad_colours[pad])).chain(buttons.flat_map(|button| sets_the_light_of(button, self.lit_buttons[button]))).collect()
+        let strips = (0..LEVEL_STRIPS).filter(|strip| on_the_device.is_none_or(|there| there.level_lights[*strip] != self.level_lights[*strip]));
+        let of_the_pads = pads.flat_map(|pad| sets_the_colour_of(pad, self.pad_colours[pad]));
+        let of_the_buttons = buttons.flat_map(|button| sets_the_light_of(button, self.lit_buttons[button]));
+        of_the_pads.chain(of_the_buttons).chain(strips.flat_map(|strip| sets_the_level_strip(strip, self.level_lights[strip]))).collect()
     }
+}
+
+fn sets_the_level_strip(strip: usize, lit: u8) -> Vec<u8> {
+    vec![CONTROLLER, CONTROLLERS_OF_THE_LEVEL_STRIPS[strip], lit_from_the_bottom(lit)]
+}
+
+/// As many of a strip's lights as `lit` says, each as one bit, the bottom light the lowest.
+fn lit_from_the_bottom(lit: u8) -> u8 {
+    (1u8 << lit.min(LIGHTS_A_STRIP)) - 1
 }
 
 fn sets_the_colour_of(pad: usize, colour: [u8; 3]) -> Vec<u8> {
@@ -174,6 +191,7 @@ pub fn as_code_for_the_device() -> String {
          constexpr uint8_t kMainVolume = {CONTROLLER_OF_THE_MAIN_VOLUME}, kDial = {CONTROLLER_OF_THE_DIAL}, kMostClicksToTheRight = {MOST_CLICKS_TO_THE_RIGHT};\n\
          constexpr uint8_t kStartsAPadColour[{starts_length}] = {{{starts_a_pad_colour}}};\n\
          constexpr uint8_t kEndsAPadColour = {ENDS_A_PAD_COLOUR}, kLightOn = {LIGHT_ON}, kLightOff = {LIGHT_OFF};\n\
+         constexpr uint8_t kLevelStrips[{LEVEL_STRIPS}] = {{{level_strips}}};\n\
          constexpr float kFallOfAScreensLight = {FALL_OF_A_SCREENS_LIGHT:?}f;\n\
          constexpr uint8_t kAsksWhereTheKnobsStand[{asks_length}] = {{{asks_where_the_knobs_stand}}};\n\
          }}  // namespace device_map\n",
@@ -181,6 +199,7 @@ pub fn as_code_for_the_device() -> String {
         pads = listed(&NOTES_OF_THE_PADS),
         notes_of_the_buttons = listed(&NOTES_OF_THE_BUTTONS),
         has_a_light = listed(&has_a_light),
+        level_strips = listed(&CONTROLLERS_OF_THE_LEVEL_STRIPS),
         starts_length = STARTS_A_PAD_COLOUR.len(),
         starts_a_pad_colour = listed(&STARTS_A_PAD_COLOUR),
         asks_length = ASKS_WHERE_THE_KNOBS_STAND.len(),
@@ -207,21 +226,24 @@ mod tests {
         assert!(code.contains("constexpr uint8_t kMainVolume = 19, kDial = 100, kMostClicksToTheRight = 63;"), "{code}");
         assert!(code.contains("constexpr uint8_t kStartsAPadColour[7] = {240, 71, 127, 92, 101, 0, 4};"), "{code}");
         assert!(code.contains("constexpr float kFallOfAScreensLight = 2.2f;"), "{code}");
+        assert!(code.contains("constexpr uint8_t kLevelStrips[2] = {83, 84};"), "{code}");
         assert!(code.contains("constexpr uint8_t kAsksWhereTheKnobsStand[8] = {240, 71, 127, 92, 66, 0, 0, 247};"), "{code}");
     }
 
     fn lights(pad_colours: [[u8; 3]; PADS], lit_buttons: &[&'static str]) -> Lights {
-        Lights::of(&Shown { picture: vec![0; SCREEN_WIDTH * SCREEN_HEIGHT * 4], pad_colours, lit_buttons: lit_buttons.to_vec() })
+        Lights::of(&Shown { picture: vec![0; SCREEN_WIDTH * SCREEN_HEIGHT * 4], pad_colours, lit_buttons: lit_buttons.to_vec(), level_lights: [0; 2] })
     }
 
     #[test]
-    fn a_device_whose_lights_are_not_known_is_sent_every_pad_and_every_button_that_has_a_light() {
+    fn a_device_whose_lights_are_not_known_is_sent_every_pad_every_button_that_has_a_light_and_both_strips() {
         let mut pad_colours = [[0u8; 3]; PADS];
         pad_colours[15] = [255, 128, 1];
 
         let bytes = lights(pad_colours, &["PLAY"]).bytes_to_set_from(None);
 
-        let (pads, buttons) = bytes.split_at(PADS * 12);
+        let (pads, the_rest) = bytes.split_at(PADS * 12);
+        let (buttons, strips) = the_rest.split_at(the_rest.len() - LEVEL_STRIPS * 3);
+        assert_eq!(strips, [0xB0, 83, 0, 0xB0, 84, 0], "both strips beside the screen are put out");
         assert_eq!(pads[..12], [0xF0, 0x47, 0x7F, 0x5C, 0x65, 0x00, 0x04, 0, 0, 0, 0, 0xF7]);
         assert_eq!(pads[15 * 12..], [0xF0, 0x47, 0x7F, 0x5C, 0x65, 0x00, 0x04, 15, 127, 28, 0, 0xF7]);
         assert_eq!(buttons.len(), (BUTTONS.len() - BUTTONS_WITHOUT_A_LIGHT.len()) * 3);
@@ -240,6 +262,16 @@ mod tests {
 
         assert_eq!(bytes, [0xF0, 0x47, 0x7F, 0x5C, 0x65, 0x00, 0x04, 2, 0, 100, 0, 0xF7, 0xB0, 81, 2, 0xB0, 82, 0]);
         assert_eq!(on_the_device.bytes_to_set_from(Some(&on_the_device)), Vec::<u8>::new());
+    }
+
+    #[test]
+    fn a_strip_beside_the_screen_is_sent_one_bit_for_each_light_that_is_lit_from_the_bottom() {
+        let dark = lights([[0; 3]; PADS], &[]);
+        let with_levels = |level_lights| Lights { level_lights, ..dark.clone() };
+
+        assert_eq!(with_levels([2, 0]).bytes_to_set_from(Some(&dark)), [0xB0, 83, 0b00011], "only the strip that changed is sent");
+        assert_eq!(with_levels([5, 3]).bytes_to_set_from(Some(&dark)), [0xB0, 83, 0b11111, 0xB0, 84, 0b00111]);
+        assert_eq!(with_levels([9, 0]).bytes_to_set_from(Some(&dark)), [0xB0, 83, 0b11111], "a strip has five lights and no more");
     }
 
     #[test]

@@ -238,7 +238,7 @@ mod tests {
     fn shown_in(dot: [u8; BYTES_A_DOT]) -> Shown {
         let mut pad_colours = [[0u8; 3]; PADS];
         pad_colours[0] = [255, 0, 0];
-        Shown { picture: picture_of(dot), pad_colours, lit_buttons: Vec::new() }
+        Shown { picture: picture_of(dot), pad_colours, lit_buttons: Vec::new(), level_lights: [0; 2] }
     }
 
     fn showing(shown: &Shown) -> Showing {

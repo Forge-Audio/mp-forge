@@ -48,6 +48,14 @@ public:
         std::fprintf(stderr, "The built-in speaker was off with no headphones in. Switching it on %s.\n", isOn ? "worked" : "did not work");
     }
 
+    // Switches one of the card's ways in or out on or off, by the name it goes by. False when the card has
+    // no switch of that name.
+    bool turn(const char* named, bool on) {
+        char itsSwitch[64];
+        std::snprintf(itsSwitch, sizeof itsSwitch, "%s Switch", named);
+        return write(itsSwitch, on ? 1 : 0) || write(named, on ? 1 : 0);
+    }
+
     // Writes how every switch and level stands, for whoever reads the notes of a run that stayed silent.
     void noteHowItStands() {
         if (file_ < 0) return (void)std::fprintf(stderr, "The sound card's switches could not be opened.\n");

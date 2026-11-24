@@ -149,10 +149,27 @@ private:
     std::array<uint8_t, kByteCount> bytes_{};
 };
 
+// The two strips of lights beside the screen, the left one and the right one, each of five lights: three
+// green at the bottom, then a yellow, then a red.
+constexpr int kLevelStrips = 2;
+constexpr int kLightsAStrip = 5;
+
+// How many lights of a strip show a loudness from 0 to 1, where 1 is as loud as the device plays. Each light
+// stands for a step in loudness: the first comes on for a sound that can just be heard, the yellow at half
+// of full, and the red only close to full.
+inline int levelLightsFor(float loudness) {
+    constexpr float kLoudEnoughFor[kLightsAStrip] = {0.016f, 0.063f, 0.25f, 0.5f, 0.89f};
+    int lit = 0;
+    while (lit < kLightsAStrip && loudness >= kLoudEnoughFor[lit]) ++lit;
+    return lit;
+}
+
 // The lights of the device an app sets: the colour of each pad, and the buttons that glow.
 struct Lights {
     std::array<Colour, kPads> pads{};
     std::array<bool, kButtons> buttons{};
+    std::array<int, kLevelStrips> levels{};
+    bool showsItsOwnLevels = false;
 
     // Pads are numbered as on the device, from 1 at the bottom left to 16 at the top right.
     void pad(int number, Colour colour) {
@@ -160,6 +177,46 @@ struct Lights {
     }
 
     void glow(Button button, bool isLit = true) { buttons[static_cast<size_t>(button)] = isLit; }
+
+    // The two strips beside the screen show how loud the app's sound is, and MP Forge sees to that itself. An
+    // app with something else to show there, such as how loud the microphone is while it records, says how
+    // many lights of each strip are lit, counted from the bottom, 0 to 5. `levelLightsFor` turns a loudness
+    // into that.
+    void level(int left, int right) {
+        levels = {std::clamp(left, 0, kLightsAStrip), std::clamp(right, 0, kLightsAStrip)};
+        showsItsOwnLevels = true;
+    }
+
+    // Gives the strips back to MP Forge, to show how loud the app's sound is.
+    void levelOfTheSound() { showsItsOwnLevels = false; }
+};
+
+// MP Forge's own use of the strips beside the screen: how loud each side of the app's sound has been since the
+// strips were last shown. A strip falls one light at a time, so that a short loud sound is seen.
+class LevelMeter {
+public:
+    void hear(const float* left, const float* right, int frames) {
+        loudest_[0] = std::max(loudest_[0], loudestIn(left, frames));
+        loudest_[1] = std::max(loudest_[1], loudestIn(right, frames));
+    }
+
+    std::array<int, kLevelStrips> lightsNow() {
+        for (size_t strip = 0; strip < kLevelStrips; ++strip) {
+            lit_[strip] = std::max(levelLightsFor(loudest_[strip]), lit_[strip] - 1);
+            loudest_[strip] = 0.0f;
+        }
+        return lit_;
+    }
+
+private:
+    static float loudestIn(const float* sound, int frames) {
+        float loudest = 0.0f;
+        for (int frame = 0; frame < frames; ++frame) loudest = std::max(loudest, std::fabs(sound[frame]));
+        return loudest;
+    }
+
+    std::array<float, kLevelStrips> loudest_{};
+    std::array<int, kLevelStrips> lit_{};
 };
 
 // One short stretch of sound: what came in at the device's inputs, and where what goes out is written. Every
@@ -877,6 +934,7 @@ struct Running {
     App* app;
     Screen screen;
     Lights lights;
+    LevelMeter meter;
 };
 
 enum class Touched : int32_t { Pad = 0, Knob = 1, Fader = 2, Encoder = 3, Button = 4, Midi = 5, GamepadButton = 6, GamepadAxis = 7 };
@@ -940,13 +998,21 @@ inline void show(Running& running, uint8_t* picture, uint8_t* padColours, uint8_
     for (int button = 0; button < kButtons; ++button) litButtons[button] = running.lights.buttons[static_cast<size_t>(button)] ? 1 : 0;
 }
 
+// How many lights of each strip beside the screen are lit: what the app chose to show there, or else how loud
+// its sound has been.
+inline void showLevels(Running& running, uint8_t* lit) {
+    const std::array<int, kLevelStrips> ofTheSound = running.meter.lightsNow();
+    const std::array<int, kLevelStrips>& shown = running.lights.showsItsOwnLevels ? running.lights.levels : ofTheSound;
+    for (size_t strip = 0; strip < kLevelStrips; ++strip) lit[strip] = static_cast<uint8_t>(shown[strip]);
+}
+
 }  // namespace sample
 
 #define MPC_SAMPLE_APP(AppClass)                                                                                  \
-    MP_FORGE_SAMPLE_SHOWN int32_t mp_forge_sample_kit() { return 6; }                                             \
+    MP_FORGE_SAMPLE_SHOWN int32_t mp_forge_sample_kit() { return 7; }                                             \
     MP_FORGE_SAMPLE_SHOWN void* mp_forge_sample_make(double framesASecond, const sample::SampleGiven* samples,    \
                                                      int32_t sampleCount) {                                       \
-        auto* running = new sample::Running{new AppClass(), {}, {}};                                              \
+        auto* running = new sample::Running{new AppClass(), {}, {}, {}};                                          \
         running->app->take(sample::Samples(samples, sampleCount));                                                \
         running->app->start(framesASecond);                                                                       \
         return running;                                                                                           \
@@ -962,7 +1028,12 @@ inline void show(Running& running, uint8_t* picture, uint8_t* padColours, uint8_
     MP_FORGE_SAMPLE_SHOWN void mp_forge_sample_sound(void* made, const float* inLeft, const float* inRight,       \
                                                      float* outLeft, float* outRight, int32_t frames) {           \
         sample::Sound sound{inLeft, inRight, outLeft, outRight, frames};                                          \
-        static_cast<sample::Running*>(made)->app->makeSound(sound);                                               \
+        auto* running = static_cast<sample::Running*>(made);                                                      \
+        running->app->makeSound(sound);                                                                           \
+        running->meter.hear(outLeft, outRight, frames);                                                           \
+    }                                                                                                             \
+    MP_FORGE_SAMPLE_SHOWN void mp_forge_sample_levels(void* made, uint8_t* lit) {                                 \
+        sample::showLevels(*static_cast<sample::Running*>(made), lit);                                            \
     }                                                                                                             \
     MP_FORGE_SAMPLE_SHOWN void mp_forge_sample_show(void* made, uint8_t* picture, uint8_t* padColours,            \
                                                     uint8_t* litButtons) {                                        \

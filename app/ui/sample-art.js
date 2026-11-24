@@ -48,7 +48,11 @@
   const PURPLE = [157, 111, 224];
   const UNLIT_PAD = [112, 109, 121];
   const FACES = { grey: [111, 108, 119], orange: [226, 90, 43], blue: [47, 127, 218], dark: [52, 51, 60], soft: [74, 72, 82], record: [111, 108, 119], play: [111, 108, 119] };
+  // The two strips of lights beside the screen, from the top light down: as they look unlit, and lit.
   const METER_LIGHTS = [[122, 47, 43], [122, 109, 43], [47, 106, 58], [47, 106, 58], [47, 106, 58]];
+  const LIT_METER_LIGHTS = [[255, 74, 60], [255, 214, 64], [84, 232, 118], [84, 232, 118], [84, 232, 118]];
+  const METER_LIGHT = { width: 5, height: 7, gap: 2, top: 27 };
+  const WHERE_THE_METERS_ARE = [184, 191];
   const BANKS = [["E", "F", "G", "H"], ["A", "B", "C", "D"]];
 
   function mixed(from, to, howFar) {
@@ -252,14 +256,25 @@
     }
   }
 
+  function paintMeterLight(brushes, x, placeFromTheTop, colour) {
+    const light = METER_LIGHT;
+    const y = light.top + placeFromTheTop * (light.height + light.gap);
+    brushes.block(x, y, light.width, light.height, colour);
+    brushes.block(x, y, light.width, 1, mixed(colour, WHITE, 0.3));
+    brushes.block(x, y + light.height - 1, light.width, 1, mixed(colour, BLACK, 0.4));
+  }
+
   function paintMeter(brushes, x) {
-    const light = { width: 5, height: 7, gap: 2, top: 27 };
+    const light = METER_LIGHT;
     brushes.block(x - 1, light.top - 1, light.width + 2, METER_LIGHTS.length * (light.height + light.gap), [5, 4, 8]);
-    METER_LIGHTS.forEach((colour, place) => {
-      const y = light.top + place * (light.height + light.gap);
-      brushes.block(x, y, light.width, light.height, colour);
-      brushes.block(x, y, light.width, 1, mixed(colour, WHITE, 0.3));
-      brushes.block(x, y + light.height - 1, light.width, 1, mixed(colour, BLACK, 0.4));
+    METER_LIGHTS.forEach((colour, place) => paintMeterLight(brushes, x, place, colour));
+  }
+
+  // Lights as many of a strip's lights as `lit` says, counted from the bottom.
+  function paintLitMeterLights(brushes, x, lit) {
+    LIT_METER_LIGHTS.forEach((colour, placeFromTheTop) => {
+      const isLit = LIT_METER_LIGHTS.length - placeFromTheTop <= lit;
+      if (isLit) paintMeterLight(brushes, x, placeFromTheTop, colour);
     });
   }
 
@@ -352,7 +367,7 @@
     paintFace(brushes);
     paintBezel(brushes);
     paintSpeaker(brushes);
-    [184, 191].forEach((x) => paintMeter(brushes, x));
+    WHERE_THE_METERS_ARE.forEach((x) => paintMeter(brushes, x));
     paintMainVolume(brushes);
     paintBanks(brushes);
     [[4, 87], [261, 87], [4, 266], [261, 266]].forEach(([x, y]) => paintScrew(brushes, x, y));
@@ -515,13 +530,14 @@
     const still = stillLife();
     const context = canvas.getContext("2d");
     const brushes = brushesOn(context);
-    const looks = { knobs: KNOBS.map(() => 0.5), fader: 0.75, clicks: 0, padsDown: new Set(), buttonsDown: new Set(), padColours: [], litButtons: [], hits: new Map() };
+    const looks = { knobs: KNOBS.map(() => 0.5), fader: 0.75, clicks: 0, padsDown: new Set(), buttonsDown: new Set(), padColours: [], litButtons: [], levelLights: [0, 0], hits: new Map() };
     let isWaitingToPaint = false;
 
     function paint() {
       isWaitingToPaint = false;
       context.clearRect(0, 0, canvas.width, canvas.height);
       context.drawImage(still, 0, 0);
+      WHERE_THE_METERS_ARE.forEach((x, strip) => paintLitMeterLights(brushes, x, looks.levelLights[strip]));
       BUTTONS.forEach((button) => paintButton(brushes, button, { isDown: looks.buttonsDown.has(button.name), isLit: looks.litButtons.includes(button.name) }));
       KNOBS.forEach((knob, index) => paintKnob(brushes, knob, looks.knobs[index]));
       paintPads(performance.now());
@@ -557,10 +573,11 @@
       paintSoon();
     }
 
-    function lit({ padColours, litButtons }) {
-      const isAsBefore = String(padColours) === String(looks.padColours) && String(litButtons) === String(looks.litButtons);
+    function lit({ padColours, litButtons, levelLights = [0, 0] }) {
+      const isAsBefore = String(padColours) === String(looks.padColours) && String(litButtons) === String(looks.litButtons) && String(levelLights) === String(looks.levelLights);
       looks.padColours = padColours || [];
       looks.litButtons = litButtons || [];
+      looks.levelLights = levelLights;
       if (!isAsBefore) paintSoon();
     }
 
