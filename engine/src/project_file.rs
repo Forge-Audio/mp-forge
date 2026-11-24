@@ -24,6 +24,7 @@ use crate::art_shelf::is_art_file_name;
 use crate::maker::is_usable_name;
 use crate::origin::{ORIGIN_FILE, Origin};
 use crate::plugin_name;
+use crate::sample_app;
 
 /// What a packed project's file name ends with.
 pub const PROJECT_FILE_ENDING: &str = "mpforge";
@@ -307,9 +308,24 @@ fn remove_if_there(folder: &Path) -> io::Result<()> {
     if folder.exists() { fs::remove_dir_all(folder) } else { Ok(()) }
 }
 
-/// A manifest holding only what one may say, each thing checked. The files it names for the MPC are worked out
-/// from the plugin's name, so a manifest cannot point the build anywhere else.
+/// A manifest holding only what one may say, each thing checked. An app for the MPC Sample stays one.
 fn manifest_afresh(arrived: &Value) -> Result<Value, NotTakenIn> {
+    if arrived["kind"] == sample_app::KIND { manifest_of_a_sample_app(arrived) } else { manifest_of_a_plugin(arrived) }
+}
+
+/// A Sample app says who it is and no more: nothing of it is built for the MPCs with a touch screen.
+fn manifest_of_a_sample_app(arrived: &Value) -> Result<Value, NotTakenIn> {
+    Ok(json!({
+        "name": usable_name_in(arrived, "name")?,
+        "manufacturer": usable_name_in(arrived, "manufacturer")?,
+        "version": version_in(arrived),
+        "kind": sample_app::KIND,
+    }))
+}
+
+/// The files a plugin names for the MPC are worked out from its name, so a manifest cannot point the build
+/// anywhere else.
+fn manifest_of_a_plugin(arrived: &Value) -> Result<Value, NotTakenIn> {
     let name = usable_name_in(arrived, "name")?;
     let maker = usable_name_in(arrived, "manufacturer")?;
     let is_effect = arrived["kind"].as_str().is_some_and(|kind| kind.eq_ignore_ascii_case("effect"));
@@ -448,6 +464,25 @@ mod tests {
         ]);
         assert_eq!(fs::read_to_string(elsewhere.0.join("Dusty Tape/src/DustyTape.cpp")).unwrap(), CODE);
         assert!(!elsewhere.0.join(FOLDER_WHILE_ARRIVING).exists());
+    }
+
+    #[test]
+    fn an_app_for_the_mpc_sample_is_taken_in_as_one() {
+        let (apps, elsewhere) = (TemporaryFolder::create("project-sample-app"), TemporaryFolder::create("project-sample-app-elsewhere"));
+        let (app, packed) = (apps.0.join("Night Bus"), apps.0.join("Night Bus.mpforge"));
+        let said_of_it = json!({ "name": "Night Bus", "manufacturer": "Forge Tests", "version": "1.2.0", "kind": sample_app::KIND, "file64": "VST/elsewhere.so" });
+        write(&app, "plugin.json", said_of_it.to_string());
+        write(&app, "src/NightBus.cpp", "// Night Bus\n");
+        write(&app, "Content/Samples/kick.wav", "RIFF");
+
+        pack(&app, &packed).unwrap();
+        let name = take_in(&packed, &elsewhere.0, None).unwrap();
+
+        let taken_in = elsewhere.0.join(&name);
+        let manifest: Value = serde_json::from_str(&fs::read_to_string(taken_in.join("plugin.json")).unwrap()).unwrap();
+        assert!(sample_app::is_one(&taken_in));
+        assert_eq!(manifest, json!({ "name": "Night Bus", "manufacturer": "Forge Tests", "version": "1.2.0", "kind": "sample-app" }), "it says who it is and no more");
+        assert_eq!(files_in(&taken_in), ["Content/Samples/kick.wav", "plugin.json", "src/NightBus.cpp"]);
     }
 
     #[test]

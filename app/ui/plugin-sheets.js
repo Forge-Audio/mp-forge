@@ -14,6 +14,8 @@
   const ABOUT_RENAMING = "The name is shown on the MPC. A plugin already sent to your MPC stays there under its old name until it is removed. Once renamed, the plugin is built and safety-checked again.";
   const ABOUT_ANOTHER_NAME = "The name is shown on the MPC. To the MPC a plugin is known by a hidden four-letter id, which stays the same, so if both are copies of one plugin the MPC will take them for the same one.";
   const ABOUT_IMPORTING = "Bring in a plugin somebody handed you: a file saved with Export, or the folder of a plugin's project, such as one written with Akai's SDK. It comes in as a new plugin. None of yours is replaced. For a plugin from the Open MPC catalog, use REMIX A PLUGIN on a new plugin and choose IMPORT AS IT IS.";
+  const ABOUT_IMPORTING_AN_APP = "Bring in an app for the MPC Sample that somebody handed you: a file saved with Export, or the folder of the app's project. It comes in as a new app. None of yours is replaced.";
+  const ONLY_APPS_FROM_PEOPLE_YOU_TRUST = "Only bring in apps from people you trust. An app is a program: its safety check builds its code and runs it on this computer. The check reads the code first and stops what it knows to be harmful, but it cannot catch everything.";
   const ONLY_FROM_PEOPLE_YOU_TRUST = "Only bring in plugins from people you trust. A plugin is a program: its safety check builds its code and runs it on this computer. The check reads the code first and stops what it knows to be harmful, but it cannot catch everything.";
   const ABOUT_THE_GUIDE = "One page on how to use this plugin, to keep or to hand to others: a picture of its screen, what every control does, where it starts and which hardware knob turns it, its presets, and things to try. It is saved in the plugin's folder and opens in your browser, where it can be printed or saved as a PDF.";
   const GUIDE_ASKS_THE_AI = "Its words have not been written yet. Your AI is asked for them once, which uses a little of your AI credit and takes a minute or so. They are then kept with the plugin.";
@@ -66,11 +68,20 @@
     return { row, isSecond: () => choices[1].getAttribute("aria-pressed") === "true" };
   }
 
-  // Answers with whether a folder is to be picked and not a file, or with nothing when the musician thought better of it.
-  function askWhatToImport(sheet) {
-    const kind = eitherOf("A PLUGIN FILE", "A PLUGIN'S FOLDER");
-    const holds = [element("div", "", ABOUT_IMPORTING), kind.row, element("div", "sheet-problem", ONLY_FROM_PEOPLE_YOU_TRUST)];
-    return asked(sheet, { title: "IMPORT A PLUGIN", confirmWords: "CHOOSE…", holds }, () => ({ asAFolder: kind.isSecond() }));
+  // What the sheet says of each thing that can be brought in. Either comes in the same way, as what its own
+  // file says it is.
+  const IMPORTED = {
+    plugin: { title: "IMPORT A PLUGIN", file: "A PLUGIN FILE", folder: "A PLUGIN'S FOLDER", about: ABOUT_IMPORTING, warning: ONLY_FROM_PEOPLE_YOU_TRUST },
+    app: { title: "IMPORT AN APP", file: "AN APP FILE", folder: "AN APP'S FOLDER", about: ABOUT_IMPORTING_AN_APP, warning: ONLY_APPS_FROM_PEOPLE_YOU_TRUST },
+  };
+
+  // Answers with whether a folder is to be picked and not a file, or with nothing when the musician thought
+  // better of it. `imported` is "plugin" or "app".
+  function askWhatToImport(sheet, imported) {
+    const words = IMPORTED[imported];
+    const kind = eitherOf(words.file, words.folder);
+    const holds = [element("div", "", words.about), kind.row, element("div", "sheet-problem", words.warning)];
+    return asked(sheet, { title: words.title, confirmWords: "CHOOSE…", holds }, () => ({ asAFolder: kind.isSecond() }));
   }
 
   // Answers with whether the AI is to write the guide's words again, or with nothing when the musician thought

@@ -582,6 +582,10 @@
     document.body.classList.toggle(MARK_OF_A_SAMPLE_APP, runsOnTheSample);
   }
 
+  function isShownForTheSample() {
+    return document.body.classList.contains(MARK_OF_A_SAMPLE_APP);
+  }
+
   function showWhyTheSampleAppIsNotRunning(problem) {
     page.sampleProblem.textContent = problem;
     page.sampleProblem.hidden = !problem;
@@ -1691,7 +1695,7 @@
   }
 
   async function importAPlugin() {
-    const what = await askWhatToImport(page.appSheet);
+    const what = await askWhatToImport(page.appSheet, isShownForTheSample() ? "app" : "plugin");
     if (!what) return;
     try {
       const from = await ask("choose_plugin_to_import", { asAFolder: what.asAFolder });
@@ -1894,7 +1898,7 @@
     ];
   }
 
-  const ROWS_FOR_ANYWHERE = [appMenu.row("New plugin", () => open(NEW_PLUGIN)), appMenu.row("Import a plugin…", importAPlugin), appMenu.row("Settings", () => showSettings(true)), appMenu.row("Show me round", showTheGuide)];
+  const ROWS_FOR_ANYWHERE = [appMenu.row("New plugin", () => open(NEW_PLUGIN)), appMenu.row("Import…", importAPlugin), appMenu.row("Settings", () => showSettings(true)), appMenu.row("Show me round", showTheGuide)];
 
   // What the right-click menu offers depends on what was clicked. The editor has a menu of its own for its page.
   function rowsForWhatWasClicked(target) {
