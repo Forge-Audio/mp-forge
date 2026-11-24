@@ -1866,19 +1866,22 @@
     return [appMenu.row("Copy these words", () => copyWords(words)), ...askAgain];
   }
 
-  // What can be done to the open plugin, with whatever cannot be done right now switched off.
+  // What can be done to the open plugin, with whatever cannot be done right now switched off. An app for the
+  // MPC Sample plays on its drawing by itself, has no look to arrange and no place in the Open MPC catalog, so
+  // the rows for those are left out for one, as their buttons are.
   function rowsForTheOpenPlugin() {
     const cannotBeTouched = state.openName === NEW_PLUGIN || isBeingWorkedOn(state.openName);
+    const forAPluginOnly = (row) => (isShownForTheSample() ? [] : [row]);
     return [
-      appMenu.row(livePlayer.isSounding() ? "Stop playing" : "Play plugin", toggleLiveSound, page.play.disabled),
+      ...forAPluginOnly(appMenu.row(livePlayer.isSounding() ? "Stop playing" : "Play plugin", toggleLiveSound, page.play.disabled)),
       appMenu.row(`${whereTheOpenPluginGoes()}…`, sendOpenPluginToMpc, cannotBeTouched || !canBeSent()),
-      appMenu.row("Edit the look", editTheLook, page.editLook.disabled),
+      ...forAPluginOnly(appMenu.row("Edit the look", editTheLook, page.editLook.disabled)),
       appMenu.row("Versions…", showVersions, page.goBack.disabled),
       appMenu.row("Run the safety check", checkOpenPlugin, !canBeChecked()),
       appMenu.DIVIDER,
       appMenu.row("Guide…", makeGuideOfOpenPlugin, cannotBeTouched),
       appMenu.row("Export…", exportOpenPlugin, cannotBeTouched),
-      appMenu.row("List on Open MPC…", listOpenPluginOnOpenMpc, cannotBeTouched),
+      ...forAPluginOnly(appMenu.row("List on Open MPC…", listOpenPluginOnOpenMpc, cannotBeTouched)),
       appMenu.row("Rename…", renameOpenPlugin, cannotBeTouched),
       appMenu.row("Delete…", deleteOpenPlugin, cannotBeTouched),
     ];
