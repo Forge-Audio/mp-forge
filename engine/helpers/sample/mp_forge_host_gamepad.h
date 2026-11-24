@@ -1,13 +1,14 @@
 // A game controller plugged into the MPC Sample's USB socket, read for the app.
 //
-// The device's system lists whatever is plugged in as files of events in /dev/input. The first of them that has
-// a game controller's buttons is read here, and what is done on it is said in the kit's words: a button by
-// where it sits, a stick from -1 to 1 with up as more, a trigger from 0 to 1. A controller that is unplugged
-// is let go of, with everything held on it let go for the app, and one plugged in later is found within a
-// second.
+// Two things are kept apart here. What an app is told of a controller is the same however the controller is
+// read: a button by where it sits, a stick from -1 to 1 with up as more, a trigger from 0 to 1, and only what
+// changed. How a controller is read differs. This file reads the ones the device's own system lists, as files
+// of events in /dev/input. The system has no driver for some families of controller, which are read straight
+// from USB instead: see mp_forge_host_xbox_gamepad.h.
 //
-// Controllers do not agree on which number is which button. This follows what the system says each number
-// means, which is right for most. A controller that numbers its buttons its own way will have some swapped.
+// Controllers the system lists do not agree on which number is which button. This follows what the system
+// says each number means, which is right for most. A controller that numbers its buttons its own way will
+// have some swapped.
 
 #pragma once
 
@@ -33,9 +34,61 @@ struct HearsTheGamepad {
     virtual void gamepadDid(sample::Touched what, int32_t number, float value) = 0;
 };
 
+// What has been said of a controller so far, so that an app is told only of what changes.
+class SaidOfAGamepad {
+public:
+    void button(sample::GamepadButton button, bool isPressed, HearsTheGamepad& heard) {
+        bool& isHeld = held_[static_cast<size_t>(button)];
+        if (isHeld == isPressed) return;
+        isHeld = isPressed;
+        heard.gamepadDid(sample::Touched::GamepadButton, static_cast<int32_t>(button), isPressed ? 1.0f : 0.0f);
+    }
+
+    // Where a stick stands along one of its directions, from -1 to 1. A stick at rest is never quite still,
+    // so the middle counts as rest.
+    void stick(sample::GamepadAxis along, float stands, HearsTheGamepad& heard) {
+        moved(along, std::fabs(stands) < kCountsAsRest ? 0.0f : stands, heard);
+    }
+
+    // How far a trigger is pulled, from 0 to 1.
+    void trigger(sample::GamepadAxis trigger, float pulled, HearsTheGamepad& heard) { moved(trigger, pulled, heard); }
+
+    // For a controller that does not say its triggers as buttons: the button is said for it, once pulled halfway.
+    void triggerWithItsButton(sample::GamepadAxis pulledTrigger, float pulled, HearsTheGamepad& heard) {
+        trigger(pulledTrigger, pulled, heard);
+        const auto asAButton = pulledTrigger == sample::GamepadAxis::LeftTrigger ? sample::GamepadButton::LeftTrigger : sample::GamepadButton::RightTrigger;
+        button(asAButton, pulled >= kPulledFarEnoughToBePressed, heard);
+    }
+
+    // The app is told that everything held on the controller was let go, so nothing is left held for good.
+    void everythingLetGo(HearsTheGamepad& heard) {
+        for (int held = 0; held < sample::kGamepadButtons; ++held) button(static_cast<sample::GamepadButton>(held), false, heard);
+        for (int along = 0; along < sample::kGamepadAxes; ++along) moved(static_cast<sample::GamepadAxis>(along), 0.0f, heard);
+    }
+
+private:
+    static constexpr float kCountsAsRest = 0.12f;
+    // A stick or a trigger is said again only once it has moved this far, so that a hand resting on it does
+    // not fill the app's ears.
+    static constexpr float kSmallestMoveWorthSaying = 0.01f;
+    static constexpr float kPulledFarEnoughToBePressed = 0.5f;
+
+    void moved(sample::GamepadAxis along, float stands, HearsTheGamepad& heard) {
+        float& lastSaid = stands_[static_cast<size_t>(along)];
+        const bool isWorthSaying = std::fabs(stands - lastSaid) >= kSmallestMoveWorthSaying || (stands == 0.0f && lastSaid != 0.0f);
+        if (!isWorthSaying) return;
+        lastSaid = stands;
+        heard.gamepadDid(sample::Touched::GamepadAxis, static_cast<int32_t>(along), stands);
+    }
+
+    std::array<bool, sample::kGamepadButtons> held_{};
+    std::array<float, sample::kGamepadAxes> stands_{};
+};
+
 #if defined(__linux__)
 
-class Gamepad {
+// A controller the device's own system lists among what is plugged in.
+class ListedGamepad {
 public:
     // What to wait on for news of the controller. Nothing, as a wait knows it, while none is plugged in.
     int file() const { return file_; }
@@ -44,7 +97,7 @@ public:
     void lookForOne() {
         if (file_ >= 0 || Clock::now() < looksAgainAt_) return;
         looksAgainAt_ = Clock::now() + kLooksAgainEvery;
-        for (int number = 0; number < kMostThingsPluggedIn && file_ < 0; ++number) takeIfItIsOne(number);
+        for (int number = 0; number < kMostThingsListed && file_ < 0; ++number) takeIfItIsOne(number);
         sayOnceWhenNoneWasFound();
     }
 
@@ -61,14 +114,7 @@ private:
     using Clock = std::chrono::steady_clock;
 
     static constexpr auto kLooksAgainEvery = std::chrono::seconds(1);
-    static constexpr int kMostThingsPluggedIn = 16;
-    static constexpr int kButtons = sample::kGamepadButtons;
-    static constexpr int kAxes = sample::kGamepadAxes;
-    // A stick at rest is never quite still, so the middle counts as rest. A stick or a trigger is said again
-    // only once it has moved this far, so that a hand resting on it does not fill the app's ears.
-    static constexpr float kCountsAsRest = 0.12f;
-    static constexpr float kSmallestMoveWorthSaying = 0.01f;
-    static constexpr float kPulledFarEnoughToBePressed = 0.5f;
+    static constexpr int kMostThingsListed = 16;
     static constexpr int kNoButton = -1;
 
     // Where the system counts from, and the range a direction of this controller runs over.
@@ -83,7 +129,7 @@ private:
         std::snprintf(place, sizeof place, "/dev/input/event%d", number);
         const int found = open(place, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
         if (found < 0) return;
-        hasSeenSomethingPluggedIn_ = true;
+        hasSeenSomethingListed_ = true;
         if (!hasAGameControllersButtons(found)) { close(found); return; }
         file_ = found;
         learnItsRanges();
@@ -125,8 +171,8 @@ private:
     void sayOnceWhenNoneWasFound() {
         if (file_ >= 0 || hasSaidNoneWasFound_) return;
         hasSaidNoneWasFound_ = true;
-        std::fprintf(stderr, hasSeenSomethingPluggedIn_ ? "No game controller is among what is plugged in.\n"
-                                                        : "Nothing that is plugged in is listed in /dev/input, so no game controller is read.\n");
+        std::fprintf(stderr, hasSeenSomethingListed_ ? "The device's system lists no game controller among what is plugged in.\n"
+                                                     : "The device's system lists nothing that is plugged in at /dev/input.\n");
     }
 
     void tellOf(const input_event& done, HearsTheGamepad& heard) {
@@ -136,7 +182,7 @@ private:
 
     void tellOfAButton(int code, bool isPressed, HearsTheGamepad& heard) {
         const int button = buttonOf(code);
-        if (button != kNoButton) say(static_cast<sample::GamepadButton>(button), isPressed, heard);
+        if (button != kNoButton) said_.button(static_cast<sample::GamepadButton>(button), isPressed, heard);
     }
 
     // The buttons as the system numbers them for a game controller, and, for a controller that only counts
@@ -171,89 +217,66 @@ private:
         return isOneTheKitHas ? place : kNoButton;
     }
 
-    void say(sample::GamepadButton button, bool isPressed, HearsTheGamepad& heard) {
-        bool& isHeld = held_[static_cast<size_t>(button)];
-        if (isHeld == isPressed) return;
-        isHeld = isPressed;
-        heard.gamepadDid(sample::Touched::GamepadButton, static_cast<int32_t>(button), isPressed ? 1.0f : 0.0f);
-    }
-
     void tellOfADirection(int code, int value, HearsTheGamepad& heard) {
         using Axis = sample::GamepadAxis;
         using Button = sample::GamepadButton;
         switch (code) {
-            case ABS_X: return sayAStickStands(Axis::LeftX, acrossAStick(code, value), heard);
-            case ABS_Y: return sayAStickStands(Axis::LeftY, -acrossAStick(code, value), heard);
-            case ABS_RX: return sayAStickStands(Axis::RightX, acrossAStick(code, value), heard);
-            case ABS_RY: return sayAStickStands(Axis::RightY, -acrossAStick(code, value), heard);
+            case ABS_X: return said_.stick(Axis::LeftX, acrossAStick(code, value), heard);
+            case ABS_Y: return said_.stick(Axis::LeftY, -acrossAStick(code, value), heard);
+            case ABS_RX: return said_.stick(Axis::RightX, acrossAStick(code, value), heard);
+            case ABS_RY: return said_.stick(Axis::RightY, -acrossAStick(code, value), heard);
             case ABS_Z: return tellOfWhatSharesWithATrigger(Axis::LeftTrigger, Axis::RightX, code, value, heard);
             case ABS_RZ: return tellOfWhatSharesWithATrigger(Axis::RightTrigger, Axis::RightY, code, value, heard);
-            case ABS_HAT0X: return sayTheCrossStands(Button::Left, Button::Right, value, heard);
-            case ABS_HAT0Y: return sayTheCrossStands(Button::Up, Button::Down, value, heard);
+            case ABS_HAT0X: return tellOfTheCross(Button::Left, Button::Right, value, heard);
+            case ABS_HAT0Y: return tellOfTheCross(Button::Up, Button::Down, value, heard);
             default: return;
         }
     }
 
     void tellOfWhatSharesWithATrigger(sample::GamepadAxis trigger, sample::GamepadAxis ofTheRightStick, int code, int value, HearsTheGamepad& heard) {
-        if (hasItsRightStickOnItsOwn_) return sayATriggerStands(trigger, ranges_[static_cast<size_t>(code)].shareOf(value), heard);
+        if (hasItsRightStickOnItsOwn_) return tellOfATrigger(trigger, ranges_[static_cast<size_t>(code)].shareOf(value), heard);
         const float stands = acrossAStick(code, value);
-        sayAStickStands(ofTheRightStick, ofTheRightStick == sample::GamepadAxis::RightY ? -stands : stands, heard);
+        said_.stick(ofTheRightStick, ofTheRightStick == sample::GamepadAxis::RightY ? -stands : stands, heard);
     }
 
-    // From -1 to 1, with the middle as rest. A direction the controller has not got stays at rest.
+    void tellOfATrigger(sample::GamepadAxis trigger, float pulled, HearsTheGamepad& heard) {
+        if (tellsItsTriggersAsButtons_) said_.trigger(trigger, pulled, heard);
+        else said_.triggerWithItsButton(trigger, pulled, heard);
+    }
+
+    // From -1 to 1. A direction the controller has not got stays at rest.
     float acrossAStick(int code, int value) const {
         const Range range = ranges_[static_cast<size_t>(code)];
-        if (!range.isThere()) return 0.0f;
-        const float stands = range.shareOf(value) * 2.0f - 1.0f;
-        return std::fabs(stands) < kCountsAsRest ? 0.0f : stands;
-    }
-
-    void sayAStickStands(sample::GamepadAxis along, float stands, HearsTheGamepad& heard) {
-        float& lastSaid = stands_[static_cast<size_t>(along)];
-        const bool isWorthSaying = std::fabs(stands - lastSaid) >= kSmallestMoveWorthSaying || (stands == 0.0f && lastSaid != 0.0f);
-        if (!isWorthSaying) return;
-        lastSaid = stands;
-        heard.gamepadDid(sample::Touched::GamepadAxis, static_cast<int32_t>(along), stands);
-    }
-
-    // A controller that does not say its triggers as buttons has them said for it, once pulled halfway.
-    void sayATriggerStands(sample::GamepadAxis trigger, float pulled, HearsTheGamepad& heard) {
-        sayAStickStands(trigger, pulled, heard);
-        if (tellsItsTriggersAsButtons_) return;
-        const auto asAButton = trigger == sample::GamepadAxis::LeftTrigger ? sample::GamepadButton::LeftTrigger : sample::GamepadButton::RightTrigger;
-        say(asAButton, pulled >= kPulledFarEnoughToBePressed, heard);
+        return range.isThere() ? range.shareOf(value) * 2.0f - 1.0f : 0.0f;
     }
 
     // The cross on the left of many controllers is said as a direction that is one way, the other, or neither.
-    void sayTheCrossStands(sample::GamepadButton whenLess, sample::GamepadButton whenMore, int value, HearsTheGamepad& heard) {
-        say(whenLess, value < 0, heard);
-        say(whenMore, value > 0, heard);
+    void tellOfTheCross(sample::GamepadButton whenLess, sample::GamepadButton whenMore, int value, HearsTheGamepad& heard) {
+        said_.button(whenLess, value < 0, heard);
+        said_.button(whenMore, value > 0, heard);
     }
 
-    // The app is told that everything held on the controller was let go, so nothing is left held for good.
     void letGoOfIt(HearsTheGamepad& heard) {
         close(file_);
         file_ = -1;
-        for (int button = 0; button < kButtons; ++button) say(static_cast<sample::GamepadButton>(button), false, heard);
-        for (int along = 0; along < kAxes; ++along) sayAStickStands(static_cast<sample::GamepadAxis>(along), 0.0f, heard);
+        said_.everythingLetGo(heard);
         std::fprintf(stderr, "The game controller was unplugged.\n");
     }
 
     int file_ = -1;
     Clock::time_point looksAgainAt_{};
-    bool hasSeenSomethingPluggedIn_ = false;
+    bool hasSeenSomethingListed_ = false;
     bool hasSaidNoneWasFound_ = false;
     bool tellsItsTriggersAsButtons_ = false;
     bool hasItsRightStickOnItsOwn_ = false;
     std::array<Range, ABS_RZ + 1> ranges_{};
-    std::array<bool, kButtons> held_{};
-    std::array<float, kAxes> stands_{};
+    SaidOfAGamepad said_;
 };
 
 #else
 
 // Only the device lists what is plugged into it this way. Anywhere else there is no controller to read here.
-class Gamepad {
+class ListedGamepad {
 public:
     int file() const { return -1; }
     void lookForOne() {}

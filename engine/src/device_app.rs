@@ -40,13 +40,14 @@ pub const TIME_ALLOWED_TO_BUILD: Duration = Duration::from_secs(300);
 const START_SCRIPT: &str = include_str!("../helpers/sample/start-app.sh");
 const HOST_CODE_FILE: &str = "mp_forge_sample_host.cpp";
 /// MP Forge's program that runs an app on the device, as the code it is built from.
-const HOST_CODE: [(&str, &str); 7] = [
+const HOST_CODE: [(&str, &str); 8] = [
     (HOST_CODE_FILE, include_str!("../helpers/sample/mp_forge_sample_host.cpp")),
     sample_surface::CODE_THAT_OPENS_THE_CONTROLS,
     ("mp_forge_host_surface.h", include_str!("../helpers/sample/mp_forge_host_surface.h")),
     ("mp_forge_host_files.h", include_str!("../helpers/sample/mp_forge_host_files.h")),
     ("mp_forge_host_gamepad.h", include_str!("../helpers/sample/mp_forge_host_gamepad.h")),
     ("mp_forge_host_listening.h", include_str!("../helpers/sample/mp_forge_host_listening.h")),
+    ("mp_forge_host_xbox_gamepad.h", include_str!("../helpers/sample/mp_forge_host_xbox_gamepad.h")),
     ("mp_forge_host_sound.h", include_str!("../helpers/sample/mp_forge_host_sound.h")),
 ];
 const DEVICE_MAP_FILE: &str = "mp_forge_device_map.h";

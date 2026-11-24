@@ -18,6 +18,7 @@
 #include "mp_forge_host_listening.h"
 #include "mp_forge_host_sound.h"
 #include "mp_forge_host_surface.h"
+#include "mp_forge_host_xbox_gamepad.h"
 #include "mpc_sample_app.h"
 
 #include <atomic>
@@ -303,9 +304,11 @@ private:
     bool hearTheControlsUntil(Clock::time_point when) {
         const auto wait = std::chrono::duration_cast<std::chrono::milliseconds>(when - Clock::now()).count();
         gamepad_.lookForOne();
-        pollfd watched[2] = {{controls_, POLLIN, 0}, {gamepad_.file(), POLLIN, 0}};
-        if (poll(watched, 2, static_cast<int>(std::max<long long>(0, wait))) <= 0) return true;
+        xboxGamepad_.lookForOne();
+        pollfd watched[3] = {{controls_, POLLIN, 0}, {gamepad_.file(), POLLIN, 0}, {xboxGamepad_.file(), POLLOUT, 0}};
+        if (poll(watched, 3, static_cast<int>(std::max<long long>(0, wait))) <= 0) return true;
         if (watched[1].revents != 0) gamepad_.hear(*this);
+        if (watched[2].revents != 0) xboxGamepad_.hear(*this);
         return watched[0].revents == 0 || hearTheDevicesControls();
     }
 
@@ -365,7 +368,8 @@ private:
     Panel panel_;
     int controls_;
     Controls heard_;
-    Gamepad gamepad_;
+    ListedGamepad gamepad_;
+    XboxGamepad xboxGamepad_;
     DeviceLights lights_;
     SoundOut& sound_;
     Listening& listening_;
