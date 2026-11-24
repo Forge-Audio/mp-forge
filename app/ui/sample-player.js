@@ -6,7 +6,7 @@
 // drawing in its place, the controls go gray and nothing touched does anything.
 //
 // Whatever the musician would set on the device, they set in the app, on its own pages, and the computer
-// follows: its sound input and its MIDI devices stand in for what is plugged into the device. A computer has
+// follows: its sound input, its MIDI devices and a game controller stand in for what is plugged into the device. A computer has
 // no SD card, so when the app opens its page for picking a file from one, a file is picked on the computer.
 
 (function () {
@@ -118,6 +118,8 @@
   function listen(heard) {
     listeners = heard;
   }
+
+  window.gamepad.playInto(tellTheApp);
 
   window.samplePlayer = { isASampleApp, drawnIn, follow, stopIfItIs, showsTheSmith, listen };
 })();

@@ -15,6 +15,9 @@
 // An app never opens a file. The sound files the musician added to it are read by MP Forge and handed over
 // whole, as `samples()`. A file on the SD card is asked for through `card()`, or picked by the musician on the
 // kit's own page, `browseCard`, and MP Forge loads it and hands it over the same way.
+//
+// The same goes for whatever is plugged in. MP Forge reads a MIDI keyboard or a game controller and tells the
+// app what was done on it: see `noteOn` and `gamepadPressed`.
 
 #pragma once
 
@@ -49,6 +52,26 @@ enum class Button {
 };
 
 constexpr int kButtons = static_cast<int>(Button::Count);
+
+// The buttons of a game controller plugged in, by where they sit, since makers print different letters on them.
+// `South` is the lowest of the four on the right: A on some controllers, a cross on others. `Up`, `Down`, `Left`
+// and `Right` are the cross on the left. A trigger is a button too, pressed once it is pulled halfway, and so is
+// a stick pushed in.
+enum class GamepadButton : int32_t {
+    South, East, West, North, LeftShoulder, RightShoulder, LeftTrigger, RightTrigger, Select, Start, LeftStickIn, RightStickIn,
+    Up, Down, Left, Right, Home,
+    Count
+};
+
+constexpr int kGamepadButtons = static_cast<int>(GamepadButton::Count);
+
+// A stick or a trigger of a game controller, by the side it is on.
+enum class GamepadSide : int32_t { Left = 0, Right = 1 };
+
+// For MP Forge, which says where a stick stands one direction at a time, and each trigger by itself.
+enum class GamepadAxis : int32_t { LeftX = 0, LeftY = 1, RightX = 2, RightY = 3, LeftTrigger = 4, RightTrigger = 5, Count };
+
+constexpr int kGamepadAxes = static_cast<int>(GamepadAxis::Count);
 
 // The screen, 320 dots across and 240 down, with (0, 0) at the top left. Whatever is drawn outside it is left out.
 class Screen {
@@ -676,6 +699,14 @@ public:
     virtual void controllerMoved(int /*controller*/, float /*stands*/, int /*channel*/) {}
     virtual void pitchBent(float /*bend*/, int /*channel*/) {}
 
+    // A game controller plugged into the device's USB socket, one at a time. A stick says where it stands: `x`
+    // from -1 at the left to 1 at the right, `y` from -1 at the bottom to 1 at the top, both 0 where it rests.
+    // A trigger says how far it is pulled, from 0 to 1, and is told as a button as well.
+    virtual void gamepadPressed(GamepadButton /*button*/) {}
+    virtual void gamepadLetGo(GamepadButton /*button*/) {}
+    virtual void gamepadStickMoved(GamepadSide /*stick*/, float /*x*/, float /*y*/) {}
+    virtual void gamepadTriggerPulled(GamepadSide /*trigger*/, float /*pulled*/) {}
+
     virtual void makeSound(Sound& sound) = 0;
 
     // Called about thirty times a second. The screen starts as the app last left it, and so do the lights.
@@ -775,7 +806,23 @@ public:
         if (midiInPage_.isOpen()) midiInPage_.draw(screen, midiIn_);
     }
 
+    // For MP Forge: a stick or a trigger of the game controller moved along one of its directions. A stick is
+    // told to the app whole, with its other direction as it was last said.
+    void gamepadMovedAlong(GamepadAxis axis, float stands) {
+        if (static_cast<int>(axis) < 0 || static_cast<int>(axis) >= kGamepadAxes) return;
+        gamepadStands_[static_cast<size_t>(axis)] = stands;
+        if (axis == GamepadAxis::LeftTrigger) return gamepadTriggerPulled(GamepadSide::Left, stands);
+        if (axis == GamepadAxis::RightTrigger) return gamepadTriggerPulled(GamepadSide::Right, stands);
+        tellOfTheStick(axis == GamepadAxis::LeftX || axis == GamepadAxis::LeftY ? GamepadSide::Left : GamepadSide::Right);
+    }
+
 private:
+    void tellOfTheStick(GamepadSide stick) {
+        const GamepadAxis across = stick == GamepadSide::Left ? GamepadAxis::LeftX : GamepadAxis::RightX;
+        const GamepadAxis upAndDown = stick == GamepadSide::Left ? GamepadAxis::LeftY : GamepadAxis::RightY;
+        gamepadStickMoved(stick, gamepadStands_[static_cast<size_t>(across)], gamepadStands_[static_cast<size_t>(upAndDown)]);
+    }
+
     bool isOnAPage() const { return browser_.isOpen() || soundInPage_.isOpen() || midiInPage_.isOpen(); }
 
     void closePages() {
@@ -808,6 +855,7 @@ private:
     SoundInPage soundInPage_;
     MidiHeard midiIn_;
     MidiInPage midiInPage_;
+    std::array<float, kGamepadAxes> gamepadStands_{};
 };
 
 }  // namespace sample
@@ -831,7 +879,7 @@ struct Running {
     Lights lights;
 };
 
-enum class Touched : int32_t { Pad = 0, Knob = 1, Fader = 2, Encoder = 3, Button = 4, Midi = 5 };
+enum class Touched : int32_t { Pad = 0, Knob = 1, Fader = 2, Encoder = 3, Button = 4, Midi = 5, GamepadButton = 6, GamepadAxis = 7 };
 
 // The kinds of MIDI message an app is told of, by the top half of a message's first byte.
 enum class Midi : int32_t { NoteOff = 0x80, NoteOn = 0x90, Controller = 0xB0, PitchBend = 0xE0 };
@@ -873,6 +921,11 @@ inline void tell(App& app, int32_t touched, int32_t number, float value) {
             if (value > 0.0f) app.buttonPressed(static_cast<Button>(number)); else app.buttonLetGo(static_cast<Button>(number));
             return;
         case Touched::Midi: tellOfMidi(app, number); return;
+        case Touched::GamepadButton:
+            if (number < 0 || number >= kGamepadButtons) return;
+            if (value > 0.0f) app.gamepadPressed(static_cast<GamepadButton>(number)); else app.gamepadLetGo(static_cast<GamepadButton>(number));
+            return;
+        case Touched::GamepadAxis: app.gamepadMovedAlong(static_cast<GamepadAxis>(number), value); return;
     }
 }
 
@@ -890,7 +943,7 @@ inline void show(Running& running, uint8_t* picture, uint8_t* padColours, uint8_
 }  // namespace sample
 
 #define MPC_SAMPLE_APP(AppClass)                                                                                  \
-    MP_FORGE_SAMPLE_SHOWN int32_t mp_forge_sample_kit() { return 5; }                                             \
+    MP_FORGE_SAMPLE_SHOWN int32_t mp_forge_sample_kit() { return 6; }                                             \
     MP_FORGE_SAMPLE_SHOWN void* mp_forge_sample_make(double framesASecond, const sample::SampleGiven* samples,    \
                                                      int32_t sampleCount) {                                       \
         auto* running = new sample::Running{new AppClass(), {}, {}};                                              \

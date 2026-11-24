@@ -73,6 +73,17 @@ A keyboard, a pad controller or a computer plugged into the device's USB socket 
 - In MP Forge a MIDI keyboard plugged into the musician's computer plays the app on the drawing, standing in for both of the device's sockets. Nothing in MP Forge's window sets it. When you have built an app that takes MIDI, say so in your final message in a few words, with the button that opens the MIDI page.
 - `look_at_screen` can play notes and move controllers, so look at what the screen shows while a note is held.
 
+## A game controller
+
+A game controller plugged into the device's USB socket can play an app: its buttons, its two sticks and its triggers. MP Forge reads it and tells the app, so an app needs nothing the check forbids. `mp-forge/mpc-sample.md` says how.
+
+- Give an app a game controller when the musician asks for one, and offer it for anything played like a game or steered by hand, such as a character walked about the screen or a sound swept with a stick.
+- Name the buttons by where they sit, as the kit does, and put what matters most on `South`, `East` and the cross, which nearly every controller has.
+- The app has to be whole without one. Never make something that can only be reached from a controller.
+- In MP Forge a game controller plugged into the musician's computer plays the app on the drawing, once a button on it has been pressed. Nothing in MP Forge's window sets it.
+- `look_at_screen` can press a controller's buttons and move its sticks, so look at what the screen shows while one is held.
+- When you have built an app that takes a game controller, say so in your final message in a few words, with what each button and stick does, and that on the MPC Sample itself it is new and not yet tried with many controllers.
+
 ## What an app cannot do yet
 
 Say so plainly when the musician asks for one of these, and offer the closest thing that can be done.
@@ -80,7 +91,7 @@ Say so plainly when the musician asks for one of these, and offer the closest th
 - It cannot record a sample or save anything, and it cannot write to the card. It plays the sound files the musician added in MP Forge and WAV or MP3 files picked from the card, and nothing it holds is kept after it is closed: a file picked from the card has to be picked again the next time. Every other sound is made in code: oscillators, noise, and tables worked out when the app starts.
 - It cannot send MIDI, and it is not told a MIDI clock, so it cannot keep time with other gear. It is told of notes, controllers and the pitch wheel coming in, and nothing else of MIDI.
 - It cannot choose where its sound goes out. That goes to the jacks, the headphones and USB together.
-- MP Forge cannot yet put an app onto a real MPC Sample. The app runs on the drawing of the device in MP Forge. Do not tell the musician how to install it.
+- You cannot put an app onto a real MPC Sample yourself. The musician does that with the send button in MP Forge, once the app has passed its check. Do not describe other ways of installing it.
 
 ## What a good app has
 

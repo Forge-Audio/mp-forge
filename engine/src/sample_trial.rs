@@ -16,7 +16,7 @@ use resvg::tiny_skia::Pixmap;
 
 use crate::app_sounds::sounds_of;
 use crate::process::{RunError, command_for, run_with_time_limit};
-use crate::sample_app::{BUTTONS, Input, PADS, RunningApp, SCREEN_HEIGHT, SCREEN_WIDTH, Shown, library_of};
+use crate::sample_app::{BUTTONS, GAMEPAD_AXES, GAMEPAD_BUTTONS, Input, PADS, RunningApp, SCREEN_HEIGHT, SCREEN_WIDTH, Shown, library_of};
 use crate::sd_card::{SdCard, write_trial_card};
 
 pub const TRY_SAMPLE_APP_COMMAND: &str = "try-sample-app";
@@ -43,6 +43,8 @@ const CONTROLLERS_MOVED: [u8; 2] = [1, 64];
 const PLACES_A_CONTROLLER_IS_PUT: [u8; 3] = [127, 0, 64];
 const PLACES_THE_PITCH_WHEEL_IS_PUT: [f32; 3] = [1.0, -1.0, 0.0];
 const MIDI_CHANNEL: u8 = 1;
+/// Where each stick and trigger of a game controller is put: as far as it goes each way, and back to rest.
+const PLACES_A_STICK_IS_PUT: [f32; 3] = [1.0, -1.0, 0.0];
 const HARDEST_NOTE: u8 = 127;
 /// A steady note comes in at the inputs, so that an app which works on sound coming in has some to work on.
 const NOTE_COMING_IN: f64 = 220.0;
@@ -105,7 +107,7 @@ fn touches_in(touches_file: &Path) -> Result<Vec<Input>, String> {
 }
 
 /// Every control of the device used in turn: the knobs and the fader to both ends, every pad hit hard and let
-/// go, a handful of pads at once, a keyboard plugged in and played, every button, and the dial both ways. The
+/// go, a handful of pads at once, a keyboard and a game controller plugged in and played, every button, and the dial both ways. The
 /// dial is pressed once more at the end, so that a file browser a button opened, and the first press of the
 /// dial took into a folder, loads a file.
 fn everything_on_the_device() -> Vec<Input> {
@@ -117,7 +119,14 @@ fn everything_on_the_device() -> Vec<Input> {
     let buttons = BUTTONS.iter().flat_map(|button| [Input::button(button, true), Input::button(button, false)]).flatten();
     let dial = [Input::encoder_turned(CLICKS_THE_DIAL_IS_TURNED), Input::encoder_turned(-CLICKS_THE_DIAL_IS_TURNED)];
     let dial_pressed_again = [Input::button(THE_DIAL_PRESSED, true), Input::button(THE_DIAL_PRESSED, false)].into_iter().flatten();
-    knobs.chain(fader).chain(pads).chain(together).chain(a_keyboard_played()).chain(buttons).chain(dial).chain(dial_pressed_again).collect()
+    let plugged_in = a_keyboard_played().chain(a_game_controller_played());
+    knobs.chain(fader).chain(pads).chain(together).chain(plugged_in).chain(buttons).chain(dial).chain(dial_pressed_again).collect()
+}
+
+fn a_game_controller_played() -> impl Iterator<Item = Input> {
+    let buttons = GAMEPAD_BUTTONS.iter().flat_map(|button| [Input::gamepad_button(button, true), Input::gamepad_button(button, false)]);
+    let sticks_and_triggers = GAMEPAD_AXES.iter().flat_map(|along| PLACES_A_STICK_IS_PUT.map(|stands| Input::gamepad_moved(along, stands)));
+    buttons.chain(sticks_and_triggers).flatten()
 }
 
 fn a_keyboard_played() -> impl Iterator<Item = Input> {

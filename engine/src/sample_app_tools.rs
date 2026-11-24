@@ -116,7 +116,7 @@ impl Toolbox for SampleAppTools<'_> {
                     "properties": {
                         "touches": {
                             "type": "array",
-                            "description": "What is done on the device or on a MIDI keyboard plugged into it, in order, such as {\"control\": \"pad\", \"number\": 5, \"value\": 127} or {\"control\": \"note\", \"number\": 60, \"value\": 100}",
+                            "description": "What is done on the device, or on a MIDI keyboard or a game controller plugged into it, in order, such as {\"control\": \"pad\", \"number\": 5, \"value\": 127}, {\"control\": \"note\", \"number\": 60, \"value\": 100} or {\"control\": \"gamepad button\", \"name\": \"SOUTH\", \"value\": 1}",
                             "items": { "type": "object" }
                         }
                     },

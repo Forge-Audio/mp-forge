@@ -2,7 +2,8 @@
 //
 // MP Forge builds this together with the app's own code into one program for the device. It does there what
 // MP Forge's player does on a computer: it tells the app what the musician touches, plays the app's sound,
-// shows its picture and its lights, and reads the files the app asks for. The app's code is the same on both.
+// shows its picture and its lights, and reads the files the app asks for. A game controller plugged into the
+// device is read for the app too. The app's code is the same on both.
 //
 //   app <screen> <controls> <sound> <sound switches> <the app's sounds> <the card>
 //
@@ -12,6 +13,7 @@
 #include "mp_forge_device_controls.h"
 #include "mp_forge_device_map.h"
 #include "mp_forge_host_files.h"
+#include "mp_forge_host_gamepad.h"
 #include "mp_forge_host_sound.h"
 #include "mp_forge_host_surface.h"
 #include "mpc_sample_app.h"
@@ -42,7 +44,7 @@ namespace mp_forge_host {
 
 using Clock = std::chrono::steady_clock;
 
-constexpr int kKitThisProgramSpeaks = 5;
+constexpr int kKitThisProgramSpeaks = 6;
 constexpr auto kAFrameOfThePicture = std::chrono::milliseconds(33);
 constexpr auto kHeldToLeave = std::chrono::seconds(1);
 constexpr auto kLongestAnAppMayTakeToAnswer = std::chrono::seconds(5);
@@ -236,7 +238,7 @@ void watchOver(const RunningApp& app) {
 }
 
 // The whole of a run: the app with the device's screen, controls, lights, sound and card around it.
-class Run : private HearsTheControls {
+class Run : private HearsTheControls, private HearsTheGamepad {
 public:
     Run(int screen, int controls, SoundOut& sound, SdCard card) : panel_(screen), controls_(controls), lights_(controls), sound_(sound), card_(std::move(card)) {}
 
@@ -265,14 +267,23 @@ private:
         app_.tell(what, number, value);
     }
 
+    void gamepadDid(sample::Touched what, int32_t number, float value) override { app_.tell(what, number, value); }
+
     // The knob is followed as hearing does: its lower half is for quiet, not for half of everything.
     void mainVolumeAt(float stands) override { mainVolume_ = stands * stands; }
 
-    // False once the controls can no longer be read.
+    // Waits for the device's own controls and for a game controller together. False once the device's
+    // controls can no longer be read.
     bool hearTheControlsUntil(Clock::time_point when) {
         const auto wait = std::chrono::duration_cast<std::chrono::milliseconds>(when - Clock::now()).count();
-        pollfd watched{controls_, POLLIN, 0};
-        if (poll(&watched, 1, static_cast<int>(std::max<long long>(0, wait))) <= 0 || watched.revents == 0) return true;
+        gamepad_.lookForOne();
+        pollfd watched[2] = {{controls_, POLLIN, 0}, {gamepad_.file(), POLLIN, 0}};
+        if (poll(watched, 2, static_cast<int>(std::max<long long>(0, wait))) <= 0) return true;
+        if (watched[1].revents != 0) gamepad_.hear(*this);
+        return watched[0].revents == 0 || hearTheDevicesControls();
+    }
+
+    bool hearTheDevicesControls() {
         uint8_t sent[256];
         const ssize_t count = read(controls_, sent, sizeof sent);
         if (count < 0 && errno == EINTR) return true;
@@ -328,6 +339,7 @@ private:
     Panel panel_;
     int controls_;
     Controls heard_;
+    Gamepad gamepad_;
     DeviceLights lights_;
     SoundOut& sound_;
     SdCard card_;

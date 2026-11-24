@@ -13,6 +13,7 @@
 | Sound | `makeSound(sound)` | Stereo in and out, 44100 frames a second, 128 frames at a time. |
 | Sound files | nothing: the app reads `samples()` | The WAV and MP3 files the musician added to the app in MP Forge, up to 64. There may be none. |
 | MIDI in | `noteOn(note, strength, channel)`, `noteOff(note, channel)`, `controllerMoved(controller, stands, channel)`, `pitchBent(bend, channel)` | From a keyboard, a pad controller or a computer plugged into the USB socket or the MIDI IN socket. There may be nothing plugged in. Which socket and which channel is chosen on the kit's page, `chooseMidiIn()`. |
+| Game controller | `gamepadPressed(button)`, `gamepadLetGo(button)`, `gamepadStickMoved(stick, x, y)`, `gamepadTriggerPulled(trigger, pulled)` | From a game controller plugged into the USB socket. There may be none. MP Forge reads it and tells the app; see "A game controller" below. |
 | Sound in | `soundInChosen(from)` when the musician has chosen where it comes from | The jacks at the back (`SoundIn::LineIn`), the built-in microphone (`SoundIn::Mic`), USB (`SoundIn::Usb`), or nowhere (`SoundIn::Off`, as it starts), chosen on the kit's page, `chooseSoundIn()`. |
 | SD card | `sampleLoaded(number)` when a file from it has been loaded | Folders and WAV and MP3 files, looked through with the kit's page, `browseCard(number)`. There may be no card in. |
 
@@ -173,6 +174,34 @@ void midiInChosen(sample::MidiHeard heard) override { letGoOfEveryVoice(); }   /
 
 `card()` is for an app that draws its own way of looking through the card, and only when the musician asks for that. `card().look()` asks for the current folder to be read, `goInto(number)` and `goUp()` move, and `load(number, intoSample)` asks for a file. None of them waits: `isBusy()` is true until MP Forge has answered, and then `count()`, `at(number).name`, `at(number).isFolder`, `folder()`, `isThere()` and `problem()` say what came back. In MP Forge it finds no card, since a computer has none: only the kit's page has a file picked there.
 
+## A game controller
+
+A game controller plugged into the device's USB socket can play the app. MP Forge reads the controller and tells the app what was done on it. The app never opens anything itself, and the check still stops an app that tries.
+
+```cpp
+void gamepadPressed(sample::GamepadButton button) override {
+    if (button == sample::GamepadButton::South) jump();
+}
+void gamepadLetGo(sample::GamepadButton button) override {
+    if (button == sample::GamepadButton::South) land();
+}
+void gamepadStickMoved(sample::GamepadSide stick, float x, float y) override {
+    if (stick == sample::GamepadSide::Left) { walkAcross_ = x; walkUp_ = y; }
+}
+void gamepadTriggerPulled(sample::GamepadSide trigger, float pulled) override {
+    if (trigger == sample::GamepadSide::Right) speed_ = pulled;
+}
+```
+
+- The buttons are named by where they sit, since makers print different letters on them. The four on the right are `South` (the lowest: A on some controllers, a cross on others), `East`, `West` and `North`. The cross on the left is `Up`, `Down`, `Left` and `Right`. The rest are `LeftShoulder`, `RightShoulder`, `LeftTrigger`, `RightTrigger`, `Select`, `Start`, `LeftStickIn`, `RightStickIn` and `Home`.
+- A stick says where it stands: `x` from -1 at the left to 1 at the right, `y` from -1 at the bottom to 1 at the top. It is told as exactly 0 when it rests, so there is no need to allow for a stick that wobbles. Keep what it last said: it is told only when it moves.
+- A trigger says how far it is pulled, from 0 to 1, and is also told as the button `LeftTrigger` or `RightTrigger` once it is pulled halfway. Some controllers only have triggers that are buttons: then `pulled` jumps between 0 and 1.
+- One controller plays the app, the first one plugged in. An app is not told whether one is plugged in. When a controller is unplugged, everything held on it is told as let go and both sticks as at rest.
+- Controllers differ. Some have no sticks, some no triggers, and some number their buttons their own way, so `West` and `North` can come swapped. Put what matters most on `South`, `East` and the cross, which nearly every controller has.
+- Everything on the device still has to work with nothing plugged in. A controller adds a way to play the app; it never replaces the pads, the knobs or the fader.
+- In MP Forge a game controller plugged into the musician's computer plays the app on the drawing. Nothing in MP Forge's window sets it. The computer notices a controller only after a button on it has been pressed once.
+- On the MPC Sample itself this is new, and has not been tried with many controllers yet. When you give an app a game controller, say so in your final message in a few words, with what each button and stick does.
+
 ## The screen
 
 - `draw` is called about thirty times a second. Drawing the whole screen every time is the simple way and is fast enough: `screen.clear(colour)`, then the parts.
@@ -190,7 +219,7 @@ void midiInChosen(sample::MidiHeard heard) override { letGoOfEveryVoice(); }   /
 
 ## What the check does
 
-`check_plugin` reads the code for anything an app may not do, builds it, and then plays it for some seconds: every pad hit at full strength and let go, four pads at once, every button pressed and let go, each knob and the fader to both ends and the middle, a keyboard plugged in and played (three notes, one at a time and then together, the mod wheel and the holding pedal moved, and the pitch wheel to both ends and back), the dial three clicks each way and then pressed once more, with a steady note coming in at the inputs. The app has the sound files the musician added, and a small SD card that is the same every time: a folder `DRUMS` with `kick.wav` and `snare.wav`, a folder `LOOPS` with `bass loop.wav` and `quiet.mp3`, which is silence, and `tone.wav` at the top. `look_at_screen` has the same card, so the kit's page can be looked at: press the button that opens it, then `ENCODER` to go into `DRUMS`. The check blocks an app that crashes or hangs, whose sound holds a value that is not a number, whose sound goes over 1, or that takes too long to make its sound. It shows the screen the app ended on.
+`check_plugin` reads the code for anything an app may not do, builds it, and then plays it for some seconds: every pad hit at full strength and let go, four pads at once, every button pressed and let go, each knob and the fader to both ends and the middle, a keyboard plugged in and played (three notes, one at a time and then together, the mod wheel and the holding pedal moved, and the pitch wheel to both ends and back), a game controller plugged in and played (every button pressed and let go, and each stick and trigger as far as it goes and back to rest), the dial three clicks each way and then pressed once more, with a steady note coming in at the inputs. The app has the sound files the musician added, and a small SD card that is the same every time: a folder `DRUMS` with `kick.wav` and `snare.wav`, a folder `LOOPS` with `bass loop.wav` and `quiet.mp3`, which is silence, and `tone.wav` at the top. `look_at_screen` has the same card, so the kit's page can be looked at: press the button that opens it, then `ENCODER` to go into `DRUMS`. The check blocks an app that crashes or hangs, whose sound holds a value that is not a number, whose sound goes over 1, or that takes too long to make its sound. It shows the screen the app ended on.
 
 `look_at_screen` takes a list of `touches`, done one after another a twentieth of a second apart, and shows the screen half a second after the last. A touch is one of:
 
@@ -205,6 +234,8 @@ void midiInChosen(sample::MidiHeard heard) override { letGoOfEveryVoice(); }   /
 { "control": "note", "number": 60, "value": 0 }
 { "control": "controller", "number": 1, "value": 64 }
 { "control": "bend", "value": -0.5 }
+{ "control": "gamepad button", "name": "SOUTH", "value": 1 }
+{ "control": "gamepad axis", "name": "LEFT X", "value": -1 }
 ```
 
-A pad's `value` is how hard it is hit, from 1 to 127, and 0 lets it go. A button's `name` is the word printed on it: `B1`, `B2`, `B3`, `SAMPLE`, `SEQ`, `PAD FX`, `KNOB FX`, `SHIFT`, `PAD BANK`, `ERASE`, `NOTE REPEAT`, `CHOP`, `MUTE`, `LOOP`, `16 LEVELS`, `SAMPLE SELECT`, `TAP TEMPO`, `MINUS`, `PLUS`, `SAMPLE RECORD`, `SEQ RECORD`, `STOP`, `PLAY`, `ENCODER`. Its `value` is 1 for pressed and 0 for let go. The last four are MIDI from something plugged in: a note's `value` is how hard it is played, from 1 to 127, and 0 lets it go; a controller's runs from 0 to 127; a bend's from -1 to 1. Each is on channel 1 unless it names a `channel`.
+A pad's `value` is how hard it is hit, from 1 to 127, and 0 lets it go. A button's `name` is the word printed on it: `B1`, `B2`, `B3`, `SAMPLE`, `SEQ`, `PAD FX`, `KNOB FX`, `SHIFT`, `PAD BANK`, `ERASE`, `NOTE REPEAT`, `CHOP`, `MUTE`, `LOOP`, `16 LEVELS`, `SAMPLE SELECT`, `TAP TEMPO`, `MINUS`, `PLUS`, `SAMPLE RECORD`, `SEQ RECORD`, `STOP`, `PLAY`, `ENCODER`. Its `value` is 1 for pressed and 0 for let go. The last four are MIDI from something plugged in: a note's `value` is how hard it is played, from 1 to 127, and 0 lets it go; a controller's runs from 0 to 127; a bend's from -1 to 1. Each is on channel 1 unless it names a `channel`. A game controller's button is named `SOUTH`, `EAST`, `WEST`, `NORTH`, `LEFT SHOULDER`, `RIGHT SHOULDER`, `LEFT TRIGGER`, `RIGHT TRIGGER`, `SELECT`, `START`, `LEFT STICK`, `RIGHT STICK`, `UP`, `DOWN`, `LEFT`, `RIGHT` or `HOME`, with a `value` of 1 for pressed and 0 for let go. What its sticks and triggers move along is named `LEFT X`, `LEFT Y`, `RIGHT X`, `RIGHT Y` (from -1 to 1, with up and right as more), `LEFT TRIGGER` or `RIGHT TRIGGER` (from 0 to 1).

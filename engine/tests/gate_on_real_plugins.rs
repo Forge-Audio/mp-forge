@@ -992,6 +992,56 @@ fn the_knobs_and_the_fader_of_pocket_pads_change_what_is_heard() {
     assert!(loudest(&quieter) < loudest(&as_it_starts) / 2.0, "the fader turns it down");
 }
 
+/// An app that shows what a game controller does: its first dot is red while the lowest button on the right is
+/// held, and green and blue with where the left stick stands; its second dot is red with the right trigger.
+const SHOWS_WHAT_A_GAME_CONTROLLER_DOES: &str = r#"#include "mpc_sample_app.h"
+
+class StickDot : public sample::App {
+public:
+    void gamepadPressed(sample::GamepadButton button) override { if (button == sample::GamepadButton::South) isHeld_ = true; }
+    void gamepadLetGo(sample::GamepadButton button) override { if (button == sample::GamepadButton::South) isHeld_ = false; }
+    void gamepadStickMoved(sample::GamepadSide stick, float x, float y) override { if (stick == sample::GamepadSide::Left) { across_ = x; up_ = y; } }
+    void gamepadTriggerPulled(sample::GamepadSide trigger, float pulled) override { if (trigger == sample::GamepadSide::Right) pulled_ = pulled; }
+    void makeSound(sample::Sound& sound) override { sound.silence(); }
+    void draw(sample::Screen& screen, sample::Lights&) override {
+        screen.dot(0, 0, sample::Colour{static_cast<uint8_t>(isHeld_ ? 255 : 0), shadeOf(across_), shadeOf(up_)});
+        screen.dot(1, 0, sample::Colour{shadeOf(pulled_), 0, 0});
+    }
+
+private:
+    static uint8_t shadeOf(float stands) { return static_cast<uint8_t>(100.0f + stands * 100.0f); }
+
+    bool isHeld_ = false;
+    float across_ = 0.0f, up_ = 0.0f, pulled_ = 0.0f;
+};
+
+MPC_SAMPLE_APP(StickDot)
+"#;
+
+#[test]
+fn an_app_is_told_what_is_done_on_a_game_controller_and_stands_up_to_one_being_played() {
+    let apps = PluginsFolder::empty("sample-app-game-controller");
+    let app_dir = pocket_pads_in(&apps);
+    fs::write(app_dir.join("src/PocketPads.cpp"), SHOWS_WHAT_A_GAME_CONTROLLER_DOES).unwrap();
+    let sdk = Sdk::at(sdk_dir()).unwrap_or_else(|not_found| panic!("{not_found}"));
+    let library = sample_app::build_for_this_computer(&sdk, &app_dir, Duration::from_secs(300)).unwrap_or_else(|not_built| panic!("{not_built}"));
+    let mut app = RunningApp::load(&library, 44_100.0, Vec::new()).unwrap();
+    let first_two_dots = |app: &mut RunningApp| app.show().picture[..5].to_vec();
+    let played = ["SOUTH"].map(|button| Input::gamepad_button(button, true)).into_iter().chain([("LEFT X", 1.0), ("LEFT Y", -0.5), ("RIGHT TRIGGER", 1.0)].map(|(along, stands)| Input::gamepad_moved(along, stands)));
+
+    let at_rest = first_two_dots(&mut app);
+    played.flatten().for_each(|done| app.tell(done));
+    let while_played = first_two_dots(&mut app);
+    [Input::gamepad_button("SOUTH", false), Input::gamepad_moved("RIGHT X", 1.0)].into_iter().flatten().for_each(|done| app.tell(done));
+    let with_the_button_let_go_and_the_other_stick_moved = first_two_dots(&mut app);
+    drop(app);
+
+    assert_eq!(at_rest, [0, 100, 100, 255, 100]);
+    assert_eq!(while_played, [255, 200, 50, 255, 200], "a stick is told whole, each direction as it was last said");
+    assert_eq!(with_the_button_let_go_and_the_other_stick_moved, [0, 200, 50, 255, 200]);
+    assert!(gate().inspect(&app_dir).may_be_sent(), "the check plays a game controller too");
+}
+
 #[test]
 fn a_sample_app_whose_code_does_not_build_says_what_the_compiler_said() {
     let apps = PluginsFolder::empty("sample-app-broken");

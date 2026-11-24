@@ -34,6 +34,16 @@ pub const BUTTONS: [&str; 24] = [
     "SAMPLE SELECT", "TAP TEMPO", "MINUS", "PLUS", "SAMPLE RECORD", "SEQ RECORD", "STOP", "PLAY", "ENCODER",
 ];
 
+/// The buttons of a game controller plugged in, by where they sit, in the order the kit counts them. The four on
+/// the right are named for their places, since makers print different letters on them.
+pub const GAMEPAD_BUTTONS: [&str; 17] = [
+    "SOUTH", "EAST", "WEST", "NORTH", "LEFT SHOULDER", "RIGHT SHOULDER", "LEFT TRIGGER", "RIGHT TRIGGER", "SELECT", "START", "LEFT STICK", "RIGHT STICK",
+    "UP", "DOWN", "LEFT", "RIGHT", "HOME",
+];
+/// What a game controller's sticks and triggers move along, in the order the kit counts them.
+pub const GAMEPAD_AXES: [&str; 6] = ["LEFT X", "LEFT Y", "RIGHT X", "RIGHT Y", "LEFT TRIGGER", "RIGHT TRIGGER"];
+const FIRST_TRIGGER_AMONG_THE_AXES: usize = 4;
+
 const MANIFEST: &str = "plugin.json";
 const FIRST_VERSION: &str = "1.0.0";
 const STARTER_FILE: &str = "App.cpp";
@@ -43,7 +53,7 @@ const MARKS_THE_KIT_CAN_WRITE: [char; 5] = [' ', '-', '+', ':', '.'];
 const KIT_FILE: &str = "mpc_sample_app.h";
 const KIT: &str = include_str!("../helpers/sample/mpc_sample_app.h");
 /// The kit an app has to have been built with. An app built with another is not run.
-const KIT_NUMBER: i32 = 5;
+const KIT_NUMBER: i32 = 6;
 const NO_ROOM_FOR_IT: &CStr = c"NO ROOM LEFT FOR IT";
 const LONGEST_PATH_ON_THE_CARD: usize = 255;
 const ASKED_FOR_A_FOLDER: i32 = 1;
@@ -193,6 +203,8 @@ enum Touched {
     Encoder = 3,
     Button = 4,
     Midi = 5,
+    GamepadButton = 6,
+    GamepadAxis = 7,
 }
 
 pub(crate) const NOTE_ON: u8 = 0x90;
@@ -239,6 +251,20 @@ impl Input {
         Some(Input { touched: Touched::Button, number: number as i32, value: if is_pressed { 1.0 } else { 0.0 } })
     }
 
+    /// A button of a game controller pressed or let go, by where it sits. None for a button no controller has.
+    pub fn gamepad_button(name: &str, is_pressed: bool) -> Option<Input> {
+        let number = GAMEPAD_BUTTONS.iter().position(|button| *button == name)?;
+        Some(Input { touched: Touched::GamepadButton, number: number as i32, value: if is_pressed { 1.0 } else { 0.0 } })
+    }
+
+    /// A stick of a game controller moved along one of its directions, from -1 to 1 with 0 where it rests and
+    /// up as more, or a trigger pulled, from 0 to 1. None for a direction no controller has.
+    pub fn gamepad_moved(along: &str, stands: f32) -> Option<Input> {
+        let number = GAMEPAD_AXES.iter().position(|axis| *axis == along)?;
+        let least = if number < FIRST_TRIGGER_AMONG_THE_AXES { -1.0 } else { 0.0 };
+        Some(Input { touched: Touched::GamepadAxis, number: number as i32, value: stands.clamp(least, 1.0) })
+    }
+
     /// One MIDI message as it arrives, of three bytes. The app is handed them in one number, the first byte
     /// lowest. None for a message of another length, which is nothing an app is told of.
     pub fn midi(message: &[u8]) -> Option<Input> {
@@ -280,7 +306,8 @@ impl Input {
 
     /// What the screen said was done, in the screen's own words: which `control`, its `number` or `name`, and
     /// a `value`. MIDI is said as a `note` or a `controller` with a `value` up to 127, or a `bend` from -1 to
-    /// 1, each on `channel` 1 when none is named. None for anything that is not something the device can do.
+    /// 1, each on `channel` 1 when none is named. A game controller is said as a `gamepad button` or a
+    /// `gamepad axis`, by its `name`. None for anything that is not something the device can do.
     pub fn said_by_the_screen(said: &Value) -> Option<Input> {
         let value = said["value"].as_f64()? as f32;
         let number = || said["number"].as_i64().and_then(|number| i32::try_from(number).ok());
@@ -297,6 +324,8 @@ impl Input {
             "fader" => Some(Input::fader_moved(value)),
             "encoder" => Some(Input::encoder_turned(value as i32)),
             "button" => Input::button(said["name"].as_str()?, value > 0.0),
+            "gamepad button" => Input::gamepad_button(said["name"].as_str()?, value > 0.0),
+            "gamepad axis" => Input::gamepad_moved(said["name"].as_str()?, value),
             _ => None,
         }
     }
@@ -582,7 +611,7 @@ mod tests {
 
     #[test]
     fn the_kit_reads_midi_as_it_is_handed_over() {
-        assert!(KIT.contains("enum class Touched : int32_t { Pad = 0, Knob = 1, Fader = 2, Encoder = 3, Button = 4, Midi = 5 };"));
+        assert!(KIT.contains("enum class Touched : int32_t { Pad = 0, Knob = 1, Fader = 2, Encoder = 3, Button = 4, Midi = 5, GamepadButton = 6, GamepadAxis = 7 };"));
         assert!(KIT.contains("enum class Midi : int32_t { NoteOff = 0x80, NoteOn = 0x90, Controller = 0xB0, PitchBend = 0xE0 };"));
     }
 
@@ -594,6 +623,26 @@ mod tests {
         assert!(KIT.contains(&format!("static_cast<MidiCameIn>(message >> {WHERE_MIDI_CAME_IN_STARTS_AT_BIT})")));
         assert_eq!(played.having_come_in(MidiCameIn::AtEither), played);
         assert_eq!(played.having_come_in(MidiCameIn::AtTheSocket).number, played.number | 2 << 24);
+    }
+
+    #[test]
+    fn a_game_controller_is_said_by_the_screen_by_the_names_of_its_buttons_sticks_and_triggers() {
+        let said = |said: Value| Input::said_by_the_screen(&said);
+
+        assert_eq!(said(json!({ "control": "gamepad button", "name": "SOUTH", "value": 1 })), Some(Input { touched: Touched::GamepadButton, number: 0, value: 1.0 }));
+        assert_eq!(said(json!({ "control": "gamepad button", "name": "HOME", "value": 0 })), Some(Input { touched: Touched::GamepadButton, number: 16, value: 0.0 }));
+        assert_eq!(said(json!({ "control": "gamepad axis", "name": "LEFT Y", "value": -3 })), Some(Input { touched: Touched::GamepadAxis, number: 1, value: -1.0 }));
+        assert_eq!(said(json!({ "control": "gamepad axis", "name": "RIGHT TRIGGER", "value": -0.5 })), Some(Input { touched: Touched::GamepadAxis, number: 5, value: 0.0 }), "a trigger is never pulled less than not at all");
+        assert_eq!(said(json!({ "control": "gamepad button", "name": "TURBO", "value": 1 })), None);
+    }
+
+    #[test]
+    fn a_game_controller_is_counted_as_the_kit_counts_it() {
+        assert!(KIT.contains("South, East, West, North, LeftShoulder, RightShoulder, LeftTrigger, RightTrigger, Select, Start, LeftStickIn, RightStickIn,"));
+        assert!(KIT.contains("Up, Down, Left, Right, Home,"));
+        assert!(KIT.contains("enum class GamepadAxis : int32_t { LeftX = 0, LeftY = 1, RightX = 2, RightY = 3, LeftTrigger = 4, RightTrigger = 5, Count };"));
+        assert_eq!((GAMEPAD_BUTTONS[0], GAMEPAD_BUTTONS[11], GAMEPAD_BUTTONS[12], GAMEPAD_BUTTONS[16]), ("SOUTH", "RIGHT STICK", "UP", "HOME"));
+        assert_eq!(GAMEPAD_AXES[FIRST_TRIGGER_AMONG_THE_AXES], "LEFT TRIGGER");
     }
 
     #[test]
