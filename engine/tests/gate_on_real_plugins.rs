@@ -5,6 +5,8 @@
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+#[cfg(unix)]
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use serde_json::json;
@@ -1493,10 +1495,14 @@ impl StandInDevice {
         shown[ROWS_OF_THE_QUESTION.start * bytes_a_row..ROWS_OF_THE_QUESTION.end * bytes_a_row].chunks_exact(4).any(|dot| dot == INK_ON_THE_SCREEN)
     }
 
-    /// Waits until the musician is asked on the screen, then answers with what the controls send.
-    fn answer_once_asked(&self, sent_by_the_controls: &[u8]) {
-        let gives_up = std::time::Instant::now() + Duration::from_secs(10);
-        while !self.asks_the_musician() && std::time::Instant::now() < gives_up {
+    /// Waits until the musician is asked on the screen, then answers with what the controls send. A musician
+    /// who is never asked sends nothing: with no question on the screen, a push of the dial would end the link,
+    /// and on a slow computer the question can be a long while coming.
+    fn answer_once_asked(&self, sent_by_the_controls: &[u8], is_over: &AtomicBool) {
+        while !self.asks_the_musician() {
+            if is_over.load(Ordering::Relaxed) {
+                return;
+            }
             std::thread::sleep(Duration::from_millis(20));
         }
         self.touch(sent_by_the_controls);
@@ -1504,9 +1510,12 @@ impl StandInDevice {
 
     /// What `send` comes to, with the musician answering on the device as soon as they are asked.
     fn with_the_musician_answering<Sent: Send>(&self, sent_by_the_controls: &[u8], send: impl FnOnce() -> Sent + Send) -> Sent {
+        let is_over = AtomicBool::new(false);
         std::thread::scope(|both| {
-            both.spawn(|| self.answer_once_asked(sent_by_the_controls));
-            both.spawn(send).join().unwrap()
+            both.spawn(|| self.answer_once_asked(sent_by_the_controls, &is_over));
+            let sent = both.spawn(send).join();
+            is_over.store(true, Ordering::Relaxed);
+            sent.unwrap()
         })
     }
 
