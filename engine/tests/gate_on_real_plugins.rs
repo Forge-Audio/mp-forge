@@ -1535,6 +1535,15 @@ impl StandInDevice {
         std::net::SocketAddr::from(([127, 0, 0, 1], self.port))
     }
 
+    /// Whether a computer that comes to link is greeted, rather than turned away.
+    fn greets_a_computer(&self) -> bool {
+        use std::io::Read;
+        let mut computer = std::net::TcpStream::connect(self.address()).unwrap();
+        let mut greeting = [0u8; 16];
+        computer.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+        computer.read_exact(&mut greeting).is_ok() && &greeting == b"MP FORGE LINK 1\n"
+    }
+
     fn touch(&self, sent_by_the_controls: &[u8]) {
         fs::OpenOptions::new().write(true).open(&self.controls).unwrap().write_all(sent_by_the_controls).unwrap();
     }
@@ -2004,6 +2013,31 @@ fn an_app_sent_over_the_link_lands_where_the_boot_menu_looks_and_runs_until_it_i
     assert_eq!(told_when_run_again, told_when_first_run);
     assert!(sent_again_without_being_asked.is_ok(), "the musician is asked once each time the link starts: {sent_again_without_being_asked:?}");
     assert_eq!(device.first_dot_once_it_is(THE_WAITING_PICTURES_BAR), THE_WAITING_PICTURES_BAR, "the link is back once the app is left");
+}
+
+#[cfg(unix)]
+#[test]
+fn once_an_app_is_left_the_link_keeps_to_itself_until_a_pad_is_hit() {
+    const PLAY_PRESSED: [u8; 3] = [0x90, 82, 127];
+    const A_PAD_HIT: [u8; 3] = [0x99, 37, 127];
+    let holder = PluginsFolder::empty("app-left");
+    let folder = folder_of_night_bus_in(&holder);
+    let device = StandInDevice::started_as_one_that(Takes::Apps, "device-app-left");
+    device.first_dot_once_it_is(THE_WAITING_PICTURES_BAR);
+    let greeted_before_any_app = device.greets_a_computer();
+
+    let sent = device.with_the_musician_answering(&THE_DIAL_PUSHED, || app_sending::send_and_run(&device.doors(), &folder));
+    let greeted_once_the_app_is_left = device.greets_a_computer();
+    device.touch(&PLAY_PRESSED);
+    let greeted_after_a_button = device.greets_a_computer();
+    device.touch(&A_PAD_HIT);
+    let greeted_after_a_pad = device.greets_a_computer();
+
+    assert!(sent.is_ok(), "{sent:?}");
+    assert!(greeted_before_any_app, "a link that has run no app lets a computer in at once");
+    assert!(!greeted_once_the_app_is_left, "a computer with the app open would otherwise put it straight back on the screen");
+    assert!(!greeted_after_a_button, "the buttons that left the app may still be going up and down");
+    assert!(greeted_after_a_pad);
 }
 
 #[cfg(unix)]

@@ -39,7 +39,7 @@
   }
 
   function wordsAboutTheCable(appName) {
-    return `**${appName} is on your MPC Sample** and running there. Hold SHIFT and STOP on it to leave the app. It is in the boot menu from now on.`;
+    return `**${appName} is on your MPC Sample** and running there. Hold SHIFT and STOP on it to leave the app, then hit a pad to link it to MP Forge again. It is in the boot menu from now on.`;
   }
 
   // Each way answers with the safety check's report and, when the app got there, the words that say so.

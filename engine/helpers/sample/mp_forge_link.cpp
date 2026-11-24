@@ -7,7 +7,8 @@
 //
 // It also takes an app from the computer and puts it on the SD card, at a door of its own, and runs that app
 // when asked: see mp_forge_link_apps.h. While the app runs the device is the app's. When the app is left the
-// link is back.
+// link is back, and keeps to itself until a pad is hit: a computer that has the same app open would otherwise
+// link at once, and the device would look as if the app had never been left.
 //
 //   mp-forge-link <screen> <controls> <port> [<port for apps> <folder for apps> [<the device's own storage>]]
 //
@@ -57,8 +58,9 @@ constexpr int kNobody = -1;
 char kStartedByTheLink[] = "from-mp-forge-link";
 char kShell[] = "sh";
 
-// The dial pushed in is a note on the controls' first channel.
-constexpr uint8_t kNoteOnTheFirstChannel = 0x90;
+// The buttons send notes on the controls' first channel, the dial pushed in among them, and the pads on the tenth.
+constexpr uint8_t kNoteOfAButton = 0x90;
+constexpr uint8_t kNoteOfAPad = 0x99;
 constexpr uint8_t kNoteOfTheDial = 111;
 constexpr uint8_t kFirstStatusByte = 0x80;
 constexpr uint8_t kFirstByteSentInBetween = 0xF8;
@@ -124,10 +126,13 @@ private:
     int controls_ = kNobody;
 };
 
-// What the buttons say among the bytes the controls send: a push of the dial, or a press of any other button.
-enum class Pressed { Nothing, TheDial, AnotherButton };
+// What the musician did among the bytes the controls send: a push of the dial, a press of any other button, or
+// a hit on a pad.
+enum class Pressed { Nothing, TheDial, AnotherButton, APad };
 
-class ButtonPresses {
+bool isAButton(Pressed pressed) { return pressed == Pressed::TheDial || pressed == Pressed::AnotherButton; }
+
+class PressesHeard {
 public:
     Pressed lastIn(const uint8_t* bytes, size_t count) {
         Pressed last = Pressed::Nothing;
@@ -142,12 +147,17 @@ private:
     Pressed pressEndedBy(uint8_t byte) {
         if (byte >= kFirstByteSentInBetween) return Pressed::Nothing;
         if (byte >= kFirstStatusByte) return startAMessage(byte);
-        if (status_ != kNoteOnTheFirstChannel) return Pressed::Nothing;
+        if (status_ != kNoteOfAButton && status_ != kNoteOfAPad) return Pressed::Nothing;
         if (note_ == kNoNoteYet) return takeTheNote(byte);
         const bool isAPress = byte > 0;
-        const Pressed pressed = note_ == kNoteOfTheDial ? Pressed::TheDial : Pressed::AnotherButton;
+        const Pressed pressed = whatTheNoteIsOf();
         note_ = kNoNoteYet;
         return isAPress ? pressed : Pressed::Nothing;
+    }
+
+    Pressed whatTheNoteIsOf() const {
+        if (status_ == kNoteOfAPad) return Pressed::APad;
+        return note_ == kNoteOfTheDial ? Pressed::TheDial : Pressed::AnotherButton;
     }
 
     Pressed startAMessage(uint8_t status) {
@@ -177,6 +187,17 @@ const sample::Screen& waitingPicture() {
     writeAcross(picture, "MP FORGE LINK", 56, kInk, 4);
     writeAcross(picture, "PLUG THE USB-C CABLE INTO THE COMPUTER", 112, kSoft, 2);
     writeAcross(picture, "AND OPEN AN APP IN MP FORGE", 130, kSoft, 2);
+    writeAcross(picture, "PUSH THE DIAL TO LEAVE", 196, kInk, 2);
+    return picture;
+}
+
+const sample::Screen& leftAnAppPicture() {
+    static sample::Screen picture;
+    picture.clear(kDark);
+    picture.fill(0, 0, sample::kScreenWidth, 6, kAccent);
+    writeAcross(picture, "MP FORGE LINK", 56, kInk, 4);
+    writeAcross(picture, "THE APP IS CLOSED", 112, kSoft, 2);
+    writeAcross(picture, "HIT A PAD TO LINK TO THE COMPUTER", 130, kInk, 2);
     writeAcross(picture, "PUSH THE DIAL TO LEAVE", 196, kInk, 2);
     return picture;
 }
@@ -224,7 +245,7 @@ public:
 private:
     static constexpr int kTheControls = 0, kTheDoorForLinking = 1, kTheComputer = 2, kTheDoorForApps = 3, kWatched = 4;
 
-    void showThatItWaits() { panel_.show(waitingPicture()); }
+    void showThatItWaits() { panel_.show(keepsToItself_ ? leftAnAppPicture() : waitingPicture()); }
 
     bool isLinked() const { return computer_ != kNobody; }
 
@@ -233,7 +254,7 @@ private:
         pollfd watched[kWatched] = {{device_.controls(), POLLIN, 0}, {isLinked() ? kNobody : doors_.forLinking, POLLIN, 0}, {computer_, POLLIN, 0}, {doors_.forApps, POLLIN, 0}};
         if (!waitFor(watched, kWatched, kForever)) return false;
         if (watched[kTheControls].revents != 0 && !hearTheControls()) return false;
-        if ((watched[kTheDoorForLinking].revents & POLLIN) != 0) letAComputerIn();
+        if ((watched[kTheDoorForLinking].revents & POLLIN) != 0) answerTheDoorForLinking();
         if (watched[kTheComputer].revents != 0 && isLinked() && !takeAMessageFrom(computer_)) letTheComputerGo();
         if ((watched[kTheDoorForApps].revents & POLLIN) != 0) return takeAnApp();
         return true;
@@ -247,16 +268,39 @@ private:
         return true;
     }
 
-    // What the controls send goes to the computer while one is linked. While none is, a push of the dial ends
-    // the program. Controls that can no longer be read end it too, so that the device is not left stuck.
+    // What the controls send goes to the computer while one is linked. While none is, the controls are the
+    // link's own. Controls that can no longer be read end the program, so that the device is not left stuck.
     bool hearTheControls() {
         uint8_t sent[256];
         const ssize_t count = read(device_.controls(), sent, sizeof sent);
         if (count < 0 && errno == EINTR) return true;
         if (count <= 0) return false;
-        if (!isLinked()) return buttons_.lastIn(sent, static_cast<size_t>(count)) != Pressed::TheDial;
+        if (!isLinked()) return staysAfter(presses_.lastIn(sent, static_cast<size_t>(count)));
         if (!writeAll(computer_, sent, static_cast<size_t>(count))) letTheComputerGo();
         return true;
+    }
+
+    // With no computer linked, a push of the dial ends the program, and a hit on a pad lets computers link
+    // again after an app was left.
+    bool staysAfter(Pressed pressed) {
+        if (pressed == Pressed::APad && keepsToItself_) letComputersLinkAgain();
+        return pressed != Pressed::TheDial;
+    }
+
+    void letComputersLinkAgain() {
+        keepsToItself_ = false;
+        showThatItWaits();
+    }
+
+    void answerTheDoorForLinking() {
+        if (keepsToItself_) turnAComputerAway();
+        else letAComputerIn();
+    }
+
+    // A computer turned away is not greeted, so it takes the link for not there and looks again later.
+    void turnAComputerAway() {
+        const int computer = accept(doors_.forLinking, nullptr, nullptr);
+        if (computer >= 0) close(computer);
     }
 
     void letAComputerIn() {
@@ -269,7 +313,7 @@ private:
     void letTheComputerGo() {
         if (isLinked()) close(computer_);
         computer_ = kNobody;
-        buttons_ = ButtonPresses();
+        presses_ = PressesHeard();
         showThatItWaits();
     }
 
@@ -345,15 +389,15 @@ private:
 
     bool theMusicianSaysYes() {
         drawOverThePicture(askingPicture());
-        ButtonPresses answers;
+        PressesHeard answers;
         for (int secondsLeft = kSecondsTheMusicianHasToAnswer; secondsLeft > 0; --secondsLeft) {
             const Pressed pressed = pressedWithinASecond(answers);
-            if (pressed != Pressed::Nothing) return pressed == Pressed::TheDial;
+            if (isAButton(pressed)) return pressed == Pressed::TheDial;
         }
         return false;
     }
 
-    Pressed pressedWithinASecond(ButtonPresses& answers) {
+    Pressed pressedWithinASecond(PressesHeard& answers) {
         pollfd watched{device_.controls(), POLLIN, 0};
         uint8_t sent[256];
         if (!waitFor(&watched, 1, 1000) || watched.revents == 0) return Pressed::Nothing;
@@ -364,7 +408,7 @@ private:
     void isShownThatAnAppArrives(const std::string& name) override { drawOverThePicture(arrivingPicture(name)); }
 
     // Runs an app's start script and waits until the app is left. The screen and the controls are the app's
-    // meanwhile. False when they could not be taken back.
+    // meanwhile, and from then on the link keeps to itself. False when they could not be taken back.
     bool runTheApp(const std::string& script) {
         std::string scriptRun = script;
         char* const started[] = {kShell, &scriptRun[0], kStartedByTheLink, nullptr};
@@ -373,6 +417,7 @@ private:
         letTheComputerGo();
         device_.letGo();
         if (posix_spawn(&app, "/bin/sh", nullptr, nullptr, started, environ) == 0) waitUntilLeft(app);
+        keepsToItself_ = true;
         return device_.take();
     }
 
@@ -388,7 +433,8 @@ private:
     int computer_ = kNobody;
     bool isAllowed_ = false;
     bool hasDrawnOverThePicture_ = false;
-    ButtonPresses buttons_;
+    bool keepsToItself_ = false;
+    PressesHeard presses_;
     std::vector<uint8_t> taken_;
 };
 
