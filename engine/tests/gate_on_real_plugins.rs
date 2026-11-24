@@ -358,7 +358,7 @@ fn a_plugin_the_musician_arranged_by_hand_is_let_through_with_its_arrangement_on
     assert!(screen.contains("\"bounds\": \"500 400 278 107\""), "{screen}");
     assert!(screen.contains("\"value\": \"WithName[ECHOES]/Parameter "), "{screen}");
     assert!(!screen.contains("\"bounds\": \"983 45 278 107\""), "the knob should have left its slot");
-    assert!(screen.contains("\"494 190 773 323\""), "the fourth column's box should surround Feedback and Mix");
+    assert!(screen.contains("\"490 186 781 331\""), "the fourth column's box should surround Feedback and Mix");
 }
 
 const FEEDBACK_AND_LOW_CUT_SWAP_KNOBS: &str = r#"{ "pages": [{ "page": "DELAY", "knobs": [
@@ -381,6 +381,32 @@ fn a_plugin_whose_knobs_the_musician_chose_is_let_through_with_them_in_its_built
     assert_eq!(turned_by(9), built_control_number(&plugin.0, "Feedback"));
     assert_eq!(turned_by(16), built_control_number(&plugin.0, "Low Cut"));
     assert_eq!(turned_by(13), built_control_number(&plugin.0, "Sync"));
+}
+
+/// Sync and Low Cut sit one above the other, so the first column of knobs still turns the same two controls.
+const SYNC_AND_LOW_CUT_SWAP_KNOBS: &str = r#"{ "pages": [{ "page": "DELAY", "knobs": [
+    { "control": "Sync", "knob": 9 }, { "control": "Low Cut", "knob": 13 }
+]}]}"#;
+
+/// The boxes drawn round each column of hardware knobs on the first page of the screen the build made.
+fn knob_boxes_on_the_first_page(plugin: &Path) -> Vec<String> {
+    let screen: serde_json::Value = serde_json::from_str(&fs::read_to_string(built_screen_file(plugin).unwrap()).unwrap()).unwrap();
+    let boxes = screen["pageData"]["tabs"][0]["qlinkBoundsData"].as_array().unwrap();
+    boxes.iter().map(|drawn| drawn.as_str().unwrap().to_string()).collect()
+}
+
+#[test]
+fn the_boxes_mp_forge_draws_round_the_knobs_columns_are_the_ones_akais_generator_draws() {
+    let as_akai_generates_it = CopiedExample::of_the_delay("boxes-of-the-generator");
+    let with_boxes_of_mp_forge = CopiedExample::of_the_delay("boxes-of-mp-forge");
+    fs::write(with_boxes_of_mp_forge.0.join("look.json"), SYNC_AND_LOW_CUT_SWAP_KNOBS).unwrap();
+
+    let reports = [gate().inspect(&as_akai_generates_it.0), gate().inspect(&with_boxes_of_mp_forge.0)];
+
+    let generated = knob_boxes_on_the_first_page(&as_akai_generates_it.0);
+    assert!(reports.iter().all(|report| report.may_be_sent()), "{reports:#?}");
+    assert_eq!(generated.len(), 4, "the delay has a control in every column: {generated:?}");
+    assert_eq!(knob_boxes_on_the_first_page(&with_boxes_of_mp_forge.0), generated);
 }
 
 const ONE_STREAM: &str = r#"{ "streams": [{ "name": "Jazz", "address": "http://stream.example.com/jazz.mp3" }] }"#;

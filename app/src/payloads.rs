@@ -527,7 +527,7 @@ mod tests {
         let items = &shown["pages"][0]["items"];
         assert_eq!(items[0], json!({ "kind": "control", "name": "Time", "slot": 0, "knob": 13, "area": { "x": 23, "y": 45, "width": 278, "height": 107 }, "shownName": null, "moved": false, "parts": null }));
         assert_eq!(items[1], json!({ "kind": "control", "name": "Mix", "slot": 1, "knob": 14, "area": { "x": 600, "y": 300, "width": 278, "height": 107 }, "shownName": "BLEND", "moved": true, "parts": null }));
-        assert_eq!(shown["pages"][0]["groupBoxes"].as_array().unwrap().len(), 4);
+        assert_eq!(shown["pages"][0]["groupBoxes"].as_array().unwrap().len(), 2);
     }
 
     #[test]

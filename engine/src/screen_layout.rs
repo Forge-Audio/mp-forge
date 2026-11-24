@@ -20,11 +20,12 @@ const SLOT_WIDTH: u32 = 278;
 const SLOT_HEIGHT: u32 = 107;
 const SLOTS_ON_A_PAGE: usize = (SLOTS_PER_SIDE * SLOTS_PER_SIDE) as usize;
 const EMPTY_SLOT: &str = "empty";
+/// Two things Akai's generator reads from a layout file: which way the hardware knobs are grouped, and a
+/// picture file drawn behind a page.
+const KNOB_GROUPS: &str = "qlinkGroups";
+const KNOB_GROUPS_FOLLOWED_HERE: &str = "columns";
+const BACKDROP_FILE: &str = "background";
 const HEADING: &str = "text";
-/// The boxes Akai's generator draws round each column of controls: how far in from the slot's edge, and how wide.
-const GROUP_BOX_INSET: u32 = 15;
-const GROUP_BOX_WIDTH: u32 = 248;
-const GROUP_BOX_HEIGHT: u32 = 624;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Area {
@@ -65,11 +66,6 @@ pub fn area_of_slot(position: usize) -> Area {
 
 pub fn column_of_slot(position: usize) -> usize {
     position % SLOTS_PER_SIDE as usize
-}
-
-/// The box Akai's generator draws round one column of controls when the hardware knobs are on it.
-pub fn generated_group_box(column: usize) -> Area {
-    Area { x: SLOT_LEFT_EDGES[column] + GROUP_BOX_INSET, y: 0, width: GROUP_BOX_WIDTH, height: GROUP_BOX_HEIGHT }
 }
 
 /// A rectangle of slots, counted from zero at the top left.
@@ -161,6 +157,22 @@ impl ScreenLayout {
     }
 }
 
+/// What a layout file asks of Akai's generator that MP Forge's own drawing of the screen and of the hardware
+/// knobs does not follow. The MPC would then show one thing and MP Forge another, so each is said in words.
+pub fn asked_for_but_not_followed_here(layout: &Value) -> Vec<String> {
+    let pages = layout["pages"].as_array().map(Vec::as_slice).unwrap_or_default();
+    let turns_rows_of_knobs = layout[KNOB_GROUPS].as_str().is_some_and(|groups| groups != KNOB_GROUPS_FOLLOWED_HERE);
+    let has_a_backdrop_file = pages.iter().any(|page| !page[BACKDROP_FILE].is_null());
+    let mut not_followed = Vec::new();
+    if turns_rows_of_knobs {
+        not_followed.push(format!("ui.json sets `{KNOB_GROUPS}`. Take it out: here the hardware knobs always take one column of controls at a time."));
+    }
+    if has_a_backdrop_file {
+        not_followed.push(format!("A page in ui.json has a `{BACKDROP_FILE}`. Take it out and draw the backdrop as a picture in pictures.json, which MP Forge shows."));
+    }
+    not_followed
+}
+
 /// A page without a name is known by its number, as on the MPC.
 fn page_from_json(position: usize, page: &Value) -> LayoutPage {
     let name = page["name"].as_str().map(str::to_string).unwrap_or_else(|| (position + 1).to_string());
@@ -249,9 +261,14 @@ mod tests {
     }
 
     #[test]
-    fn the_generated_group_boxes_are_the_ones_akais_generator_writes() {
-        assert_eq!(generated_group_box(0), Area { x: 38, y: 0, width: 248, height: 624 });
-        assert_eq!(generated_group_box(3), Area { x: 998, y: 0, width: 248, height: 624 });
+    fn what_akais_generator_would_do_but_mp_forge_does_not_show_is_said() {
+        let as_mp_forge_shows_it = json!({ "qlinkGroups": "columns", "pages": [{ "name": "MAIN", "controls": ["Time"] }] });
+        let knobs_by_the_row = json!({ "qlinkGroups": "rows", "pages": [{ "name": "MAIN", "controls": ["Time"] }] });
+        let with_a_backdrop_file = json!({ "pages": [{ "name": "MAIN", "controls": ["Time"], "background": "wood.png" }] });
+
+        assert_eq!(asked_for_but_not_followed_here(&as_mp_forge_shows_it), Vec::<String>::new());
+        assert!(asked_for_but_not_followed_here(&knobs_by_the_row)[0].contains("`qlinkGroups`"));
+        assert!(asked_for_but_not_followed_here(&with_a_backdrop_file)[0].contains("pictures.json"));
     }
 
     #[test]

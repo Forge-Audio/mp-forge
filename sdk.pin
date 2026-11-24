@@ -1,4 +1,4 @@
 # The exact version of Akai's MPC Plugin SDK this project is built and tested against.
 # Change SDK_COMMIT only after scripts/check-sdk.sh passes on the new version.
 SDK_REPOSITORY=https://github.com/inmusic-software/mpc-plugin-builder-sdk.git
-SDK_COMMIT=febd2ca5bd9eb16c4a412837196e145566bc981b
+SDK_COMMIT=e78bad508a305a92443758eb2bc8b428e9e7a687

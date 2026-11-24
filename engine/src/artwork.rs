@@ -437,7 +437,7 @@ mod tests {
             {"componentData": {"name": "Time", "type": "knobUni", "data": {"handleName": "Data"}},
              "handle remapping": {"version": 1, "map": [{"key": "Data", "value": "Parameter 1"}]}, "bounds": {"bounds": "23 45 278 107"}}
         ]},
-        "qlinkBoundsData": ["38 0 248 624", "358 0 248 624", "678 0 248 624", "998 0 248 624"]}]}}"#;
+        "qlinkBoundsData": ["13 35 298 127"]}]}}"#;
 
     #[test]
     fn what_the_musician_arranged_is_applied_to_the_screen_the_build_made() {
@@ -453,7 +453,7 @@ mod tests {
         assert!(screen.contains("\"bounds\": \"600 300 278 107\""), "{screen}");
         assert!(screen.contains("\"value\": \"WithName[SPEED]/Parameter 1\""), "{screen}");
         assert!(screen.contains("\"bounds\": \"900 500 278 107\""), "{screen}");
-        assert!(screen.contains("\"594 294 290 119\""), "{screen}");
+        assert!(screen.contains("\"590 290 298 127\""), "{screen}");
     }
 
     const RED_BEHIND_MAIN: &str = r##"{ "pages": [{ "page": "MAIN", "artwork": [

@@ -15,7 +15,8 @@ use crate::pictures::pictures_of;
 use crate::process::{Finished, RunError};
 use crate::sample_app;
 use crate::sample_trial;
-use crate::screen_layout::ScreenLayout;
+use crate::library;
+use crate::screen_layout::{self, ScreenLayout};
 use crate::sdk::{Sdk, native_library_of};
 use crate::simulation::{Session, SimulationReport};
 use crate::online;
@@ -336,10 +337,19 @@ fn clock_shown_as_a_knob(turned_by_the_plugin: &[String], layout: &ScreenLayout)
 }
 
 fn check_pictures(plugin: &Path) -> Outcome {
+    let not_followed = not_followed_in_the_layout_of(plugin);
+    if !not_followed.is_empty() {
+        return Outcome::Blocked(not_followed);
+    }
     match artwork::draw_pictures(plugin) {
         Ok(_) => Outcome::Passed,
         Err(problems) => Outcome::Blocked(problems),
     }
+}
+
+/// A screen is only let through as MP Forge shows it, so what its layout asks of Akai's generator beyond that stops it.
+fn not_followed_in_the_layout_of(plugin: &Path) -> Vec<String> {
+    library::screen_layout(plugin).map(|layout| screen_layout::asked_for_but_not_followed_here(&layout)).unwrap_or_default()
 }
 
 /// The lines Akai's validator marked as errors, or all it said when it marked none.

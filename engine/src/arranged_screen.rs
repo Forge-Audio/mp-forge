@@ -11,10 +11,12 @@ use crate::layers::Frame;
 use crate::look::{Depth, FULLY_SOLID, ItemKind, ItemLook, Look, look_of};
 use crate::page_art::frame_of;
 use crate::pictures::{Picture, Placement, pictures_of};
-use crate::screen_layout::{Area, LayoutPage, SLOTS_PER_SIDE, ScreenLayout, SlotContent, WHOLE_PAGE, area_of_slot, generated_group_box};
+use crate::screen_layout::{Area, LayoutPage, SLOTS_PER_SIDE, ScreenLayout, SlotContent, WHOLE_PAGE, area_of_slot};
 
-/// The room left between a group of controls and the box drawn round it.
-const GROUP_BOX_MARGIN: u32 = 6;
+/// The room left between a group of controls and the box drawn round it, and between a box and the page's edge.
+/// Both are what Akai's generator leaves, so a box drawn here sits as one of its own would.
+const GROUP_BOX_MARGIN: u32 = 10;
+const ROOM_AT_THE_PAGES_EDGE: u32 = 2;
 /// The MPC shows nothing of a film strip taller than this, as seen on a real one.
 pub const TALLEST_FILM_STRIP: u32 = 16_128;
 
@@ -210,14 +212,14 @@ fn group_boxes_round(items: &[ArrangedItem]) -> Vec<Area> {
     if the_generated_boxes_still_fit {
         return Vec::new();
     }
-    (0..SLOTS_PER_SIDE as usize).map(|column| group_box_of(column, items)).collect()
+    (0..SLOTS_PER_SIDE as usize).filter_map(|column| group_box_of(column, items)).collect()
 }
 
-/// The hardware knobs take one column of knobs at a time, wherever the controls they turn now sit.
-fn group_box_of(column: usize, items: &[ArrangedItem]) -> Area {
+/// The hardware knobs take one column of knobs at a time, wherever the controls they turn now sit. A column
+/// that turns nothing has no box, as in the list Akai's generator writes.
+fn group_box_of(column: usize, items: &[ArrangedItem]) -> Option<Area> {
     let in_the_column = controls_among(items).filter(|control| control.knob.map(column_of_knob) == Some(column));
-    let around_them = in_the_column.map(|control| control.area).reduce(around_both);
-    around_them.map(with_margin).unwrap_or_else(|| generated_group_box(column))
+    in_the_column.map(|control| control.area).reduce(around_both).map(with_margin)
 }
 
 fn controls_among(items: &[ArrangedItem]) -> impl Iterator<Item = &ArrangedItem> {
@@ -229,11 +231,11 @@ fn around_both(one: Area, other: Area) -> Area {
     Area { x, y, width: one.right().max(other.right()) - x, height: one.bottom().max(other.bottom()) - y }
 }
 
-/// A little room all round, without leaving the page.
+/// A little room all round, kept just inside the page.
 fn with_margin(area: Area) -> Area {
-    let (x, y) = (area.x.saturating_sub(GROUP_BOX_MARGIN), area.y.saturating_sub(GROUP_BOX_MARGIN));
-    let right = (area.right() + GROUP_BOX_MARGIN).min(WHOLE_PAGE.width).max(x);
-    let bottom = (area.bottom() + GROUP_BOX_MARGIN).min(WHOLE_PAGE.height).max(y);
+    let (x, y) = (area.x.saturating_sub(GROUP_BOX_MARGIN).max(ROOM_AT_THE_PAGES_EDGE), area.y.saturating_sub(GROUP_BOX_MARGIN).max(ROOM_AT_THE_PAGES_EDGE));
+    let right = (area.right() + GROUP_BOX_MARGIN).min(WHOLE_PAGE.width - ROOM_AT_THE_PAGES_EDGE).max(x);
+    let bottom = (area.bottom() + GROUP_BOX_MARGIN).min(WHOLE_PAGE.height - ROOM_AT_THE_PAGES_EDGE).max(y);
     Area { x, y, width: right - x, height: bottom - y }
 }
 
@@ -332,11 +334,9 @@ mod tests {
 
         let pages = arranged(&tape_layout(), &[], &look);
 
-        let boxes = &pages[0].group_boxes;
-        assert_eq!(boxes.len(), 4);
-        assert_eq!(boxes[0], Area { x: 17, y: 190, width: 767, height: 323 });
-        assert_eq!(boxes[1], Area { x: 337, y: 39, width: 290, height: 119 });
-        assert_eq!((boxes[2], boxes[3]), (generated_group_box(2), generated_group_box(3)));
+        let round_what_the_first_column_turns = Area { x: 13, y: 186, width: 775, height: 331 };
+        let round_what_the_second_turns = Area { x: 333, y: 35, width: 298, height: 127 };
+        assert_eq!(pages[0].group_boxes, [round_what_the_first_column_turns, round_what_the_second_turns], "a column of knobs that turns nothing has no box");
     }
 
     #[test]
@@ -358,9 +358,7 @@ mod tests {
 
         let boxes = &pages[0].group_boxes;
 
-        assert_eq!(boxes[0], Area { x: 17, y: 39, width: 610, height: 270 });
-        assert_eq!(boxes[1], Area { x: 17, y: 39, width: 290, height: 119 });
-        assert_eq!((boxes[2], boxes[3]), (generated_group_box(2), generated_group_box(3)));
+        assert_eq!(boxes, &[Area { x: 13, y: 35, width: 618, height: 278 }, Area { x: 13, y: 35, width: 298, height: 127 }]);
     }
 
     #[test]
@@ -373,12 +371,12 @@ mod tests {
     }
 
     #[test]
-    fn a_box_never_leaves_the_page() {
+    fn a_box_stays_just_inside_the_page() {
         let look = look_of_main_page(vec![moved(ItemKind::Control, "Time", 0, 0), moved(ItemKind::Control, "Tone", 1002, 521)]);
 
         let pages = arranged(&tape_layout(), &[], &look);
 
-        assert_eq!(pages[0].group_boxes[0], WHOLE_PAGE);
+        assert_eq!(pages[0].group_boxes[0], Area { x: 2, y: 2, width: 1276, height: 624 });
     }
 
     #[test]

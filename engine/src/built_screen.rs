@@ -469,7 +469,6 @@ mod tests {
     use crate::layers::Colour;
     use crate::pictures::{Motion, Placement};
     use crate::pictures::test_support::{BOTTOM_LEFT_SLOT, looping_picture};
-    use crate::screen_layout::generated_group_box;
 
     /// Two pages as the build writes them, the first with one control on it.
     const BUILT_SCREEN: &str = r#"{"pageData": {"version": 1, "tabs": [
@@ -491,7 +490,7 @@ mod tests {
             {"componentData": {"name": "text 2", "type": "Label", "data": {"type": "Text", "text": "TAPE"}},
              "handle remapping": {"version": 1, "map": []}, "bounds": {"bounds": "663 45 278 107"}}
         ]},
-        "qlinkBoundsData": ["38 0 248 624", "358 0 248 624", "678 0 248 624", "998 0 248 624"]}]}}"#;
+        "qlinkBoundsData": ["13 35 298 127", "333 35 298 127"]}]}}"#;
 
     /// One page with a kit knob, a switch and a heading, and the components the generator defines for them.
     const SCREEN_WITH_DEFINITIONS: &str = r#"{"pageData": {"version": 1,
@@ -515,7 +514,7 @@ mod tests {
             {"componentData": {"name": "text 2", "type": "Label", "data": {"textStyle": {"font": {"name": "Titillium Web", "style": "Regular", "height": 30.0}, "colour": "ffffffff", "justification": "left", "case": "Original"}, "type": "Text", "text": "TAPE"}},
              "handle remapping": {"version": 1, "map": []}, "bounds": {"bounds": "663 45 278 107"}}
         ]},
-        "qlinkBoundsData": ["38 0 248 624", "358 0 248 624", "678 0 248 624", "998 0 248 624"]}]}}"#;
+        "qlinkBoundsData": ["13 35 298 127", "333 35 298 127"]}]}}"#;
 
     fn laid_out_as(item: ArrangedItem, parts: Parts) -> ArrangedItem {
         let (width, height) = parts.size().unwrap();
@@ -740,7 +739,7 @@ mod tests {
 
     #[test]
     fn the_group_boxes_are_replaced_only_when_the_arrangement_gives_new_ones() {
-        let boxes = vec![Area { x: 1, y: 2, width: 300, height: 400 }, generated_group_box(1), generated_group_box(2), generated_group_box(3)];
+        let boxes = vec![Area { x: 1, y: 2, width: 300, height: 400 }, Area { x: 5, y: 6, width: 70, height: 80 }];
         let moved = vec![moved_to(control_in_slot("Time", 0), 7, 8)];
         let with_boxes = ArrangedPage { group_boxes: boxes, ..page_of("MAIN", moved.clone()) };
         let boxes_of = |screen: &str| Json::parse(screen).unwrap().field("pageData").unwrap().field("tabs").unwrap().items().unwrap()[0].field("qlinkBoundsData").unwrap().written();
@@ -748,8 +747,8 @@ mod tests {
         let redrawn = boxes_of(&with_arrangement(GENERATED_SCREEN, &[with_boxes]).unwrap());
         let kept = boxes_of(&with_arrangement(GENERATED_SCREEN, &[page_of("MAIN", moved)]).unwrap());
 
-        assert!(redrawn.contains("\"1 2 300 400\"") && redrawn.contains("\"358 0 248 624\""), "{redrawn}");
-        assert!(kept.contains("\"38 0 248 624\""), "{kept}");
+        assert!(redrawn.contains("\"1 2 300 400\"") && redrawn.contains("\"5 6 70 80\"") && !redrawn.contains("13 35 298 127"), "{redrawn}");
+        assert!(kept.contains("\"13 35 298 127\"") && kept.contains("\"333 35 298 127\""), "{kept}");
     }
 
     #[test]
