@@ -77,14 +77,16 @@ A keyboard, a pad controller or a computer plugged into the device's USB socket 
 
 ## A game controller
 
-A game controller plugged into the device's USB socket can play an app: its buttons, its two sticks and its triggers. MP Forge reads it and tells the app, so an app needs nothing the check forbids. `mp-forge/mpc-sample.md` says how.
+A game controller plugged into the musician's computer can play an app while it runs in MP Forge, also while a real MPC Sample is linked as its screen and controls: its buttons, its two sticks and its triggers. MP Forge reads it and tells the app, so an app needs nothing the check forbids. `mp-forge/mpc-sample.md` says how.
 
-- Give an app a game controller when the musician asks for one, and offer it for anything played like a game or steered by hand, such as a character walked about the screen or a sound swept with a stick.
+On the MPC Sample by itself a controller is still being tried: for an app that takes one, MP Forge turns the device's one USB socket round when the app is started with no computer talking to it. The device gives the socket no power, so the controller has to go through a USB hub with its own power. It is not known to work yet. Say so plainly when a musician asks for a controller on the device, and do not look for a way of your own.
+
+- Give an app a game controller when the musician asks for one, such as for a character walked about the screen or a sound swept with a stick.
 - Name the buttons by where they sit, as the kit does, and put what matters most on `South`, `East` and the cross, which nearly every controller has.
 - The app has to be whole without one. Never make something that can only be reached from a controller.
 - In MP Forge a game controller plugged into the musician's computer plays the app on the drawing, once a button on it has been pressed. Nothing in MP Forge's window sets it.
 - `look_at_screen` can press a controller's buttons and move its sticks, so look at what the screen shows while one is held.
-- When you have built an app that takes a game controller, say so in your final message in a few words, with what each button and stick does, and that on the MPC Sample itself it is new and not yet tried with many controllers.
+- When you have built an app that takes a game controller, say so in your final message in a few words, with what each button and stick does, and that it plays the app in MP Forge, while on the MPC Sample by itself it is still being tried.
 
 ## What an app cannot do yet
 

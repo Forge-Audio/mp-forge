@@ -18,6 +18,8 @@
 #include "mp_forge_host_listening.h"
 #include "mp_forge_host_sound.h"
 #include "mp_forge_host_surface.h"
+#include "mp_forge_host_usb_notes.h"
+#include "mp_forge_host_usb_socket.h"
 #include "mp_forge_host_xbox_gamepad.h"
 #include "mpc_sample_app.h"
 
@@ -34,6 +36,7 @@
 // What the app's own code gives, through the one line that names its class: MPC_SAMPLE_APP(TheApp).
 extern "C" {
 int32_t mp_forge_sample_kit();
+int32_t mp_forge_sample_takes_a_gamepad();
 void* mp_forge_sample_make(double framesASecond, const sample::SampleGiven* samples, int32_t sampleCount);
 void mp_forge_sample_told(void* made, int32_t touched, int32_t number, float value);
 void mp_forge_sample_sound(void* made, const float* inLeft, const float* inRight, float* outLeft, float* outRight, int32_t frames);
@@ -49,7 +52,7 @@ namespace mp_forge_host {
 
 using Clock = std::chrono::steady_clock;
 
-constexpr int kKitThisProgramSpeaks = 7;
+constexpr int kKitThisProgramSpeaks = 8;
 constexpr auto kAFrameOfThePicture = std::chrono::milliseconds(33);
 constexpr auto kHeldToLeave = std::chrono::seconds(1);
 constexpr auto kLongestAnAppMayTakeToAnswer = std::chrono::seconds(5);
@@ -397,6 +400,8 @@ int run(char** places) {
     const int controls = device_controls::openTheControls(places[2]);
     if (controls < 0) return couldNotStart("the controls could not be opened:", places[2]);
     standUpToWhatEndsAProgram();
+    noteUsbAsTheDeviceListsIt();
+    if (mp_forge_sample_takes_a_gamepad() != 0) readyTheUsbSocketForAController();
     SoundOut sound(places[3], places[4]);
     Listening listening(places[3], places[4]);
     Run theRun(screen, controls, Sounds{sound, listening}, SdCard(places[6]));

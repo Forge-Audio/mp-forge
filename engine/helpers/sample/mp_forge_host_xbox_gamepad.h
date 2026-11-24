@@ -1,5 +1,7 @@
 // A game controller of the Xbox family, read straight from the MPC Sample's USB socket.
 //
+// There is one to read only once the socket is turned round, as mp_forge_host_gamepad.h says.
+//
 // The device's own system has no driver for these controllers, so they never show among what it lists. They
 // are spoken to here instead, through what Linux gives every program for reaching a USB device. Two kinds are
 // known: the Xbox 360's, and the Xbox One's, which the Series and the Elite controllers speak too.
@@ -21,6 +23,7 @@
 #if defined(__linux__)
 #include <dirent.h>
 #include <linux/usbdevice_fs.h>
+#include <set>
 #include <string>
 #include <sys/ioctl.h>
 #endif
@@ -191,7 +194,6 @@ public:
         if (file_ >= 0 || Clock::now() < looksAgainAt_) return;
         looksAgainAt_ = Clock::now() + kLooksAgainEvery;
         lookThroughWhatIsPluggedIn();
-        isFirstLook_ = false;
     }
 
     // Takes the report that has come, tells what it says, and asks for the next. A controller that has gone
@@ -228,8 +230,9 @@ private:
         closedir(devices);
     }
 
-    void sayOnceThatUsbCannotBeReached() const {
-        if (isFirstLook_) std::fprintf(stderr, "USB devices cannot be reached at %s (%s), so no controller is read straight from USB.\n", kWhereUsbDevicesAre, std::strerror(errno));
+    void sayOnceThatUsbCannotBeReached() {
+        if (!hasSaidUsbCannotBeReached_) std::fprintf(stderr, "USB devices cannot be reached at %s (%s), so no controller is read straight from USB.\n", kWhereUsbDevicesAre, std::strerror(errno));
+        hasSaidUsbCannotBeReached_ = true;
     }
 
     void takeIfItIsOne(const std::string& place) {
@@ -237,7 +240,7 @@ private:
         const int found = open(place.c_str(), O_RDWR | O_CLOEXEC);
         const ssize_t length = found >= 0 ? read(found, described, sizeof described) : -1;
         const XboxPart part = length > 0 ? xboxPartIn(described, static_cast<size_t>(length)) : XboxPart{};
-        if (isFirstLook_) sayWhatWasFoundAt(place, found, described, length, part);
+        if (noted_.insert(place).second) sayWhatWasFoundAt(place, found, described, length, part);
         if (part.kind == XboxKind::None || !take(found, part, usbModelIn(described, static_cast<size_t>(length)))) closeIfOpen(found);
     }
 
@@ -245,7 +248,8 @@ private:
         if (found >= 0) close(found);
     }
 
-    // Every USB device is noted once, so that whoever reads the notes of a run sees what the device saw.
+    // Every USB device is noted once, whenever it is plugged in, so that whoever reads the notes of a run sees
+    // what the device saw.
     static void sayWhatWasFoundAt(const std::string& place, int found, const uint8_t* described, ssize_t length, const XboxPart& part) {
         if (found < 0 || length <= 0) return (void)std::fprintf(stderr, "Plugged into USB at %s: it could not be read (%s).\n", place.c_str(), std::strerror(errno));
         const UsbModel model = usbModelIn(described, static_cast<size_t>(length));
@@ -335,7 +339,8 @@ private:
 
     int file_ = -1;
     Clock::time_point looksAgainAt_{};
-    bool isFirstLook_ = true;
+    bool hasSaidUsbCannotBeReached_ = false;
+    std::set<std::string> noted_;
     XboxPart part_;
     uint8_t toldSoFar_ = 0;
     usbdevfs_urb asked_{};

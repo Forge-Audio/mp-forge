@@ -40,7 +40,7 @@ pub const TIME_ALLOWED_TO_BUILD: Duration = Duration::from_secs(300);
 const START_SCRIPT: &str = include_str!("../helpers/sample/start-app.sh");
 const HOST_CODE_FILE: &str = "mp_forge_sample_host.cpp";
 /// MP Forge's program that runs an app on the device, as the code it is built from.
-const HOST_CODE: [(&str, &str); 8] = [
+const HOST_CODE: [(&str, &str); 10] = [
     (HOST_CODE_FILE, include_str!("../helpers/sample/mp_forge_sample_host.cpp")),
     sample_surface::CODE_THAT_OPENS_THE_CONTROLS,
     ("mp_forge_host_surface.h", include_str!("../helpers/sample/mp_forge_host_surface.h")),
@@ -49,6 +49,8 @@ const HOST_CODE: [(&str, &str); 8] = [
     ("mp_forge_host_listening.h", include_str!("../helpers/sample/mp_forge_host_listening.h")),
     ("mp_forge_host_xbox_gamepad.h", include_str!("../helpers/sample/mp_forge_host_xbox_gamepad.h")),
     ("mp_forge_host_sound.h", include_str!("../helpers/sample/mp_forge_host_sound.h")),
+    ("mp_forge_host_usb_notes.h", include_str!("../helpers/sample/mp_forge_host_usb_notes.h")),
+    ("mp_forge_host_usb_socket.h", include_str!("../helpers/sample/mp_forge_host_usb_socket.h")),
 ];
 const DEVICE_MAP_FILE: &str = "mp_forge_device_map.h";
 const HOST_FOLDER: &str = "host";
@@ -321,7 +323,7 @@ mod tests {
     fn the_start_script_hands_the_device_back_to_akais_app_unless_the_link_started_it() {
         let script = start_script();
 
-        assert!(script.contains("[ \"$1\" = from-mp-forge-link ] || trap 'systemctl start ac50' EXIT"), "{script}");
+        assert!(script.contains("[ \"$1\" = from-mp-forge-link ] || trap 'put_usb_back; systemctl start ac50' EXIT"), "{script}");
         assert!(script.contains("\"$HERE/sounds\" \"$CARD\" 2>>\"$SAID\""), "{script}");
         assert!(!script.contains('@') && !script.contains('\r'), "{script}");
     }
@@ -331,7 +333,17 @@ mod tests {
         let script = start_script();
 
         assert!(script.contains("PROGRAM=/run/mp-forge-app"), "the program is run from memory");
-        assert!(script.lines().filter(|line| line.contains('>')).all(|line| line.contains("\"$SAID\"")), "it writes only its own note of a run");
+        let written_to = |line: &&str| line.contains('>') && !line.contains("\"$SAID\"");
+        assert_eq!(script.lines().filter(written_to).collect::<Vec<_>>(), ["    echo \"$USB_STOOD\" >\"$USB_SWITCH\""], "besides its own note of a run it writes only the USB switch");
+        assert!(script.contains("for FOUND in /sys/kernel/debug/usb/*/mode;"), "and that switch is the system's own, forgotten at a restart");
+    }
+
+    #[test]
+    fn the_start_script_puts_the_usb_socket_back_however_the_app_ends() {
+        let script = start_script();
+
+        assert!(script.contains("trap 'put_usb_back' EXIT"), "{script}");
+        assert!(script.contains("[ \"$(cat \"$USB_SWITCH\")\" = \"$USB_STOOD\" ] && return"), "a socket that stands as it stood is left alone");
     }
 
     #[cfg(unix)]

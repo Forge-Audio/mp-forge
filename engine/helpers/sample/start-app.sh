@@ -5,7 +5,28 @@
 
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 SAID="$HERE/last-run.txt"
-[ "$1" = @STARTED_BY_THE_LINK@ ] || trap 'systemctl start ac50' EXIT
+
+# The USB socket is put back the way it stood, however the app ends: the app's program turns it round for a
+# game controller when nothing else is on it.
+USB_SWITCH=
+for FOUND in /sys/kernel/debug/usb/*/mode; do [ -e "$FOUND" ] && USB_SWITCH=$FOUND && break; done
+USB_STOOD=$([ -n "$USB_SWITCH" ] && cat "$USB_SWITCH")
+put_usb_back() {
+    [ -z "$USB_STOOD" ] && return
+    [ "$(cat "$USB_SWITCH")" = "$USB_STOOD" ] && return
+    echo "$USB_STOOD" >"$USB_SWITCH"
+    { echo "The USB socket was put back as it stood: $USB_STOOD."; say_how_the_link_stands; } >>"$SAID"
+}
+# The link to a computer has to come back with the socket, so it is given a moment and then noted.
+say_how_the_link_stands() {
+    sleep 2
+    for LINK in /sys/class/udc/*; do
+        [ -e "$LINK/state" ] && echo "After that the USB link to a computer ($(basename "$LINK")) stands as: $(cat "$LINK/state")."
+    done
+}
+
+trap 'put_usb_back' EXIT
+[ "$1" = @STARTED_BY_THE_LINK@ ] || trap 'put_usb_back; systemctl start ac50' EXIT
 
 # The program is run from memory, so nothing is written to the MPC Sample's own storage.
 PROGRAM=/run/mp-forge-app

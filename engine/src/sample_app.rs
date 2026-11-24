@@ -53,7 +53,7 @@ const MARKS_THE_KIT_CAN_WRITE: [char; 5] = [' ', '-', '+', ':', '.'];
 const KIT_FILE: &str = "mpc_sample_app.h";
 const KIT: &str = include_str!("../helpers/sample/mpc_sample_app.h");
 /// The kit an app has to have been built with. An app built with another is not run.
-const KIT_NUMBER: i32 = 7;
+const KIT_NUMBER: i32 = 8;
 const NO_ROOM_FOR_IT: &CStr = c"NO ROOM LEFT FOR IT";
 const LONGEST_PATH_ON_THE_CARD: usize = 255;
 const ASKED_FOR_A_FOLDER: i32 = 1;
@@ -345,6 +345,7 @@ type Sound = unsafe extern "C" fn(*mut c_void, *const f32, *const f32, *mut f32,
 type Show = unsafe extern "C" fn(*mut c_void, *mut u8, *mut u8, *mut u8);
 type Levels = unsafe extern "C" fn(*mut c_void, *mut u8);
 type KitNumber = unsafe extern "C" fn() -> i32;
+type TakesAGameController = unsafe extern "C" fn() -> i32;
 type Asked = unsafe extern "C" fn(*mut c_void, *mut c_char, *mut i32) -> i32;
 type Listed = unsafe extern "C" fn(*mut c_void, *const EntryGiven, i32, i32);
 type Loaded = unsafe extern "C" fn(*mut c_void, i32, *const SoundGiven, *const c_char);
@@ -419,6 +420,7 @@ pub struct RunningApp {
     sound_in: SoundInChosen,
     browsing_into: BrowsingInto,
     close_browser: CloseBrowser,
+    takes_a_game_controller: bool,
     /// Handed to an app that has its inputs off, in place of whatever came in.
     silence: Vec<f32>,
     /// The app reads its samples where they lie here, each at its number, so they are kept for as long as it
@@ -442,6 +444,7 @@ impl RunningApp {
             return Err("The app was built with another version of MP Forge's kit. Build it again.".to_string());
         }
         let make: Make = unsafe { std::mem::transmute(function(b"mp_forge_sample_make")?) };
+        let takes_a_game_controller: TakesAGameController = unsafe { std::mem::transmute(function(b"mp_forge_sample_takes_a_gamepad")?) };
         let given: Vec<SoundGiven> = sounds.iter().map(SoundGiven::of).collect();
         Ok(RunningApp {
             told: unsafe { std::mem::transmute::<*const c_void, Told>(function(b"mp_forge_sample_told")?) },
@@ -455,11 +458,18 @@ impl RunningApp {
             sound_in: unsafe { std::mem::transmute::<*const c_void, SoundInChosen>(function(b"mp_forge_sample_sound_in")?) },
             browsing_into: unsafe { std::mem::transmute::<*const c_void, BrowsingInto>(function(b"mp_forge_sample_browsing_into")?) },
             close_browser: unsafe { std::mem::transmute::<*const c_void, CloseBrowser>(function(b"mp_forge_sample_close_browser")?) },
+            takes_a_game_controller: unsafe { takes_a_game_controller() } != 0,
             silence: Vec::new(),
             made: unsafe { make(frames_a_second, given.as_ptr(), given.len() as i32) },
             sounds: at_their_numbers(sounds),
             _library: library,
         })
+    }
+
+    /// Whether the app says for itself what is done on a game controller. MP Forge readies the device for a
+    /// controller only for an app that does.
+    pub fn takes_a_game_controller(&self) -> bool {
+        self.takes_a_game_controller
     }
 
     pub fn tell(&mut self, input: Input) {

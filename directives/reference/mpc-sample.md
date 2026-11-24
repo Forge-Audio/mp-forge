@@ -13,7 +13,7 @@
 | Sound | `makeSound(sound)` | Stereo in and out, 44100 frames a second, 128 frames at a time. |
 | Sound files | nothing: the app reads `samples()` | The WAV and MP3 files the musician added to the app in MP Forge, up to 64. There may be none. |
 | MIDI in | `noteOn(note, strength, channel)`, `noteOff(note, channel)`, `controllerMoved(controller, stands, channel)`, `pitchBent(bend, channel)` | From a keyboard, a pad controller or a computer plugged into the USB socket or the MIDI IN socket. There may be nothing plugged in. Which socket and which channel is chosen on the kit's page, `chooseMidiIn()`. |
-| Game controller | `gamepadPressed(button)`, `gamepadLetGo(button)`, `gamepadStickMoved(stick, x, y)`, `gamepadTriggerPulled(trigger, pulled)` | From a game controller plugged into the USB socket. There may be none. MP Forge reads it and tells the app; see "A game controller" below. |
+| Game controller | `gamepadPressed(button)`, `gamepadLetGo(button)`, `gamepadStickMoved(stick, x, y)`, `gamepadTriggerPulled(trigger, pulled)` | From a game controller plugged into the musician's computer, while the app plays in MP Forge. There may be none; on the MPC Sample by itself it is still being tried. MP Forge reads it and tells the app; see "A game controller" below. |
 | Sound in | `soundInChosen(from)` when the musician has chosen where it comes from | The jacks at the back (`SoundIn::LineIn`), the built-in microphone (`SoundIn::Mic`), USB (`SoundIn::Usb`), or nowhere (`SoundIn::Off`, as it starts), chosen on the kit's page, `chooseSoundIn()`. |
 | SD card | `sampleLoaded(number)` when a file from it has been loaded | Folders and WAV and MP3 files, looked through with the kit's page, `browseCard(number)`. There may be no card in. |
 
@@ -179,7 +179,9 @@ void midiInChosen(sample::MidiHeard heard) override { letGoOfEveryVoice(); }   /
 
 ## A game controller
 
-A game controller plugged into the device's USB socket can play the app. MP Forge reads the controller and tells the app what was done on it. The app never opens anything itself, and the check still stops an app that tries.
+A game controller plugged into the musician's computer can play the app while it runs in MP Forge, also while a real MPC Sample is linked to MP Forge as its screen and controls. MP Forge reads the controller and tells the app what was done on it. The app never opens anything itself, and the check still stops an app that tries.
+
+On the MPC Sample by itself a game controller is being tried and is not known to work yet. The device has one USB socket, for charging and for the cable to a computer, and it usually faces a computer. For an app that takes a controller, MP Forge turns that socket round when the app is started on the device with no computer talking to it, and puts it back when the app is left. The device gives the socket no power, and a controller only speaks once it sees power on its cable, so the controller has to go through a USB hub with its own power or an adapter that charges while it connects. The app does nothing for any of this and must not try to: it only says what is done on a controller, as below.
 
 ```cpp
 void gamepadPressed(sample::GamepadButton button) override {
@@ -203,7 +205,7 @@ void gamepadTriggerPulled(sample::GamepadSide trigger, float pulled) override {
 - Controllers differ. Some have no sticks, some no triggers, and some number their buttons their own way, so `West` and `North` can come swapped. Put what matters most on `South`, `East` and the cross, which nearly every controller has.
 - Everything on the device still has to work with nothing plugged in. A controller adds a way to play the app; it never replaces the pads, the knobs or the fader.
 - In MP Forge a game controller plugged into the musician's computer plays the app on the drawing. Nothing in MP Forge's window sets it. The computer notices a controller only after a button on it has been pressed once.
-- On the MPC Sample itself this is new, and has not been tried with many controllers yet. When you give an app a game controller, say so in your final message in a few words, with what each button and stick does.
+- Away from the computer the app is played with the device's own controls and with MIDI. When you give an app a game controller, say so in your final message in a few words, with what each button and stick does, and that it plays the app in MP Forge, while on the MPC Sample by itself it is still being tried.
 
 ## The screen
 

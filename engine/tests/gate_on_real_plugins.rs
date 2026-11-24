@@ -1094,6 +1094,21 @@ fn the_strips_beside_the_screen_show_how_loud_an_app_is_unless_it_shows_levels_o
 }
 
 #[test]
+fn an_app_that_says_what_is_done_on_a_game_controller_is_known_to_take_one() {
+    let takes_one = |made_as: &str, code: &str| {
+        let apps = PluginsFolder::empty(made_as);
+        let app_dir = pocket_pads_in(&apps);
+        fs::write(app_dir.join("src/PocketPads.cpp"), code).unwrap();
+        let sdk = Sdk::at(sdk_dir()).unwrap_or_else(|not_found| panic!("{not_found}"));
+        let library = sample_app::build_for_this_computer(&sdk, &app_dir, Duration::from_secs(300)).unwrap_or_else(|not_built| panic!("{not_built}"));
+        RunningApp::load(&library, 44_100.0, Vec::new()).unwrap().takes_a_game_controller()
+    };
+
+    assert!(takes_one("sample-app-takes-a-controller", SHOWS_WHAT_A_GAME_CONTROLLER_DOES));
+    assert!(!takes_one("sample-app-takes-no-controller", LOUD_ON_THE_LEFT), "the device is readied for a controller only for an app that takes one");
+}
+
+#[test]
 fn a_sample_app_whose_code_does_not_build_says_what_the_compiler_said() {
     let apps = PluginsFolder::empty("sample-app-broken");
     let app_dir = pocket_pads_in(&apps);

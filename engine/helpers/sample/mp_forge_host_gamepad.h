@@ -1,5 +1,8 @@
 // A game controller plugged into the MPC Sample's USB socket, read for the app.
 //
+// The device's one USB socket usually faces a computer, and its system then lists nowhere for a controller to
+// be plugged in. mp_forge_host_usb_socket.h turns the socket round for an app that takes a controller.
+//
 // Two things are kept apart here. What an app is told of a controller is the same however the controller is
 // read: a button by where it sits, a stick from -1 to 1 with up as more, a trigger from 0 to 1, and only what
 // changed. How a controller is read differs. This file reads the ones the device's own system lists, as files

@@ -28,6 +28,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <type_traits>
 
 namespace sample {
 
@@ -756,8 +757,11 @@ public:
     virtual void controllerMoved(int /*controller*/, float /*stands*/, int /*channel*/) {}
     virtual void pitchBent(float /*bend*/, int /*channel*/) {}
 
-    // A game controller plugged into the device's USB socket, one at a time. A stick says where it stands: `x`
-    // from -1 at the left to 1 at the right, `y` from -1 at the bottom to 1 at the top, both 0 where it rests.
+    // A game controller plugged into the musician's computer while the app plays in MP Forge, one at a time.
+    // On the MPC Sample by itself MP Forge turns the device's one USB socket round for an app that says what is
+    // done on a controller. That is still being tried.
+    // A stick says where it stands: `x` from -1 at the left to 1 at the right, `y` from -1 at the bottom to 1
+    // at the top, both 0 where it rests.
     // A trigger says how far it is pulled, from 0 to 1, and is told as a button as well.
     virtual void gamepadPressed(GamepadButton /*button*/) {}
     virtual void gamepadLetGo(GamepadButton /*button*/) {}
@@ -915,6 +919,29 @@ private:
     std::array<float, kGamepadAxes> gamepadStands_{};
 };
 
+// Whether an app's class says for itself what is done on a game controller. A function the class wrote has
+// the class in its type, and one it only inherits keeps the kit's. MP Forge readies the device for a controller
+// only for an app that takes one.
+template <typename Function>
+struct IsTheKitsOwn : std::false_type {};
+template <typename Result, typename... Given>
+struct IsTheKitsOwn<Result (App::*)(Given...)> : std::true_type {};
+
+// A function that cannot be named from outside the class is one the class wrote and kept to itself.
+template <typename AppClass, typename = void>
+struct LeavesTheGamepadToTheKit : std::false_type {};
+template <typename AppClass>
+struct LeavesTheGamepadToTheKit<AppClass, std::void_t<decltype(&AppClass::gamepadPressed), decltype(&AppClass::gamepadLetGo),
+                                                      decltype(&AppClass::gamepadStickMoved), decltype(&AppClass::gamepadTriggerPulled)>>
+    : std::integral_constant<bool, IsTheKitsOwn<decltype(&AppClass::gamepadPressed)>::value && IsTheKitsOwn<decltype(&AppClass::gamepadLetGo)>::value &&
+                                       IsTheKitsOwn<decltype(&AppClass::gamepadStickMoved)>::value &&
+                                       IsTheKitsOwn<decltype(&AppClass::gamepadTriggerPulled)>::value> {};
+
+template <typename AppClass>
+constexpr bool takesAGamepad() {
+    return !LeavesTheGamepadToTheKit<AppClass>::value;
+}
+
 }  // namespace sample
 
 // ---------------------------------------------------------------------------------------------------------
@@ -1009,7 +1036,8 @@ inline void showLevels(Running& running, uint8_t* lit) {
 }  // namespace sample
 
 #define MPC_SAMPLE_APP(AppClass)                                                                                  \
-    MP_FORGE_SAMPLE_SHOWN int32_t mp_forge_sample_kit() { return 7; }                                             \
+    MP_FORGE_SAMPLE_SHOWN int32_t mp_forge_sample_kit() { return 8; }                                             \
+    MP_FORGE_SAMPLE_SHOWN int32_t mp_forge_sample_takes_a_gamepad() { return sample::takesAGamepad<AppClass>() ? 1 : 0; } \
     MP_FORGE_SAMPLE_SHOWN void* mp_forge_sample_make(double framesASecond, const sample::SampleGiven* samples,    \
                                                      int32_t sampleCount) {                                       \
         auto* running = new sample::Running{new AppClass(), {}, {}, {}};                                          \
