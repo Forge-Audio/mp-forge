@@ -14,10 +14,11 @@ use crate::picture_clock::{self, CLOCK_CONTROL};
 use crate::pictures::pictures_of;
 use crate::process::{Finished, RunError};
 use crate::sample_app;
+use crate::sample_knobs;
 use crate::sample_trial;
 use crate::library;
 use crate::screen_layout::{self, ScreenLayout};
-use crate::sdk::{Sdk, native_library_of};
+use crate::sdk::{PluginKind, Sdk, native_library_of};
 use crate::simulation::{Session, SimulationReport};
 use crate::online;
 use crate::source_scan::{Violation, scan_plugin};
@@ -26,6 +27,7 @@ pub const SOURCE_CHECK: &str = "Code stays inside the plugin";
 pub const PICTURES_CHECK: &str = "Pictures can be drawn";
 pub const BUILD_CHECK: &str = "Builds for every MPC";
 pub const SCREEN_CHECK: &str = "Screen loads with its pictures";
+pub const SIX_KNOBS_CHECK: &str = "Has its knobs for the MPC Sample";
 pub const MOVING_PICTURES_CHECK: &str = "Moving pictures move";
 pub const APP_SOURCE_CHECK: &str = "Code stays inside the app";
 pub const APP_BUILD_CHECK: &str = "Builds";
@@ -184,6 +186,9 @@ impl Gate {
         report.record(PICTURES_CHECK, || check_pictures(plugin));
         report.record(BUILD_CHECK, || self.check_build(plugin));
         report.record(SCREEN_CHECK, || self.check_screen(plugin));
+        if is_an_effect(plugin) {
+            report.record(SIX_KNOBS_CHECK, || self.check_six_knobs(plugin));
+        }
         report.record(MOVING_PICTURES_CHECK, || self.check_moving_pictures(plugin));
         for session in &SESSIONS {
             report.record(simulation_check_name(session), || self.check_session(plugin, session));
@@ -254,6 +259,16 @@ impl Gate {
         }
     }
 
+    /// An MPC Sample plays an effect with three knobs and shows none of its pages. The build knows nothing of
+    /// which controls those knobs turn, so they are written into the finished folder afterwards, and the
+    /// folder is checked again as Akai's validator sees it.
+    fn check_six_knobs(&self, plugin: &Path) -> Outcome {
+        match sample_knobs::write_into_the_built_plugin(plugin) {
+            Ok(()) => self.check_finished_folder(plugin),
+            Err(problems) => Outcome::Blocked(problems),
+        }
+    }
+
     fn check_finished_folder(&self, plugin: &Path) -> Outcome {
         match self.sdk.validate(plugin, self.limits.build) {
             Ok(finished) if finished.succeeded() => Outcome::Passed,
@@ -300,13 +315,22 @@ impl Gate {
     }
 }
 
+/// The MPC Sample loads effects only, so an instrument has no knobs to give it.
+fn is_an_effect(plugin: &Path) -> bool {
+    library::summary_of(plugin).is_some_and(|summary| summary.kind == PluginKind::Effect.as_word())
+}
+
 pub fn simulation_check_name(session: &Session) -> String {
     format!("Survives {}", session.name)
 }
 
 /// A plugin that lists streams is first given MP Forge's stream helper afresh, which is the one part of its
-/// code allowed online. Everything else in its code is read as it always was.
+/// code allowed online. Everything else in its code is read as it always was. The knobs of the MPC Sample
+/// are kept apart from the manifest, so none named there by number can stop the build.
 fn check_source(plugin: &Path, online_is_switched_on: bool) -> Outcome {
+    if let Err(error) = sample_knobs::take_out_of_the_manifest(plugin) {
+        return Outcome::Blocked(vec![format!("The plugin's plugin.json could not be made ready for the build: {error}")]);
+    }
     if let Err(problems) = online::make_ready(plugin, online_is_switched_on) {
         return Outcome::Blocked(problems);
     }

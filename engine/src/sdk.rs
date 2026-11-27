@@ -38,6 +38,7 @@ const RUNS_A_TOOL_ACROSS_DRIVES: &str = include_str!("akai_tool_across_drives.py
 /// The workbench's own script that draws kit images at other sizes with Akai's drawing code.
 const SIZED_ART_SCRIPT: &str = include_str!("sized_kit_art.py");
 const SCREEN_FILE_IN_BUILT_PLUGIN: &str = "Plugin Skins/TUI.json";
+const MANIFEST_IN_BUILT_PLUGIN: &str = "plugin.json";
 const NATIVE_LIBRARY_EXTENSIONS: [&str; 3] = ["dylib", "so", "dll"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -227,6 +228,13 @@ pub fn built_screen_file(plugin: &Path) -> Option<PathBuf> {
     entries
         .filter_map(|entry| entry.ok().map(|entry| entry.path().join(SCREEN_FILE_IN_BUILT_PLUGIN)))
         .find(|screen_file| screen_file.is_file())
+}
+
+/// The finished plugin folder the build left behind: the one folder among what was built that says what
+/// plugin it is. This is the folder an MPC is given.
+pub fn built_plugin_folder(plugin: &Path) -> Option<PathBuf> {
+    let entries = fs::read_dir(plugin.join(BUILD_FOLDER)).ok()?;
+    entries.filter_map(|entry| entry.ok().map(|entry| entry.path())).find(|folder| folder.join(MANIFEST_IN_BUILT_PLUGIN).is_file())
 }
 
 fn is_native_library(path: &Path) -> bool {

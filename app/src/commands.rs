@@ -46,7 +46,7 @@ use workbench_engine::pictures::Picture;
 use workbench_engine::process::command_for;
 use workbench_engine::project_file::{NotTakenIn, PROJECT_FILE_ENDING};
 use workbench_engine::readiness;
-use workbench_engine::maker::{Connection, Delivery, Listed, MakeError, Maker, PluginRequest, PutOnACard, Sending, SentToTheSample};
+use workbench_engine::maker::{Connection, Delivery, EffectOnACard, Listed, MakeError, Maker, PluginRequest, PutOnACard, Sending, SentToTheSample};
 use workbench_engine::providers::{ANTHROPIC, Provider};
 use workbench_engine::samples::SampleShelf;
 use workbench_engine::sdk::{PluginIdentity, PluginKind, Sdk, built_screen_file, built_skin_image};
@@ -740,6 +740,34 @@ pub fn put_sample_app_on_card(name: String, workbench: State<Workbench>, picked_
     match workbench.maker()?.put_sample_app_on_card(&name, &picked).map_err(explain)? {
         PutOnACard::HeldBack(report) => Ok(json!({ "done": false, "report": payloads::report(&report) })),
         PutOnACard::Written { report, made } => Ok(json!({ "done": true, "report": payloads::report(&report), "made": payloads::made_for_the_card(&made) })),
+    }
+}
+
+/// The knobs an effect is played with on an MPC Sample, as kept with it or as MP Forge's first guess, with
+/// the controls there are to choose from.
+#[tauri::command]
+pub fn six_knobs(name: String, workbench: State<Workbench>) -> Result<Value, String> {
+    workbench.maker()?.six_knobs_of(&name).map(|shown| payloads::six_knobs(&shown)).map_err(explain)
+}
+
+/// Keeps the knobs the musician chose by hand for an effect on an MPC Sample. They reach the built plugin
+/// at the next safety check.
+#[tauri::command]
+pub fn choose_six_knobs(name: String, knobs: Value, workbench: State<Workbench>) -> Result<(), String> {
+    let _claim = workbench.claim_to_change_by_hand(&name)?;
+    workbench.maker()?.choose_six_knobs(&name, &knobs).map_err(explain)
+}
+
+/// Copies an effect into `VST2 Plugins` on the card the musician just picked, for an MPC Sample to load as a
+/// Knob FX. The safety check is run on the effect as it stands first, and one it stops is not copied.
+/// Nothing else on the card is touched.
+#[tauri::command(async)]
+pub fn put_effect_on_card(name: String, workbench: State<Workbench>, picked_card: State<PickedCard>) -> Result<Value, String> {
+    let picked = picked_card.take().ok_or("Choose the card first.")?;
+    let _claim = workbench.claim_to_check(&name)?;
+    match workbench.maker()?.put_effect_on_card(&name, &picked).map_err(explain)? {
+        EffectOnACard::HeldBack(report) => Ok(json!({ "done": false, "report": payloads::report(&report) })),
+        EffectOnACard::Written { report, on_the_card } => Ok(json!({ "done": true, "report": payloads::report(&report), "onTheCard": payloads::effect_on_the_card(&on_the_card) })),
     }
 }
 

@@ -12,12 +12,13 @@ use crate::attachments::is_attachment;
 use crate::look::LOOK_FILE;
 use crate::online::{ONLINE_FILE, is_kept_for_the_helper};
 use crate::pictures::{DRAWING_EXTENSION, DRAWINGS_FOLDER, PICTURES_FILE};
+use crate::sample_knobs::SIX_KNOBS_FILE;
 
 const LARGEST_FILE_IN_BYTES: usize = 512 * 1024;
 const PLUGIN_MANIFEST: &str = "plugin.json";
 /// `DESIGN.md` is where the AI keeps its plan for the sound and for the screen's look, so both stay whole from one
 /// request to the next.
-const FILES_THE_AI_WRITES: [&str; 5] = ["ui.json", "README.md", "DESIGN.md", PICTURES_FILE, ONLINE_FILE];
+const FILES_THE_AI_WRITES: [&str; 6] = ["ui.json", "README.md", "DESIGN.md", PICTURES_FILE, ONLINE_FILE, SIX_KNOBS_FILE];
 const SOURCE_FOLDER: &str = "src";
 const SOURCE_EXTENSIONS: [&str; 3] = ["cpp", "h", "hpp"];
 const REFERENCE_FOLDERS: [&str; 6] = ["docs", "framework", "examples", "templates", "schemas", "ui-kit"];

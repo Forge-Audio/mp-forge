@@ -25,16 +25,18 @@ use crate::maker::is_usable_name;
 use crate::origin::{ORIGIN_FILE, Origin};
 use crate::plugin_name;
 use crate::sample_app;
+use crate::sample_knobs::{SIX_KNOBS_FILE, SixKnobs};
 
 /// What a packed project's file name ends with.
 pub const PROJECT_FILE_ENDING: &str = "mpforge";
 
 const MANIFEST: &str = "plugin.json";
-/// The words of the plugin's guide and the addresses it brings sound in from are among them, when it has them.
+/// The words of the plugin's guide, the addresses it brings sound in from and the knobs it is played with on an
+/// MPC Sample are among them, when it has them.
 /// So are the licence it is shared under, by any of the names such a file goes by, and the note of where it
 /// came from: both have to stay with somebody else's work wherever it goes.
-const OTHER_FILES_AT_THE_TOP: [&str; 12] =
-    ["ui.json", "README.md", "DESIGN.md", "pictures.json", "look.json", "guide.json", "online.json", ORIGIN_FILE, "LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING"];
+const OTHER_FILES_AT_THE_TOP: [&str; 13] =
+    ["ui.json", "README.md", "DESIGN.md", "pictures.json", "look.json", "guide.json", "online.json", SIX_KNOBS_FILE, ORIGIN_FILE, "LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING"];
 /// The names a project's licence goes by, each of them carried.
 pub(crate) const LICENSE_FILES: [&str; 4] = ["LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING"];
 const CODE_FOLDER: &str = "src";
@@ -286,9 +288,20 @@ impl Arriving {
             return Err(not_a_project("it has no code. Only a plugin's project can be taken in, not a finished plugin built for the MPC."));
         }
         let manifest = manifest_afresh(&arrived)?;
+        self.keep_the_knobs_named_in(&arrived)?;
         let written = serde_json::to_string_pretty(&manifest).expect("a manifest is always plain JSON");
         fs::write(self.folder.join(MANIFEST), written + "\n")?;
         Ok(manifest["name"].as_str().unwrap_or_default().to_string())
+    }
+
+    /// A plugin written by hand with Akai's SDK names the MPC Sample's knobs in its manifest. They are kept
+    /// the way MP Forge keeps them, in a file of their own, unless the project brought that file along.
+    fn keep_the_knobs_named_in(&self, arrived: &Value) -> io::Result<()> {
+        let brought_its_own = self.folder.join(SIX_KNOBS_FILE).exists();
+        match SixKnobs::named_in_a_manifest(arrived) {
+            Some(named) if !brought_its_own && arrived["kind"] != sample_app::KIND => named.keep_with(&self.folder),
+            _ => Ok(()),
+        }
     }
 
     fn has_code(&self) -> bool {
@@ -583,6 +596,38 @@ mod tests {
         assert_eq!((&manifest["kind"], &manifest["numInputs"], &manifest["numOutputs"]), (&json!("effect"), &json!(2), &json!(2)));
         assert_eq!((&manifest["description"], &manifest["version"]), (&json!("twolines"), &json!(USUAL_VERSION)));
         assert!(manifest.get("runAfterBuild").is_none() && manifest.get("file").is_none());
+    }
+
+    #[test]
+    fn the_knobs_a_handwritten_plugin_names_for_the_mpc_sample_are_kept_in_a_file_of_their_own() {
+        let folder = TemporaryFolder::create("project-six-knobs");
+        let mut by_hand: Value = serde_json::from_str(&manifest_of("Dusty Tape")).unwrap();
+        by_hand["shortName"] = json!("Dusty");
+        by_hand["knobs"] = json!([{ "parameter": 2, "label": "Wear" }, {}, { "parameter": 1, "label": "Mix" }]);
+        write(&folder.0.join("project"), MANIFEST, by_hand.to_string());
+        write(&folder.0.join("project"), "src/DustyTape.cpp", CODE);
+
+        take_in(&folder.0.join("project"), &folder.0.join("plugins"), None).unwrap();
+
+        let taken_in = folder.0.join("plugins/Dusty Tape");
+        let manifest: Value = serde_json::from_str(&fs::read_to_string(taken_in.join(MANIFEST)).unwrap()).unwrap();
+        let kept: Value = serde_json::from_str(&fs::read_to_string(taken_in.join(SIX_KNOBS_FILE)).unwrap()).unwrap();
+        assert!(manifest.get("knobs").is_none() && manifest.get("shortName").is_none(), "the manifest says only what the build needs");
+        assert_eq!(kept, json!({ "shortName": "Dusty", "knobs": [{ "parameter": 2, "label": "Wear" }, {}, { "parameter": 1, "label": "Mix" }], "shiftKnobs": [{}, {}, {}] }));
+    }
+
+    #[test]
+    fn the_knobs_a_project_brings_along_win_over_what_its_manifest_names() {
+        let folder = TemporaryFolder::create("project-six-knobs-own");
+        let mut by_hand: Value = serde_json::from_str(&manifest_of("Dusty Tape")).unwrap();
+        by_hand["knobs"] = json!([{ "parameter": 2, "label": "Wear" }]);
+        write(&folder.0.join("project"), MANIFEST, by_hand.to_string());
+        write(&folder.0.join("project"), "src/DustyTape.cpp", CODE);
+        write(&folder.0.join("project"), SIX_KNOBS_FILE, r#"{ "knobs": [{ "control": "Wear" }] }"#);
+
+        take_in(&folder.0.join("project"), &folder.0.join("plugins"), None).unwrap();
+
+        assert_eq!(fs::read_to_string(folder.0.join("plugins/Dusty Tape").join(SIX_KNOBS_FILE)).unwrap(), r#"{ "knobs": [{ "control": "Wear" }] }"#);
     }
 
     #[test]

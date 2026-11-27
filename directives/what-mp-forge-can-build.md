@@ -4,6 +4,10 @@ Everything you offer has to be something real, so keep to this:
 
 - An effect changes sound that is played through it. It hears no notes. An instrument makes its own sound when
   notes are played. A sequencer or arpeggiator has to be an instrument that makes its own sound.
+- An effect also runs on the MPC Sample, as a Knob FX: there it has no pages, only six of its controls on the
+  three knobs, three of them with SHIFT held. An instrument does not run on the MPC Sample. This is
+  experimental, needs firmware 1.4.0 or later on the MPC Sample and has not been tried on a device yet, so
+  say so when you offer it.
 - A plugin cannot send notes to the MPC or control other plugins.
 - It runs on a small, slow computer inside the MPC, so nothing that needs heavy number work: no long
   convolution reverbs, no huge numbers of voices, no machine learning.

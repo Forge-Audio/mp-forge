@@ -20,12 +20,12 @@ use workbench_engine::device_app;
 use workbench_engine::device_link::DeviceLink;
 use workbench_engine::gate::{
     APP_BUILD_CHECK, APP_SOURCE_CHECK, APP_TRIAL_CHECK,
-    BUILD_CHECK, Gate, GateReport, MOVING_PICTURES_CHECK, Outcome, PICTURES_CHECK, SCREEN_CHECK, SOURCE_CHECK, TimeLimits, simulation_check_name,
+    BUILD_CHECK, Gate, GateReport, MOVING_PICTURES_CHECK, Outcome, PICTURES_CHECK, SCREEN_CHECK, SIX_KNOBS_CHECK, SOURCE_CHECK, TimeLimits, simulation_check_name,
 };
 use workbench_engine::hosted_plugin::{HostedPlugin, LARGEST_BLOCK, Note, moves_made_by_the_plugin};
 use workbench_engine::library::built_parameters;
 use workbench_engine::link_program;
-use workbench_engine::maker::{Connection, Maker, PluginRequest, PutOnACard, SentToTheSample};
+use workbench_engine::maker::{Connection, EffectOnACard, Maker, PluginRequest, PutOnACard, SentToTheSample};
 use workbench_engine::online::{ONLINE_FILE, ONLINE_IS_SWITCHED_OFF};
 use workbench_engine::open_mpc_listing::{self, License, Listing};
 use workbench_engine::origin::Origin;
@@ -38,10 +38,11 @@ use workbench_engine::open_mpc;
 use workbench_engine::project_file::{self, pack, take_in};
 use workbench_engine::sample_app::{self, Input, MidiCameIn, RunningApp, Shown, SoundIn};
 use workbench_engine::sample_app_tools::SampleAppTools;
+use workbench_engine::sample_knobs::SIX_KNOBS_FILE;
 use workbench_engine::sample_surface::Lights;
 use workbench_engine::samples::{SampleShelf, sixteen_bit_wav};
 use workbench_engine::sd_card::{self, AskedOfTheCard, SdCard, write_trial_card};
-use workbench_engine::sdk::{PluginIdentity, PluginKind, Sdk, built_screen_file, native_library_of};
+use workbench_engine::sdk::{PluginIdentity, PluginKind, Sdk, built_plugin_folder, built_screen_file, native_library_of};
 use workbench_engine::simulation::Session;
 
 const FREEZE_LIMIT: Duration = Duration::from_secs(5);
@@ -82,7 +83,9 @@ fn blocking_details(report: &GateReport, check_name: &str) -> String {
 #[test]
 fn akais_own_examples_are_let_through() {
     for example in ["SimpleSynth", "StereoDelay", "DrumSynth"] {
-        let report = gate().inspect(&akai_example(example));
+        let copied = CopiedExample::of(example, &format!("own-example-{example}"));
+
+        let report = gate().inspect(&copied.0);
 
         assert!(report.may_be_sent(), "{example} was blocked: {report:#?}");
     }
@@ -495,6 +498,84 @@ fn akais_delay_handed_over_as_a_file_and_taken_in_under_another_name_is_let_thro
     assert!(!plugins.0.join("Stereo Delay/build").exists(), "what Akai's example had built should stay behind");
     let report = gate().inspect(&plugins.0.join("Borrowed Delay"));
     assert!(report.may_be_sent(), "{report:#?}");
+}
+
+/// What the finished plugin folder says of the plugin, which is what an MPC reads.
+fn built_manifest_of(plugin: &Path) -> serde_json::Value {
+    let manifest = fs::read_to_string(built_plugin_folder(plugin).unwrap().join("plugin.json")).unwrap();
+    serde_json::from_str(&manifest).unwrap()
+}
+
+#[test]
+fn akais_delay_taken_in_keeps_the_knobs_its_makers_chose_for_the_mpc_sample() {
+    let plugins = PluginsFolder::empty("six-knobs-carried");
+    let plugin = plugins.0.join(take_in(&akai_example("StereoDelay"), &plugins.0, None).unwrap());
+
+    let report = gate().inspect(&plugin);
+
+    assert_eq!(report.outcome_of(SIX_KNOBS_CHECK), Some(&Outcome::Passed), "{report:#?}");
+    let built = built_manifest_of(&plugin);
+    assert_eq!(built["shortName"], "St Delay");
+    assert_eq!(built["knobs"], json!([{ "parameter": 2, "label": "Time" }, { "parameter": 3, "label": "Feedback" }, { "parameter": 7, "label": "Mix" }]));
+    assert_eq!(built["shiftKnobs"], json!([{ "parameter": 4, "label": "Low Cut" }, { "parameter": 5, "label": "High Cut" }, { "parameter": 0, "label": "Sync" }]));
+}
+
+#[test]
+fn knobs_chosen_by_the_names_of_controls_reach_the_built_plugin_by_number_as_akais_checker_reads_them() {
+    let delay = CopiedExample::of_the_delay("six-knobs-by-name");
+    fs::write(delay.0.join(SIX_KNOBS_FILE), r#"{ "shortName": "Echo", "knobs": [{ "control": "Mix", "label": "Wet" }, {}, { "control": "time" }] }"#).unwrap();
+
+    let report = gate().inspect(&delay.0);
+    let read_by_akais_checker = Sdk::at(sdk_dir()).unwrap().validate(&delay.0, Duration::from_secs(60)).unwrap().output;
+
+    assert!(report.may_be_sent(), "{report:#?}");
+    assert_eq!(built_manifest_of(&delay.0)["knobs"], json!([{ "parameter": 7, "label": "Wet" }, {}, { "parameter": 2, "label": "Time" }]));
+    assert!(read_by_akais_checker.contains(r#"knob 1 (knobs[0]) -> [7] "Mix", label "Wet""#), "{read_by_akais_checker}");
+    assert!(read_by_akais_checker.contains(r#"knob 3 (knobs[2]) -> [2] "Time", label "Time""#), "{read_by_akais_checker}");
+    assert!(!fs::read_to_string(delay.0.join("plugin.json")).unwrap().contains("knobs"), "the plugin's own manifest names no knobs by number");
+}
+
+#[test]
+fn a_knob_for_a_control_the_plugin_does_not_have_is_blocked_in_words() {
+    let delay = CopiedExample::of_the_delay("six-knobs-gone");
+    fs::write(delay.0.join(SIX_KNOBS_FILE), r#"{ "knobs": [{ "control": "Wobble" }] }"#).unwrap();
+
+    let report = gate().inspect(&delay.0);
+
+    let said = blocking_details(&report, SIX_KNOBS_CHECK);
+    assert!(said.contains("Knob 1 of the MPC Sample turns `Wobble`, but the plugin's controls are: Sync, Division, Time"), "{said}");
+    assert!(!report.may_be_sent());
+}
+
+#[test]
+fn akais_delay_is_put_on_a_card_with_its_knobs_and_an_instrument_is_refused() {
+    let plugins = PluginsFolder::empty("effect-on-a-card");
+    let card = plugins.0.join("the card");
+    take_in(&akai_example("StereoDelay"), &plugins.0, None).unwrap();
+    take_in(&akai_example("SimpleSynth"), &plugins.0, None).unwrap();
+    let maker = Maker::new(Sdk::at(sdk_dir()).unwrap(), &plugins.0).hosting_plugins_with(env!("CARGO_BIN_EXE_workbench"));
+
+    let put = maker.put_effect_on_card("Stereo Delay", &card);
+    let instrument_refused = maker.put_effect_on_card("Simple Synth", &card);
+
+    let Ok(EffectOnACard::Written { report, on_the_card }) = put else { panic!("{:?}", put.err().map(|not_put| not_put.to_string())) };
+    assert!(report.may_be_sent());
+    assert_eq!(on_the_card.folder, card.join("VST2 Plugins/MPC SDK Examples - VST - Stereo Delay"));
+    let on_the_card: serde_json::Value = serde_json::from_str(&fs::read_to_string(on_the_card.folder.join("plugin.json")).unwrap()).unwrap();
+    assert_eq!(on_the_card["knobs"][0], json!({ "parameter": 2, "label": "Time" }));
+    assert!(card.join("VST2 Plugins/MPC SDK Examples - VST - Stereo Delay/VST/stereo-delay-arm64.so").is_file());
+    assert_eq!(fs::read_dir(&card).unwrap().count(), 1, "nothing is left on the card beside VST2 Plugins");
+    assert!(instrument_refused.is_err_and(|refused| refused.to_string().contains("loads effects only")));
+}
+
+#[test]
+fn an_instrument_is_asked_for_no_knobs_because_the_mpc_sample_loads_effects_only() {
+    let synth = CopiedExample::of("SimpleSynth", "six-knobs-instrument");
+
+    let report = gate().inspect(&synth.0);
+
+    assert!(report.may_be_sent(), "{report:#?}");
+    assert_eq!(report.outcome_of(SIX_KNOBS_CHECK), None);
 }
 
 #[test]

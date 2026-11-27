@@ -17,6 +17,9 @@
   const livePlayer = window.livePlayer;
   const samplePlayer = window.samplePlayer;
   const sampleSend = window.sampleSend;
+  const sampleEffect = window.sampleEffect;
+  const sixKnobs = window.sixKnobs;
+  const effectCard = window.effectCard;
   const lookEditor = window.lookEditor;
   const { element, remember, recall } = window.helpers;
   const { addressOf } = window.fetchedImages;
@@ -46,6 +49,9 @@
   const ASK_FOR_AN_APP = "Describe your app for the MPC Sample";
   const KIND_OF_A_SAMPLE_APP = "sample-app";
   const MADE_FOR_THE_SAMPLE = "sample";
+  const MADE_AS_A_KNOB_FX = "knob-fx";
+  const MARK_OF_A_NEW_KNOB_FX = "new-as-a-knob-fx";
+  const SAID_TO_THE_AI_OF_A_KNOB_FX = "This effect is made first for the MPC Sample, where it is a Knob FX with no pages. Design it around its six knobs in sample-knobs.json, so that those six controls are the whole effect there, and give every other control a value that sounds good, because on an MPC Sample nobody can change it.";
   const NAME_FOR_EXAMPLE = { plugin: "Dusty Tape", app: "Night Bus" };
   const ASK_FOR_A_CHANGE = "Ask for a change";
   const ASK_WHAT_IS_DIFFERENT = "Say what should be different in your version";
@@ -70,6 +76,10 @@
   const GOES_ONLINE_FOR = "This plugin goes online. On your MPC and when you play it here, it fetches sound from:";
   const WHAT_AN_EXPORT_HOLDS = "The file holds the plugin's code, its screen and look, its pictures and its sounds. Your conversation with the AI and the plugin's earlier versions are not in it. Whoever you give it to brings it in with IMPORT A PLUGIN.";
   const MARK_OF_A_SAMPLE_APP = "on-the-sample";
+  const MARK_OF_A_KNOB_FX = "as-a-knob-fx";
+  const EFFECT = "effect";
+  const NOT_ON_THE_CARD_UNTIL_SAFE = "An effect has to pass its safety check before it can go onto an MPC Sample's card. Press the status at the top to run the check.";
+  const KNOBS_WERE_KEPT = "The six knobs for the MPC Sample were kept. They go into the effect at its next safety check.";
   const KINDS_IN_WORDS = { effect: "Effect", instrument: "Instrument", "sample-app": "MPC Sample app" };
   const IMPORTED_AND_NOT_RUN = "**Brought in.** Nothing of it has been run yet. Run the safety check to build it, then you can see its screen, play it and change it.";
   const NO_SUCH_VERSION = "That version could not be found, so nothing was changed.";
@@ -130,6 +140,12 @@
     moreButton: document.getElementById("more-button"),
     moreMenu: document.getElementById("more-menu"),
     guidePlugin: document.getElementById("guide-plugin"),
+    tryAsKnobFx: document.getElementById("try-as-knob-fx"),
+    knobFxDevice: document.getElementById("knob-fx-device"),
+    chooseSixKnobs: document.getElementById("choose-six-knobs"),
+    putOnCard: document.getElementById("put-on-card"),
+    sixKnobsRow: document.getElementById("six-knobs-plugin"),
+    cardRow: document.getElementById("card-plugin"),
     exportPlugin: document.getElementById("export-plugin"),
     listPlugin: document.getElementById("list-plugin"),
     renamePlugin: document.getElementById("rename-plugin"),
@@ -174,6 +190,8 @@
   const statusMenu = window.popupMenu(page.statusButton, page.statusMenu);
 
   const state = {
+    // Whether the open effect is shown the way an MPC Sample plays it, in place of its pages.
+    triedAsKnobFx: false,
     plugins: [],
     openName: NEW_PLUGIN,
     openPlugin: null,
@@ -569,11 +587,47 @@
     page.subtitle.textContent = plugin ? summaryLine(plugin) : "";
     page.subtitle.title = whereItGoesOnline(plugin);
     showTheDeviceItRunsOn(runsOnTheSample);
+    showAsAKnobFx(plugin);
     if (plugin && runsOnTheSample) showOnTheSample(plugin);
     else samplePlayer.follow(null, page.sampleDevice);
     livePlayer.follow(!runsOnTheSample && plugin && plugin.builtAt ? plugin : null);
     if (!runsOnTheSample) drawAsOnAnMpc(plugin);
     drawStatus();
+  }
+
+  function isAnEffect(plugin) {
+    return Boolean(plugin && plugin.summary.kind === EFFECT);
+  }
+
+  function canBeTriedAsAKnobFx(plugin) {
+    return isAnEffect(plugin) && Boolean(plugin.builtAt) && controlsOfOpenPlugin().length > 0;
+  }
+
+  function isStillTheOneTried(plugin) {
+    return state.triedAsKnobFx && state.openPlugin !== null && state.openPlugin.summary.name === plugin.summary.name;
+  }
+
+  function showOnTheDrawingWithItsKnobs(plugin) {
+    ask("six_knobs", { name: plugin.summary.name })
+      .then((knobs) => { if (isStillTheOneTried(plugin)) sampleEffect.show(page.knobFxDevice, plugin, knobs, tellPlayerOfTurn); })
+      .catch((problem) => addMessage(plugin.summary.name, { kind: "problem", text: describeProblem(problem) }));
+  }
+
+  // A built effect can be tried the way an MPC Sample plays it: on the drawing of the device, with its six
+  // knobs, while the computer plays it. What only an effect has is put away for anything else.
+  function showAsAKnobFx(plugin) {
+    const isTried = state.triedAsKnobFx && canBeTriedAsAKnobFx(plugin);
+    document.body.classList.toggle(MARK_OF_A_KNOB_FX, isTried);
+    page.tryAsKnobFx.hidden = !canBeTriedAsAKnobFx(plugin);
+    page.tryAsKnobFx.setAttribute("aria-pressed", String(isTried));
+    page.sixKnobsRow.hidden = page.cardRow.hidden = !isAnEffect(plugin);
+    if (!isTried) sampleEffect.hide();
+    else if (!sampleEffect.isShowing(plugin)) showOnTheDrawingWithItsKnobs(plugin);
+  }
+
+  function toggleTryingAsAKnobFx() {
+    state.triedAsKnobFx = !state.triedAsKnobFx;
+    drawMirror();
   }
 
   // A Sample app is shown on the drawing of the MPC Sample. Anything else is shown as an MPC's touch screen,
@@ -657,6 +711,7 @@
     const askedOfSomethingNew = isNewForTheSample() ? ASK_FOR_AN_APP : state.remixOf ? ASK_WHAT_IS_DIFFERENT : ASK_FOR_A_PLUGIN;
     const asked = startingNew ? askedOfSomethingNew : ASK_FOR_A_CHANGE;
     page.newPluginFields.hidden = !startingNew;
+    document.body.classList.toggle(MARK_OF_A_NEW_KNOB_FX, startingNew && isNewAsAKnobFx());
     page.pluginName.placeholder = isNewForTheSample() ? NAME_FOR_EXAMPLE.app : NAME_FOR_EXAMPLE.plugin;
     page.message.placeholder = asked;
     page.message.setAttribute("aria-label", asked);
@@ -1044,18 +1099,33 @@
   // A remix is described by what is known of the original, then by what was typed. Its `shown` is how the
   // request reads in the conversation, which leaves out the long README.
   // Whether what is being started is an app for the MPC Sample, and not a plugin for the MPCs with a touch screen.
+  function whatItIsMadeFor() {
+    return page.composer.querySelector('input[name="made-for"]:checked').value;
+  }
+
   function isNewForTheSample() {
-    return page.composer.querySelector('input[name="made-for"]:checked').value === MADE_FOR_THE_SAMPLE;
+    return whatItIsMadeFor() === MADE_FOR_THE_SAMPLE;
+  }
+
+  // A Knob FX is an effect like any other, made with the MPC Sample's six knobs in mind first.
+  function isNewAsAKnobFx() {
+    return whatItIsMadeFor() === MADE_AS_A_KNOB_FX;
   }
 
   function kindOfWhatIsNew() {
-    return isNewForTheSample() ? KIND_OF_A_SAMPLE_APP : page.composer.querySelector('input[name="kind"]:checked').value;
+    if (isNewForTheSample()) return KIND_OF_A_SAMPLE_APP;
+    return isNewAsAKnobFx() ? EFFECT : page.composer.querySelector('input[name="kind"]:checked').value;
+  }
+
+  function describedForAKnobFx(typed) {
+    return { description: `${SAID_TO_THE_AI_OF_A_KNOB_FX}\n\n${typed}`, shown: typed };
   }
 
   // Nothing is remixed into an app for the MPC Sample: the plugins there are to remix are for other MPCs.
   function newPluginRequest() {
     const typed = page.message.value.trim();
     const said = { name: page.pluginName.value.trim(), maker: page.makerName.value.trim(), kind: kindOfWhatIsNew() };
+    if (isNewAsAKnobFx() && typed) return { ...said, ...describedForAKnobFx(typed) };
     if (!state.remixOf || isNewForTheSample()) return { ...said, description: typed };
     const sent = sentWithTheRemix();
     return { ...said, description: remixPicker.describedWith(state.remixOf, typed, sent), shown: remixPicker.shownWith(state.remixOf, typed, sent) };
@@ -1081,7 +1151,8 @@
   // The switch between the MPCs with a touch screen and the MPC Sample was thrown: the form and the drawing
   // beside it change to what is now being started.
   function madeForChanged() {
-    remember("madeFor", isNewForTheSample() ? MADE_FOR_THE_SAMPLE : "mpc");
+    remember("madeFor", whatItIsMadeFor());
+    state.triedAsKnobFx = isNewAsAKnobFx();
     drawComposer();
     drawMirror();
   }
@@ -1839,6 +1910,41 @@
     drawWork();
   }
 
+  // Lets the musician choose the open effect's six knobs. The drawing is shown again with what they chose.
+  async function chooseTheSixKnobs() {
+    const effectName = state.openName;
+    try {
+      if (!(await sixKnobs.choose(page.appSheet, effectName))) return;
+      addMessage(effectName, { kind: "note", text: KNOBS_WERE_KEPT });
+      sampleEffect.hide();
+      drawMirror();
+    } catch (problem) {
+      addMessage(effectName, { kind: "problem", text: describeProblem(problem) });
+    }
+  }
+
+  async function copyToTheCardPicked(effectName) {
+    state.checking.set(effectName, STATUS.sending);
+    drawWork();
+    try {
+      const outcome = await effectCard.put(effectName);
+      if (outcome) showReport(effectName, outcome.report);
+      if (outcome && outcome.words) addMessage(effectName, { kind: "note", text: outcome.words });
+    } catch (problem) {
+      addMessage(effectName, { kind: "problem", text: describeProblem(problem) });
+    }
+    state.checking.delete(effectName);
+    drawWork();
+  }
+
+  async function putOpenEffectOnTheCard() {
+    const effectName = state.openName;
+    if (!canBeSent()) return addMessage(effectName, { kind: "problem", text: NOT_ON_THE_CARD_UNTIL_SAFE });
+    const next = await effectCard.askBeforeCopying(page.appSheet, effectName);
+    if (next === effectCard.THE_KNOBS_FIRST) return chooseTheSixKnobs();
+    if (next === effectCard.TO_THE_CARD) return copyToTheCardPicked(effectName);
+  }
+
   async function sendOpenPluginToMpc() {
     const pluginName = state.openName;
     if (samplePlayer.isASampleApp(state.openPlugin)) return putOpenAppOnTheSample();
@@ -1872,9 +1978,12 @@
   function rowsForTheOpenPlugin() {
     const cannotBeTouched = state.openName === NEW_PLUGIN || isBeingWorkedOn(state.openName);
     const forAPluginOnly = (row) => (isShownForTheSample() ? [] : [row]);
+    const forAnEffectOnly = (row) => (isAnEffect(state.openPlugin) ? [row] : []);
     return [
       ...forAPluginOnly(appMenu.row(livePlayer.isSounding() ? "Stop playing" : "Play plugin", toggleLiveSound, page.play.disabled)),
       appMenu.row(`${whereTheOpenPluginGoes()}…`, sendOpenPluginToMpc, cannotBeTouched || !canBeSent()),
+      ...forAnEffectOnly(appMenu.row("Six knobs for MPC Sample…", chooseTheSixKnobs, cannotBeTouched)),
+      ...forAnEffectOnly(appMenu.row("Export to MPC Sample…", putOpenEffectOnTheCard, cannotBeTouched)),
       ...forAPluginOnly(appMenu.row("Edit the look", editTheLook, page.editLook.disabled)),
       appMenu.row("Versions…", showVersions, page.goBack.disabled),
       appMenu.row("Run the safety check", checkOpenPlugin, !canBeChecked()),
@@ -1953,6 +2062,7 @@
   function playerToldAValue(value) {
     const control = controlsOfOpenPlugin().find((known) => known.index === value.index);
     if (control) valueArrived(control.name, value.amount, value.text);
+    sampleEffect.valueArrived(value.index, value.amount, value.text);
   }
 
   // Controls the plugin moved by itself, such as lamps it lights for the notes held.
@@ -2088,6 +2198,9 @@
     page.guidePlugin.addEventListener("click", makeGuideOfOpenPlugin);
     page.exportPlugin.addEventListener("click", exportOpenPlugin);
     page.listPlugin.addEventListener("click", listOpenPluginOnOpenMpc);
+    page.tryAsKnobFx.addEventListener("click", toggleTryingAsAKnobFx);
+    [page.chooseSixKnobs, page.sixKnobsRow].forEach((button) => button.addEventListener("click", chooseTheSixKnobs));
+    [page.putOnCard, page.cardRow].forEach((button) => button.addEventListener("click", putOpenEffectOnTheCard));
     page.importPlugin.addEventListener("click", importAPlugin);
     page.renamePlugin.addEventListener("click", renameOpenPlugin);
     page.deletePlugin.addEventListener("click", deleteOpenPlugin);
@@ -2106,7 +2219,7 @@
   // The menu for the open plugin closes as soon as one of its rows is picked.
   function connectMoreMenu() {
     const moreMenu = window.popupMenu(page.moreButton, page.moreMenu);
-    [page.guidePlugin, page.exportPlugin, page.listPlugin, page.renamePlugin, page.deletePlugin].forEach((row) => row.addEventListener("click", moreMenu.close));
+    [page.guidePlugin, page.exportPlugin, page.listPlugin, page.sixKnobsRow, page.cardRow, page.renamePlugin, page.deletePlugin].forEach((row) => row.addEventListener("click", moreMenu.close));
   }
 
   // One plus button offers both things that can be added. Picking either closes the menu and opens its file picker.
@@ -2234,6 +2347,7 @@
     page.makerName.value = recall("maker") || "";
     page.architect.checked = recall("architect") === "on";
     page.composer.querySelector(`input[name="made-for"][value="${recall("madeFor") || "mpc"}"]`).checked = true;
+    state.triedAsKnobFx = isNewAsAKnobFx();
     connectButtons();
     connectAddMenu();
     connectMoreMenu();

@@ -229,7 +229,7 @@ impl Toolbox for PluginTools<'_> {
             ToolDefinition {
                 name: WRITE_PLUGIN_FILE,
                 description: "Creates or replaces one of the plugin's files with the full contents you give. \
-                    You can write ui.json, pictures.json, README.md, DESIGN.md, .cpp, .h or .hpp files inside src/, and .svg \
+                    You can write ui.json, pictures.json, sample-knobs.json, README.md, DESIGN.md, .cpp, .h or .hpp files inside src/, and .svg \
                     drawings inside pictures/. plugin.json is fixed and nothing outside the plugin can be written. \
                     To change a small part of a file that is already there, use edit_plugin_file instead.",
                 input_schema: input_of_a_write(),

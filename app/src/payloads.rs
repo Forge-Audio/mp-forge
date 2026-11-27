@@ -25,7 +25,9 @@ use workbench_engine::maker::Delivery;
 use workbench_engine::pictures::{Motion, Picture, Placement};
 use workbench_engine::plugin_tools::describe_step;
 use workbench_engine::readiness::Need;
+use workbench_engine::sample_knobs::ShownToTheMusician;
 use workbench_engine::samples::Sample;
+use workbench_engine::card_plugin::OnTheCard;
 use workbench_engine::screen_layout::Area;
 
 /// What the screen sends to start a new plugin.
@@ -317,6 +319,20 @@ pub fn progress(event: &Event) -> Option<Value> {
 /// to be copied.
 pub fn made_for_the_card(made: &MadeForTheCard) -> Value {
     json!({ "folder": made.folder, "isWhereTheBootMenuLooks": made.is_where_the_boot_menu_looks })
+}
+
+/// The knobs an effect is played with on an MPC Sample, written as they are kept, with whether anybody has
+/// chosen them yet and the controls there are to choose from.
+pub fn six_knobs(shown: &ShownToTheMusician) -> Value {
+    let mut said = shown.knobs.as_written();
+    said["firstGuess"] = json!(shown.is_a_first_guess);
+    said["controls"] = json!(shown.controls);
+    said
+}
+
+/// Where on the card an effect was put, and whether an older copy of it made way.
+pub fn effect_on_the_card(on_the_card: &OnTheCard) -> Value {
+    json!({ "folder": on_the_card.folder, "replaced": on_the_card.replaced_an_older_copy })
 }
 
 /// A step in the conversation saying what is being fetched before the build can begin.

@@ -934,6 +934,17 @@ body.nothing-said-yet .messages { flex: 0 1 auto; min-height: 0; align-items: ce
    screen, the presets, and playing, sending and arranging it, none of which a Sample app has yet. */
 body:not(.on-the-sample) :is(.sample-view, .for-the-sample) { display: none; }
 body.on-the-sample .for-mpcs { display: none; }
+/* A Knob FX is an effect, so what is asked of a new one is what is asked of a plugin, less the choice of
+   its kind. */
+body:not(.new-as-a-knob-fx) .for-knob-fx { display: none; }
+body.new-as-a-knob-fx .not-for-knob-fx { display: none; }
+/* An effect tried as an MPC Sample plays it is shown on the same drawing, in place of its pages, which the
+   MPC Sample never shows. Playing it and its volume stay, since the computer still plays it. */
+body:not(.as-a-knob-fx) .knob-fx-view { display: none; }
+body.as-a-knob-fx :is(.mirror-row, #edit-look, #presets) { display: none; }
+.edit-look-button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.six-knobs-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.six-knobs-seat { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 /* While something new is only being described there is no device to show yet, and the drawing would hold the
    conversation off the side of the window. */
 body.starting-new .sample-view { display: none; }

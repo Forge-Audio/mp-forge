@@ -12,8 +12,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::{Value, json};
 
+use crate::sample_knobs::SIX_KNOBS_FILE;
+
 const VERSIONS_FOLDER: &str = ".versions";
-const FILES_KEPT: [&str; 7] = ["plugin.json", "ui.json", "README.md", "DESIGN.md", "pictures.json", "look.json", "online.json"];
+const FILES_KEPT: [&str; 8] = ["plugin.json", "ui.json", "README.md", "DESIGN.md", "pictures.json", "look.json", "online.json", SIX_KNOBS_FILE];
 const FOLDERS_KEPT: [&str; 3] = ["src", "pictures", "artwork"];
 /// Says when a version was kept and what was about to happen to the plugin. It is no part of the plugin.
 const NOTE_FILE: &str = "version.json";

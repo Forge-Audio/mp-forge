@@ -189,14 +189,14 @@ pub fn built_control_number(plugin: &Path, control: &str) -> Option<u32> {
 }
 
 /// A control's number is its place in the list. The exact name wins; failing that, the same name in other capitals.
-fn number_of(control: &str, control_names: &[String]) -> Option<u32> {
+pub(crate) fn number_of(control: &str, control_names: &[String]) -> Option<u32> {
     let exact = control_names.iter().position(|name| name == control);
     let position = exact.or_else(|| control_names.iter().position(|name| name.eq_ignore_ascii_case(control)))?;
     u32::try_from(position).ok()
 }
 
 /// The names of the plugin's controls, in the order the built plugin reports them.
-fn built_control_names(plugin: &Path) -> Vec<String> {
+pub(crate) fn built_control_names(plugin: &Path) -> Vec<String> {
     let reported = library::built_parameters(plugin).unwrap_or(Value::Null);
     let controls = reported["params"].as_array().map(Vec::as_slice).unwrap_or_default();
     controls.iter().map(|control| control["name"].as_str().unwrap_or_default().to_string()).collect()

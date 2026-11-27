@@ -40,6 +40,7 @@ pub fn readme_of(facts: &Facts, words: &Words, shared: &AsShared) -> String {
         presets_section(facts, words),
         things_to_try_section(words),
         putting_it_on_an_mpc(facts, shared),
+        putting_it_on_an_mpc_sample(facts),
         format!("Made with [MP Forge]({WEBSITE})."),
     ];
     sections.into_iter().filter(|section| !section.is_empty()).collect::<Vec<String>>().join("\n\n") + "\n"
@@ -66,6 +67,25 @@ fn putting_it_on_an_mpc(facts: &Facts, shared: &AsShared) -> String {
          {needs}",
         shared.releases_page,
         plain(&facts.where_it_is_on_the_mpc()),
+    )
+}
+
+/// An effect also loads on an MPC Sample, which has no pages for it and takes it from its card. An
+/// instrument does not load there, so nothing is said of it.
+fn putting_it_on_an_mpc_sample(facts: &Facts) -> String {
+    if !facts.is_effect {
+        return String::new();
+    }
+    let folder = plain(&format!("{} - VST - {}", facts.maker, facts.name));
+    format!(
+        "## On an MPC Sample
+
+         It also loads on an MPC Sample as a Knob FX, played with the three knobs and three more with SHIFT held.          This has not been tried on a device yet.
+
+         1. The MPC Sample needs firmware 1.4.0 or later. In MIDI Config, switch on Dev Enhancements (Beta), then Custom Plug-In Support.
+         2. Connect it to a computer by USB and enter SD Card Access mode from its Project screen.
+         3. Copy the folder `{folder}` into a folder called `VST2 Plugins` at the top of the card.
+         4. Eject the card on the computer, then leave SD Card Access mode. The effect is at the bottom of the FX Select list."
     )
 }
 
@@ -176,6 +196,16 @@ mod tests {
         assert!(readme.contains("| Control | Settings | Starts at | Hardware knob |") && !readme.contains("What it does"));
         assert!(readme.contains("| **Time** |  | 350 ms | 1 |"));
         assert!(readme.contains("- **Default**\n") && !readme.contains("Things to try"));
+    }
+
+    #[test]
+    fn an_effect_says_how_it_goes_on_an_mpc_sample_and_an_instrument_says_nothing_of_one() {
+        let of_the_effect = readme_of(&tape_echo(), &Words::default(), &shared("A worn echo."));
+        let of_an_instrument = readme_of(&Facts { is_effect: false, ..tape_echo() }, &Words::default(), &shared("A worn echo."));
+
+        assert!(of_the_effect.contains("## On an MPC Sample") && of_the_effect.contains("Copy the folder `Somebody - VST - Tape Echo` into a folder called `VST2 Plugins`"), "{of_the_effect}");
+        assert!(of_the_effect.contains("has not been tried on a device yet"));
+        assert!(!of_an_instrument.contains("MPC Sample"));
     }
 
     #[test]

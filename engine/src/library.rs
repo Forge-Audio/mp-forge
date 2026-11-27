@@ -88,7 +88,7 @@ pub fn built_parameters(plugin_dir: &Path) -> Option<Value> {
     read_json(&plugin_dir.join(BUILT_PARAMETERS))
 }
 
-fn read_json(path: &Path) -> Option<Value> {
+pub(crate) fn read_json(path: &Path) -> Option<Value> {
     serde_json::from_str(&fs::read_to_string(path).ok()?).ok()
 }
 

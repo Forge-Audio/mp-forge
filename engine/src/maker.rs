@@ -22,11 +22,14 @@ use crate::claude_code::{ClaudeCode, ToolServer};
 use crate::codex::{Codex, CodexChoices};
 use crate::conversation;
 use crate::delivery::{self, DeliveryError, Mpc};
+use crate::card_plugin::{self, NotPutOnTheCard, OnTheCard};
 use crate::device_app::{self, NotMade};
+use crate::sample_knobs::{self, ShownToTheMusician};
 use crate::gate::{Gate, GateReport};
 use crate::history::{self, Version};
 use crate::instructions;
 use crate::kept_look::{self, NotKept};
+use crate::library;
 use crate::look::{self, Look};
 use crate::license_terms;
 use crate::open_mpc;
@@ -95,6 +98,12 @@ pub enum PutOnACard {
     HeldBack(GateReport),
 }
 
+/// How putting an effect on the card of an MPC Sample ended. Either way the gate's report comes with it.
+pub enum EffectOnACard {
+    Written { report: GateReport, on_the_card: OnTheCard },
+    HeldBack(GateReport),
+}
+
 /// How sending a Sample app to a linked MPC Sample ended. Either way the gate's report comes with it.
 pub enum SentToTheSample {
     /// It is on the device's card, and the device is running it.
@@ -148,6 +157,11 @@ pub enum MakeError {
     NotASampleApp(String),
     NotMadeForTheSample(NotMade),
     NotSentToTheSample(NotSent),
+    /// An MPC Sample loads effects only, and this is an instrument or an app.
+    NotAnEffect(String),
+    NotPutOnTheCard(NotPutOnTheCard),
+    /// The knobs for the MPC Sample cannot be followed, for these reasons.
+    KnobsNotFollowed(Vec<String>),
     Io(io::Error),
 }
 
@@ -179,6 +193,9 @@ impl fmt::Display for MakeError {
             MakeError::SampleAppNotBuilt(problem) => write!(formatter, "{problem}"),
             MakeError::NotASampleApp(name) => write!(formatter, "`{name}` is a plugin for the touch-screen MPCs. Only an app made for the MPC Sample can go onto one."),
             MakeError::NotMadeForTheSample(problem) => write!(formatter, "{problem}"),
+            MakeError::NotAnEffect(name) => write!(formatter, "`{name}` is not an effect. An MPC Sample loads effects only, as Knob FX."),
+            MakeError::NotPutOnTheCard(problem) => write!(formatter, "{problem}"),
+            MakeError::KnobsNotFollowed(problems) => write!(formatter, "{}", problems.join(" ")),
             MakeError::NotSentToTheSample(problem) => write!(formatter, "{problem}"),
             MakeError::Io(cause) => write!(formatter, "A file could not be used: {cause}"),
         }
@@ -194,6 +211,12 @@ impl From<AttachmentError> for MakeError {
 impl From<DeliveryError> for MakeError {
     fn from(problem: DeliveryError) -> Self {
         MakeError::NotSent(problem)
+    }
+}
+
+impl From<NotPutOnTheCard> for MakeError {
+    fn from(problem: NotPutOnTheCard) -> Self {
+        MakeError::NotPutOnTheCard(problem)
     }
 }
 
@@ -451,6 +474,34 @@ impl Maker {
     fn send_as_made_in(&self, made_in: &Path, app_dir: &Path, doors: &Doors) -> Result<(), MakeError> {
         let folder = device_app::write_folder_for_the_boot_menu(&self.sdk, app_dir, made_in, device_app::TIME_ALLOWED_TO_BUILD)?;
         Ok(app_sending::send_and_run(doors, &folder)?)
+    }
+
+    /// Copies an effect into `VST2 Plugins` on the card or in the folder the musician picked, for an MPC
+    /// Sample to load as a Knob FX, but only once the gate has passed it as it stands right now.
+    pub fn put_effect_on_card(&self, plugin_name: &str, picked: &Path) -> Result<EffectOnACard, MakeError> {
+        let plugin_dir = self.existing_effect(plugin_name)?;
+        let report = self.gate.inspect(&plugin_dir);
+        if !report.may_be_sent() {
+            return Ok(EffectOnACard::HeldBack(report));
+        }
+        let on_the_card = card_plugin::put_on_the_card(&plugin_dir, picked)?;
+        Ok(EffectOnACard::Written { report, on_the_card })
+    }
+
+    /// The knobs an effect is played with on an MPC Sample, as the musician is shown them.
+    pub fn six_knobs_of(&self, plugin_name: &str) -> Result<ShownToTheMusician, MakeError> {
+        sample_knobs::shown_for(&self.existing_effect(plugin_name)?).map_err(MakeError::KnobsNotFollowed)
+    }
+
+    /// Keeps the knobs the musician chose by hand for an effect on an MPC Sample.
+    pub fn choose_six_knobs(&self, plugin_name: &str, chosen: &Value) -> Result<(), MakeError> {
+        sample_knobs::keep_chosen(&self.existing_effect(plugin_name)?, chosen).map_err(MakeError::KnobsNotFollowed)
+    }
+
+    fn existing_effect(&self, plugin_name: &str) -> Result<PathBuf, MakeError> {
+        let plugin_dir = self.existing_plugin(plugin_name)?;
+        let is_an_effect = library::summary_of(&plugin_dir).is_some_and(|summary| summary.kind == PluginKind::Effect.as_word());
+        if is_an_effect { Ok(plugin_dir) } else { Err(MakeError::NotAnEffect(plugin_name.to_string())) }
     }
 
     fn existing_sample_app(&self, app_name: &str) -> Result<PathBuf, MakeError> {

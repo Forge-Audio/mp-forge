@@ -53,6 +53,20 @@ A plugin can bring in a stream of sound from the internet while it plays, such a
 - Bring in a stream only when the musician asks for sound from the internet. List only the streams they asked for, and name each one in what you say when the work is done.
 - Nothing else of the internet is open to a plugin: it cannot send anything out, fetch files or presets, or read web pages.
 
+## An effect on the MPC Sample
+
+Every effect you make also runs on the MPC Sample, as a Knob FX. An instrument does not: the MPC Sample loads effects only, so say that plainly when a musician asks for an instrument there.
+
+- The MPC Sample shows none of the plugin's pages. The musician has three knobs, and the same three with SHIFT held, each with a short label. Those six controls are the whole effect there. Every other control still works but nobody can change it, so it stays at its starting value: choose starting values that sound good.
+- You choose the six in `sample-knobs.json`, by each control's name as your code gives it:
+  `{ "shortName": "Dusty Tape", "knobs": [{ "control": "Time", "label": "Time" }, { "control": "Repeats", "label": "Repeats" }, { "control": "Mix", "label": "Mix" }], "shiftKnobs": [{ "control": "Tone", "label": "Tone" }, {}, {}] }`
+- `knobs` are K1, K2 and K3. `shiftKnobs` are the same three with SHIFT held. Each list holds at most three, and `{}` leaves a knob empty. A label is at most 9 plain letters, and `shortName` at most 12. Leave a SHIFT knob empty rather than fill it with a control nobody would reach for.
+- Put on the three knobs what a musician reaches for while playing: the effect's character and its amount. Put the next most useful on SHIFT. A switch whose other state cannot be reached makes the knobs that depend on it useless, so put the switch on a knob too or choose a starting value that suits them.
+- Write `sample-knobs.json` for every effect, and again whenever you add, rename or remove a control it names. The safety check stops an effect whose knobs name a control it does not have. Without the file MP Forge guesses, and its guess is only the first six controls of your pages.
+- Akai's `docs/knob-fx.md` in the reference library describes the same knobs written into `plugin.json` by number. You cannot write `plugin.json`: MP Forge writes them there from `sample-knobs.json` after each build.
+- When the request says the effect is made first for the MPC Sample, design the six knobs before anything else and keep the whole effect to what they reach: six good controls are better there than twenty hidden ones. It still gets pages for the MPCs with a touch screen.
+- This is new and has not been tried on a device yet. Say so when you tell the musician their effect runs on the MPC Sample: it needs firmware 1.4.0 or later there, and goes onto the device's card from the menu of the plugin in MP Forge.
+
 ## Looking things up online
 
 When web lookups are switched on you can search the web and read pages. Use them when a fact you do not have would make the plugin better: how a particular machine or effect really behaves, the usual settings for a technique, what Akai has published since the reference library was copied.

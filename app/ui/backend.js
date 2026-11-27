@@ -86,6 +86,13 @@
     return { params: names.map((name, index) => ({ ...demoParameter(name, index), index })) };
   }
 
+  // The demo's first guess at an effect's six knobs for the MPC Sample: its controls in order, three to a row.
+  function sixKnobsGuessedFor(controls) {
+    const seatFor = (control) => (control ? { control, label: control.slice(0, 9) } : {});
+    const row = (from) => [0, 1, 2].map((position) => seatFor(controls[from + position]));
+    return { shortName: "Demo Effect", knobs: row(0), shiftKnobs: row(3), firstGuess: true, controls };
+  }
+
   // --- The demo's stand-in for the app's own artwork drawing ------------------------------------
 
   const DEMO_PAGE = { x: 0, y: 0, width: 1280, height: 628 };
@@ -420,6 +427,7 @@
 
     const looks = {};
     const lookOf = (pluginName) => looks[pluginName] || { pages: [] };
+    const knobsChosen = new Map();
     const screenOf = (pluginName) => demoScreenWith(DEMO_SCREENS[pluginName] || DEMO_SCREENS["Dusty Tape"], lookOf(pluginName));
     const arrangementOf = (pluginName) => demoArrangement(screenOf(pluginName), DEMO_PICTURES[pluginName] || [], lookOf(pluginName));
     const artworkOn = (pluginName, pageName) => demoPageLook(lookOf(pluginName), pageName).artwork.filter((layer) => !layer.hidden);
@@ -561,6 +569,11 @@
       choose_card_for_sample_app: () => true,
       put_sample_app_on_card: ({ name }) => new Promise((resolve) => setTimeout(() => resolve({ done: true, report: DEMO_REPORT, made: { folder: `/Volumes/MPC SAMPLE/autorun/mods/${name}`, isWhereTheBootMenuLooks: true } }), 900)),
       send_sample_app_by_link: () => pretendToSendByCable(),
+      // The demo guesses an effect's six knobs from its first six controls until some are chosen, and pretends a
+      // card was picked.
+      six_knobs: ({ name }) => knobsChosen.get(name) || sixKnobsGuessedFor(demoParameters(screenOf(name)).params.map((control) => control.name)),
+      choose_six_knobs: ({ name, knobs }) => { knobsChosen.set(name, { ...knobs, firstGuess: false, controls: demoParameters(screenOf(name)).params.map((control) => control.name) }); },
+      put_effect_on_card: ({ name }) => new Promise((resolve) => setTimeout(() => resolve({ done: true, report: DEMO_REPORT, onTheCard: { folder: `/Volumes/MPC SAMPLE/VST2 Plugins/Demo - VST - ${name}`, replaced: false } }), 900)),
       // The demo keeps no guide's words until one has been made, and takes a moment to pretend the AI is writing.
       guide_state: ({ name }) => ({ built: true, written: guidesWritten.has(name) }),
       make_guide: ({ name, writeAgain }) => {
